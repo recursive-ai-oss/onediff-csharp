@@ -1,3 +1,6 @@
+using OneDiff.Documents;
+using OneDiff.Documents.Model;
+using OneDiff.Documents.Serialization;
 using OneDiff.Tokenization;
 
 namespace OneDiff.AotSmoke;
@@ -33,7 +36,36 @@ internal static class Program
             failures++;
         }
 
+        failures += CheckDocuments();
+
         Console.Out.WriteLine(failures == 0 ? "ok" : "FAILED");
         return failures == 0 ? 0 : 1;
+    }
+
+    /// <summary>Compares two plain-text documents through every stage and round-trips the result through JSON.</summary>
+    private static int CheckDocuments()
+    {
+        CompareDocument a = CompareDocument.FromText("The supplier shall deliver within thirty days.\n\nPayment is due in sixty days.\n\nHe said \u201Chi\u201D.");
+        CompareDocument b = CompareDocument.FromText("The supplier shall deliver within forty days.\n\nHe said \"hi\".\n\nPayment is due in sixty days.");
+        int failures = 0;
+        foreach (CompareSettings settings in new[] { CompareSettings.Legal, CompareSettings.Strict, CompareSettings.TextOnly })
+        {
+            Comparison c = Comparison.Of(a, b, settings with { ThrowOnFailure = false });
+            if (c.Verification.FallbackLevel != 0 || !c.Check().IsEmpty || c.Changes.IsEmpty)
+            {
+                Console.Error.WriteLine($"{settings.Name}: comparison failed verification");
+                failures++;
+            }
+
+            byte[] json = ComparisonJson.Write(c);
+            Comparison back = ComparisonJson.Read(json);
+            if (!ComparisonJson.Write(back).AsSpan().SequenceEqual(json) || !back.Check().IsEmpty)
+            {
+                Console.Error.WriteLine($"{settings.Name}: JSON round trip failed");
+                failures++;
+            }
+        }
+
+        return failures;
     }
 }
