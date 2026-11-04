@@ -1,60 +1,17 @@
-using System.Buffers;
-
 namespace OneDiff.Cleanup;
 
 /// <summary>
-/// The changed regions of a script (a deletion and/or an insertion between two equal runs) as a doubly linked list over token
-/// ranges, so neighbouring regions can be merged by dropping the equality between them. Merging only turns equal tokens into
-/// a deletion plus an insertion of the same tokens, so the result is always a valid script for the same sequences.
+/// The changed regions of a script (a deletion and/or an insertion between two equal runs), kept as four ints each
+/// (old start, old end, new start, new end, in tokens) in a caller-supplied buffer, and merged left to right. Merging two regions
+/// drops the equality between them: its tokens become part of both the deletion and the insertion, so the result always still
+/// turns the old tokens into the new ones.
 /// </summary>
-internal sealed class ChangeRegions : IDisposable
+internal static class ChangeRegions
 {
-    // Rented from the pool: cleanup runs on every diff a caller shows, and most have only a few regions.
-    private int[] oldStart;
-    private int[] oldEnd;
-    private int[] newStart;
-    private int[] newEnd;
-    private int[] next;
-    private int[] previous;
-    private readonly int count;
-    private bool merged;
+    private const int Stride = 4;
 
-    private ChangeRegions(int count)
-    {
-        this.count = count;
-        oldStart = ArrayPool<int>.Shared.Rent(count);
-        oldEnd = ArrayPool<int>.Shared.Rent(count);
-        newStart = ArrayPool<int>.Shared.Rent(count);
-        newEnd = ArrayPool<int>.Shared.Rent(count);
-        next = ArrayPool<int>.Shared.Rent(count);
-        previous = ArrayPool<int>.Shared.Rent(count);
-        for (int i = 0; i < count; i++)
-        {
-            next[i] = i + 1 < count ? i + 1 : -1;
-            previous[i] = i - 1;
-        }
-    }
-
-    /// <summary>True when <see cref="Eliminate"/> merged at least one pair of regions.</summary>
-    public bool Merged => merged;
-
-    public void Dispose()
-    {
-        if (oldStart is null)
-        {
-            return;
-        }
-
-        ArrayPool<int>.Shared.Return(oldStart);
-        ArrayPool<int>.Shared.Return(oldEnd);
-        ArrayPool<int>.Shared.Return(newStart);
-        ArrayPool<int>.Shared.Return(newEnd);
-        ArrayPool<int>.Shared.Return(next);
-        ArrayPool<int>.Shared.Return(previous);
-        oldStart = oldEnd = newStart = newEnd = next = previous = null!;
-    }
-
-    public int Count => count;
+    /// <summary>Which rule decides that an equality between two changes is not worth keeping.</summary>
+    public enum Rule { Semantic, Efficiency }
 
     /// <summary>Number of maximal runs of non-equal edits.</summary>
     public static int CountRegions(EditScript script)
@@ -72,14 +29,20 @@ internal sealed class ChangeRegions : IDisposable
         return regions;
     }
 
-    public static ChangeRegions From(EditScript script)
-    {
-        // A region is a maximal run of non-equal edits; count them, then fill.
-        ReadOnlySpan<Edit> edits = script.Edits;
-        int regions = CountRegions(script);
+    /// <summary>Ints of buffer needed for <paramref name="regions"/> regions.</summary>
+    public static int Size(int regions) => regions * Stride;
 
-        var result = new ChangeRegions(regions);
-        int r = -1;
+    /// <summary>
+    /// Reads the regions of <paramref name="script"/> into <paramref name="buffer"/>, merging across every equality that
+    /// <paramref name="rule"/> calls trivial. A merged region may in turn make the equality before it trivial, so after each merge
+    /// the region is compared with the one before it again, as on a stack; each merge removes a region, so the work is linear.
+    /// Returns the number of regions left.
+    /// </summary>
+    public static int Collect(EditScript script, TokenText oldText, TokenText newText, Rule rule, int editCost, Span<int> buffer, out bool merged)
+    {
+        merged = false;
+        int top = 0;
+        ReadOnlySpan<Edit> edits = script.Edits;
         for (int i = 0; i < edits.Length; i++)
         {
             Edit e = edits[i];
@@ -88,70 +51,51 @@ internal sealed class ChangeRegions : IDisposable
                 continue;
             }
 
-            if (i == 0 || edits[i - 1].Kind == EditKind.Equal)
+            int os = e.OldStart, ns = e.NewStart;
+            int oe = e.OldEnd, ne = e.NewEnd;
+            while (i + 1 < edits.Length && edits[i + 1].Kind != EditKind.Equal)
             {
-                r++;
-                result.oldStart[r] = e.OldStart;
-                result.newStart[r] = e.NewStart;
+                i++;
+                oe = edits[i].OldEnd;
+                ne = edits[i].NewEnd;
             }
 
-            result.oldEnd[r] = e.OldEnd;
-            result.newEnd[r] = e.NewEnd;
+            while (top > 0)
+            {
+                Span<int> prev = buffer.Slice((top - 1) * Stride, Stride);
+                if (!IsTrivial(oldText, newText, prev[0], prev[1], prev[2], prev[3], os, oe, ns, ne, rule, editCost))
+                {
+                    break;
+                }
+
+                os = prev[0];
+                ns = prev[2];
+                top--;
+                merged = true;
+            }
+
+            Span<int> slot = buffer.Slice(top * Stride, Stride);
+            slot[0] = os;
+            slot[1] = oe;
+            slot[2] = ns;
+            slot[3] = ne;
+            top++;
         }
 
-        return result;
+        return top;
     }
 
-    /// <summary>Which rule decides that an equality between two changes is not worth keeping.</summary>
-    public enum Rule { Semantic, Efficiency }
-
-    /// <summary>
-    /// Merges regions across the equalities <paramref name="rule"/> calls trivial, until none is left. A merge can make the
-    /// neighbouring equalities trivial in turn, so after each merge the walk steps back one region. Every merge removes a region
-    /// and every step back is paid for by one, so the work is linear in the number of regions.
-    /// </summary>
-    public void Eliminate(TokenText oldText, TokenText newText, Rule rule, int editCost)
+    private static bool IsTrivial(
+        TokenText oldText, TokenText newText,
+        int leftOldStart, int leftOldEnd, int leftNewStart, int leftNewEnd,
+        int rightOldStart, int rightOldEnd, int rightNewStart, int rightNewEnd,
+        Rule rule, int editCost)
     {
-        // Walk left to right; after a merge step back one region, because the equality before the merged region may have become trivial.
-        int left = count > 0 ? 0 : -1;
-        while (left >= 0)
-        {
-            int right = next[left];
-            if (right < 0)
-            {
-                break;
-            }
-
-            if (!IsTrivial(oldText, newText, left, right, rule, editCost))
-            {
-                left = right;
-                continue;
-            }
-
-            // Merge `right` into `left`: the equality between them becomes part of the deletion and of the insertion.
-            oldEnd[left] = oldEnd[right];
-            newEnd[left] = newEnd[right];
-            next[left] = next[right];
-            if (next[right] >= 0)
-            {
-                previous[next[right]] = left;
-            }
-
-            merged = true;
-            if (previous[left] >= 0)
-            {
-                left = previous[left];
-            }
-        }
-    }
-
-    private bool IsTrivial(TokenText oldText, TokenText newText, int left, int right, Rule rule, int editCost)
-    {
-        int equal = oldText.Chars(oldEnd[left], oldStart[right]);
-        int delLeft = oldText.Chars(oldStart[left], oldEnd[left]);
-        int insLeft = newText.Chars(newStart[left], newEnd[left]);
-        int delRight = oldText.Chars(oldStart[right], oldEnd[right]);
-        int insRight = newText.Chars(newStart[right], newEnd[right]);
+        int equal = oldText.Chars(leftOldEnd, rightOldStart);
+        int delLeft = oldText.Chars(leftOldStart, leftOldEnd);
+        int insLeft = newText.Chars(leftNewStart, leftNewEnd);
+        int delRight = oldText.Chars(rightOldStart, rightOldEnd);
+        int insRight = newText.Chars(rightNewStart, rightNewEnd);
 
         if (rule == Rule.Semantic)
         {
@@ -168,21 +112,21 @@ internal sealed class ChangeRegions : IDisposable
     }
 
     /// <summary>
-    /// Writes the regions back as a script. With <paramref name="extractOverlap"/>, a region that deletes text which the
-    /// insertion then starts with (or the reverse) keeps that shared text as an equality, e.g. <c>-abcxxx +xxxdef</c> becomes
-    /// <c>-abc =xxx +def</c>, when the shared text is at least half of the shorter side.
+    /// Writes the regions back as a script, or returns <paramref name="original"/> when nothing merged and no overlap applies. With
+    /// <paramref name="extractOverlap"/>, a region that deletes text which the insertion then starts with (or the reverse) keeps that
+    /// shared text as an equality, e.g. <c>-abcxxx +xxxdef</c> becomes <c>-abc =xxx +def</c>, when the shared text is at least half of
+    /// the shorter side.
     /// </summary>
-    public EditScript ToScript(TokenText oldText, TokenText newText, TokenEquality equality, bool extractOverlap, EditScript original)
+    public static EditScript ToScript(ReadOnlySpan<int> buffer, int count, bool merged, TokenText oldText, TokenText newText, TokenEquality equality, bool extractOverlap, EditScript original)
     {
-        // Nothing merged and no overlap to keep: the script is the one we were given.
         if (!merged)
         {
             bool any = false;
             if (extractOverlap)
             {
-                for (int r = count > 0 ? 0 : -1; r >= 0 && !any; r = next[r])
+                for (int r = 0; r < count && !any; r++)
                 {
-                    ChooseOverlap(r, oldText, newText, equality, out int afterDelete, out int afterInsert);
+                    ChooseOverlap(buffer.Slice(r * Stride, Stride), oldText, newText, equality, out int afterDelete, out int afterInsert);
                     any = afterDelete > 0 || afterInsert > 0;
                 }
             }
@@ -195,17 +139,17 @@ internal sealed class ChangeRegions : IDisposable
 
         var builder = new EditScriptBuilder();
         int oldPos = 0;
-        // Region 0 is never merged into another (merging absorbs the right-hand region), so the list always starts there.
-        for (int r = count > 0 ? 0 : -1; r >= 0; r = next[r])
+        for (int r = 0; r < count; r++)
         {
-            builder.Equal(oldStart[r] - oldPos);
-            int dels = oldEnd[r] - oldStart[r];
-            int ins = newEnd[r] - newStart[r];
+            ReadOnlySpan<int> region = buffer.Slice(r * Stride, Stride);
+            builder.Equal(region[0] - oldPos);
+            int dels = region[1] - region[0];
+            int ins = region[3] - region[2];
             int overlapAfterDelete = 0;
             int overlapAfterInsert = 0;
             if (extractOverlap)
             {
-                ChooseOverlap(r, oldText, newText, equality, out overlapAfterDelete, out overlapAfterInsert);
+                ChooseOverlap(region, oldText, newText, equality, out overlapAfterDelete, out overlapAfterInsert);
             }
 
             if (overlapAfterDelete > 0)
@@ -226,7 +170,7 @@ internal sealed class ChangeRegions : IDisposable
                 builder.Insert(ins);
             }
 
-            oldPos = oldEnd[r];
+            oldPos = region[1];
         }
 
         builder.Equal(original.OldLength - oldPos);
@@ -236,22 +180,23 @@ internal sealed class ChangeRegions : IDisposable
             : throw new InvalidOperationException("cleanup produced a script of the wrong size");
     }
 
-    // For a region that both deletes and inserts: the longest suffix of the deletion that the insertion starts with (tokens kept as an
+    // For a region that both deletes and inserts: the longest suffix of the deletion that the insertion starts with (kept as an
     // equality after the deletion), or the mirror image, when the shared text is at least half of the shorter side.
-    private void ChooseOverlap(int r, TokenText oldText, TokenText newText, TokenEquality equality, out int afterDelete, out int afterInsert)
+    private static void ChooseOverlap(ReadOnlySpan<int> region, TokenText oldText, TokenText newText, TokenEquality equality, out int afterDelete, out int afterInsert)
     {
         afterDelete = 0;
         afterInsert = 0;
-        if (oldEnd[r] == oldStart[r] || newEnd[r] == newStart[r])
+        int oldStart = region[0], oldEnd = region[1], newStart = region[2], newEnd = region[3];
+        if (oldEnd == oldStart || newEnd == newStart)
         {
             return;
         }
 
-        int k1 = Overlap(oldText, oldStart[r], oldEnd[r], newText, newStart[r], newEnd[r], equality);
-        int k2 = Overlap(newText, newStart[r], newEnd[r], oldText, oldStart[r], oldEnd[r], equality);
-        int shorter = Math.Min(oldText.Chars(oldStart[r], oldEnd[r]), newText.Chars(newStart[r], newEnd[r]));
-        int chars1 = k1 > 0 ? oldText.Chars(oldEnd[r] - k1, oldEnd[r]) : 0;
-        int chars2 = k2 > 0 ? newText.Chars(newEnd[r] - k2, newEnd[r]) : 0;
+        int shorter = Math.Min(oldText.Chars(oldStart, oldEnd), newText.Chars(newStart, newEnd));
+        int k1 = Overlap(oldText, oldStart, oldEnd, newText, newStart, newEnd, equality);
+        int k2 = Overlap(newText, newStart, newEnd, oldText, oldStart, oldEnd, equality);
+        int chars1 = k1 > 0 ? oldText.Chars(oldEnd - k1, oldEnd) : 0;
+        int chars2 = k2 > 0 ? newText.Chars(newEnd - k2, newEnd) : 0;
         if (chars1 >= chars2 && k1 > 0 && 2 * chars1 >= shorter)
         {
             afterDelete = k1;
@@ -262,9 +207,63 @@ internal sealed class ChangeRegions : IDisposable
         }
     }
 
-    // Longest suffix of text[from..to) that is a prefix of pattern[pFrom..pTo), in tokens. Knuth-Morris-Pratt: failure links over
-    // the pattern, then one pass over the text; the state at the end is the overlap.
+    // Longest suffix of text[from..to) that is a prefix of pattern[pFrom..pTo), in tokens.
     private static int Overlap(TokenText text, int from, int to, TokenText pattern, int pFrom, int pTo, TokenEquality equality)
+    {
+        // Quick answer for the usual case, no overlap at all: the overlap must start with the pattern's first token, so look for
+        // that token in the text. Plain characters under ordinal comparison can use a vectorized search.
+        if (text.IsChars && pattern.IsChars && equality.IsOrdinal)
+        {
+            ReadOnlySpan<char> t = text.Text.AsSpan(from, to - from);
+            ReadOnlySpan<char> p = pattern.Text.AsSpan(pFrom, pTo - pFrom);
+            int result = OverlapChars(t, p, out bool decided);
+            if (decided)
+            {
+                return result;
+            }
+        }
+
+        return OverlapKmp(text, from, to, pattern, pFrom, pTo, equality);
+    }
+
+    // Candidate starts are the places in the text where the pattern's first char occurs. A handful of candidates are checked directly;
+    // many (repetitive text) are left to the linear-time search, so the worst case stays linear.
+    private static int OverlapChars(ReadOnlySpan<char> text, ReadOnlySpan<char> pattern, out bool decided)
+    {
+        decided = true;
+        int max = Math.Min(text.Length, pattern.Length);
+        int from = text.Length - max;
+        char first = pattern[0];
+        int checks = 0;
+        while (from < text.Length)
+        {
+            int found = text.Slice(from).IndexOf(first);
+            if (found < 0)
+            {
+                return 0;
+            }
+
+            int start = from + found;
+            if (++checks > 16)
+            {
+                decided = false;
+                return 0;
+            }
+
+            int k = text.Length - start;
+            if (text.Slice(start).SequenceEqual(pattern.Slice(0, k)))
+            {
+                return k;
+            }
+
+            from = start + 1;
+        }
+
+        return 0;
+    }
+
+    // Knuth-Morris-Pratt: failure links over the pattern, then one pass over the text; the state at the end is the overlap.
+    private static int OverlapKmp(TokenText text, int from, int to, TokenText pattern, int pFrom, int pTo, TokenEquality equality)
     {
         int m = pTo - pFrom;
         // Bounded: at most 128 ints (512 bytes) on the stack; longer patterns use the heap.
