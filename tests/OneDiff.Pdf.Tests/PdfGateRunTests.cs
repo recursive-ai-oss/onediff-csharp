@@ -32,6 +32,9 @@ public class PdfGateRunTests
         int from = Int("ONEDIFF_PDF_GATE_FROM", 0), count = Int("ONEDIFF_PDF_GATE_COUNT", int.MaxValue), jobs = Int("ONEDIFF_PDF_GATE_JOBS", 4);
         string[] ids = [.. Directory.EnumerateFiles(Path.Combine(dir, "pdf"), "*.old.pdf")
             .Select(p => Path.GetFileName(p)[..^".old.pdf".Length]).OrderBy(x => x, StringComparer.Ordinal).Skip(from).Take(count)];
+        // ONEDIFF_PDF_GATE_EVERY=n keeps every n-th pair of the slice (a spread across the set, for cross-machine digests).
+        int every = Int("ONEDIFF_PDF_GATE_EVERY", 1);
+        ids = [.. ids.Where((_, i) => i % every == 0)];
 
         var lines = new ConcurrentDictionary<string, string>();
         var failures = new ConcurrentBag<string>();
@@ -106,6 +109,7 @@ public class PdfGateRunTests
     {
         byte[] oldPdf = File.ReadAllBytes(Path.Combine(dir, "pdf", id + ".old.pdf")), newPdf = File.ReadAllBytes(Path.Combine(dir, "pdf", id + ".new.pdf"));
         var sb = new StringBuilder(id);
+        sb.Append(CultureInfo.InvariantCulture, $" in.old={Hex(oldPdf)} in.new={Hex(newPdf)}");
         foreach ((string name, CompareSettings settings) in new[] { ("legal", CompareSettings.Legal), ("strict", CompareSettings.Strict) })
         {
             Run one = Run.Of(oldPdf, newPdf, settings);
@@ -123,13 +127,17 @@ public class PdfGateRunTests
                 failures.Add($"{id} {name}: re-extraction: {e.Message.ReplaceLineEndings(" | ")} (kinds {string.Join(",", one.Comparison.Changes.Select(c => c.Kind).Distinct())})");
             }
 
+            try
+            {
+                one.AssertOldReextraction();
+            }
+            catch (Exception e)
+            {
+                failures.Add($"{id} {name}: old-document re-extraction: {e.Message.ReplaceLineEndings(" | ")}");
+            }
+
             using var oldMarked = new MemoryStream();
             PdfRedline.OnPages.MarkOldDocument(one.Comparison, oldPdf, oldMarked);
-            int oldAnnotations = Run.ReadAnnotations(oldMarked.ToArray()).Count;
-            if (oldAnnotations == 0 && one.Comparison.Changes.Length > 0 && one.Result.Marks.Length > 0 && one.Comparison.Changes.Any(c => c.Old.Text.Length > 0 && c.Kind != ChangeKind.Insert))
-            {
-                failures.Add($"{id} {name}: old document has no annotations although changes remove text");
-            }
 
             // Determinism: a second run from the bytes gives identical comparison JSON and identical marked PDFs.
             Run two = Run.Of(oldPdf, newPdf, settings);

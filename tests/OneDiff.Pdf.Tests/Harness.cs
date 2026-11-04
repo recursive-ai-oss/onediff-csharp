@@ -204,28 +204,38 @@ internal sealed class Run
     }
 
     /// <summary>The re-extraction gate: every annotation maps to one change, every shown change is marked, and the text under each highlight and each pop-up is the change's.</summary>
-    public void AssertReextraction()
+    public void AssertReextraction() => AssertReextraction(Marked, Result, onOld: false);
+
+    /// <summary>The same gate for the marks on the old document: deleted and replaced text struck out, the new text in the pop-ups.</summary>
+    public void AssertOldReextraction()
     {
-        List<ReadAnnotation> read = ReadAnnotations(Marked);
-        Assert.Equal(Result.Marks.Length, read.Count);
+        using var ms = new MemoryStream();
+        PdfMarkupResult r = PdfRedline.OnPages.MarkOldDocument(Comparison, OldPdf, ms);
+        AssertReextraction(ms.ToArray(), r, onOld: true);
+    }
+
+    private void AssertReextraction(byte[] marked, PdfMarkupResult result, bool onOld)
+    {
+        List<ReadAnnotation> read = ReadAnnotations(marked);
+        Assert.Equal(result.Marks.Length, read.Count);
         var byName = read.ToDictionary(a => a.Name!);
         Assert.Equal(read.Count, byName.Count);
         var changes = Comparison.Changes.ToDictionary(c => c.Id);
 
         // Every change is marked or skipped, exactly once.
-        var seen = new HashSet<int>(Result.Marks.Select(m => m.ChangeId));
-        foreach (PdfSkippedChange s in Result.Skipped)
+        var seen = new HashSet<int>(result.Marks.Select(m => m.ChangeId));
+        foreach (PdfSkippedChange s in result.Skipped)
         {
             Assert.DoesNotContain(s.ChangeId, seen);
             Assert.True(changes.ContainsKey(s.ChangeId));
             Change sc = changes[s.ChangeId];
-            Assert.True(sc.Old.Text.Length == 0 && sc.New.Text.Length == 0, $"change {sc.Id} ({sc.Kind}) was skipped: {s.Reason}");
+            Assert.True(sc.Old.Text.Length == 0 && sc.New.Text.Length == 0 || onOld && sc.Kind == ChangeKind.Insert, $"change {sc.Id} ({sc.Kind}) was skipped: {s.Reason}");
             seen.Add(s.ChangeId);
         }
 
         Assert.Equal(Comparison.Changes.Select(c => c.Id).Order(), seen.Order());
 
-        foreach (PdfMark m in Result.Marks)
+        foreach (PdfMark m in result.Marks)
         {
             ReadAnnotation a = byName[m.Name];
             Change c = changes[m.ChangeId];
@@ -235,16 +245,18 @@ internal sealed class Run
             Assert.True(a.HasPopup);
             (string label, string body) = PdfRedline.SplitContents(a.Contents!);
             Assert.False(string.IsNullOrEmpty(label));
-            Assert.Equal(c.Old.Text, body);
+            Assert.Equal(onOld ? c.New.Text : c.Old.Text, body);
             if (m.Kind != PdfMarkupKind.Caret)
             {
                 // The text under the quadrilaterals of every annotation of the change, taken together, is the change's new text.
-                string under = string.Concat(Result.Marks.Where(x => x.ChangeId == c.Id && x.Kind != PdfMarkupKind.Caret).OrderBy(x => x.Page).ThenBy(x => x.Name, StringComparer.Ordinal).Select(x => byName[x.Name].TextUnder));
-                string expected = Canon(c.Kind == ChangeKind.Attribute ? AttributeMarkText(c.New, Comparison.New) : ExpectedPageText(c.New, Comparison.New, Comparison.Alignment.Settings)), got = Canon(under);
+                string under = string.Concat(result.Marks.Where(x => x.ChangeId == c.Id && x.Kind != PdfMarkupKind.Caret).OrderBy(x => x.Page).ThenBy(x => x.Name, StringComparer.Ordinal).Select(x => byName[x.Name].TextUnder));
+                ChangeSide mine = onOld ? c.Old : c.New;
+                CompareDocument doc = onOld ? Comparison.Old : Comparison.New;
+                string expected = Canon(c.Kind == ChangeKind.Attribute ? AttributeMarkText(mine, doc) : ExpectedPageText(mine, doc, Comparison.Alignment.Settings)), got = Canon(under);
                 // A change that is only a space across a line break rests on the word before it; there is no text to compare.
-                bool spaceOnly = expected.Length == 0 && c.New.Text.All(ch => char.IsWhiteSpace(ch) || ch == '\u001E');
+                bool spaceOnly = expected.Length == 0 && mine.Text.All(ch => char.IsWhiteSpace(ch) || ch == '\u001E');
                 string under2 = got;
-                if (expected != got && Result.Marks.Count(x => x.ChangeId == c.Id && x.Kind != PdfMarkupKind.Caret) == 1)
+                if (expected != got && result.Marks.Count(x => x.ChangeId == c.Id && x.Kind != PdfMarkupKind.Caret) == 1)
                 {
                     under2 = byName[m.Name].WithoutOverlaps?.Invoke().Select(Canon).FirstOrDefault(v => v == expected) ?? got;
                 }
