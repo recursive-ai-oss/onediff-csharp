@@ -8,6 +8,9 @@
 
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" />
+    <!-- Comparators: this project only. They are called through their public APIs and nothing here ships. -->
+    <PackageReference Include="DiffPlex" />
+    <PackageReference Include="DiffMatchPatch" />
   </ItemGroup>
 
   <ItemGroup>
