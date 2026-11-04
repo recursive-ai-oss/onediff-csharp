@@ -2,7 +2,8 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <AssemblyName>onediff</AssemblyName>
+    <!-- Not named onediff: the runtime matches assembly names without regard to case, so that would shadow the OneDiff library. The command is still onediff (ToolCommandName). -->
+    <AssemblyName>OneDiff.Cli</AssemblyName>
     <RootNamespace>OneDiff.Cli</RootNamespace>
     <PackageId>$(PackagePrefix)OneDiff.Tool</PackageId>
     <PackAsTool>true</PackAsTool>
@@ -14,6 +15,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../OneDiff/OneDiff.csproj" />
+    <ProjectReference Include="../OneDiff.Documents/OneDiff.Documents.csproj" />
   </ItemGroup>
 
 </Project>
