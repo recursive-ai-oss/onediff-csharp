@@ -402,9 +402,9 @@ public class CorpusGateTests
                 oursDefaultApplied++;
             }
 
-            string o = File.ReadAllText(Path.Combine(dir, "old.txt"), strict);
-            string n = File.ReadAllText(Path.Combine(dir, "new.txt"), strict);
-            string theirs = File.ReadAllText(Path.Combine(dir, "theirs.patch"), strict);
+            string o = strict.GetString(File.ReadAllBytes(Path.Combine(dir, "old.txt")));
+            string n = strict.GetString(File.ReadAllBytes(Path.Combine(dir, "new.txt")));
+            string theirs = strict.GetString(File.ReadAllBytes(Path.Combine(dir, "theirs.patch")));
             if (!DmpPatcher.TryFromText(theirs, out IReadOnlyList<DmpPatch>? parsed, out PatchParseError err))
             {
                 if (isAstral)

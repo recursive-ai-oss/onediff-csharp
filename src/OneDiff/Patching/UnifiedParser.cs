@@ -198,6 +198,11 @@ internal static class UnifiedParser
         oldStart = oldCount = newStart = newCount = 0;
         section = null;
         kind = PatchErrorKind.InvalidHunkHeader;
+        if (!h.StartsWith("@@ -", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
         int p = 4; // past "@@ -"
         if (!ReadRange(h, ref p, out oldStart, out oldCount, ref kind))
         {
@@ -368,7 +373,8 @@ internal static class UnifiedParser
         return false;
     }
 
-    private static ReadOnlySpan<char> TrimCr(ReadOnlySpan<char> s) => s.Length > 0 && s[^1] == '\r' ? s[..^1] : s;
+    // Header lines of a CRLF patch end in \r; every trailing one goes so that writing a header and reading it back gives the same value.
+    private static ReadOnlySpan<char> TrimCr(ReadOnlySpan<char> s) => s.TrimEnd('\r');
 
     private static bool IsBlank(string s)
     {
