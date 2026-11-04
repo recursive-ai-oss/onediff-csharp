@@ -148,7 +148,8 @@ def md_to_text(data):
     text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", text)
     text = re.sub(r"^\s{0,3}#{1,6}\s*", "", text, flags=re.M)
     text = re.sub(r"(\*\*|__|`)", "", text)
-    return tidy(text)
+    # These agreements keep one clause or list item per line, so a line is a paragraph.
+    return tidy(text.replace("\n", "\n\n"))
 
 
 def docx_to_text(data):
@@ -380,7 +381,7 @@ def update_edgar(pins, target):
                 ratio = len(orig_text) / max(1, len(new_text))
                 if not 0.3 < ratio < 3.0:
                     continue
-                pairs.append({"id": f"edgar-{new['cik']}-{new['acc'][-8:]}", "kind": q.replace("Amended and Restated ", ""),
+                pairs.append({"id": f"edgar-{new['cik']}-{orig_doc['acc'][-8:]}-{new['acc'][-8:]}", "kind": q.replace("Amended and Restated ", ""),
                               "old": {**orig_doc, "sha256": sha256(orig_bytes)}, "new": {**new, "sha256": sha256(new_bytes)}})
                 found += 1
                 print(f"  edgar pair {len(pairs)}: {new['company']} — {title} dated {date}", file=sys.stderr)

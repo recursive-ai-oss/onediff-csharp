@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using OneDiff.Documents;
 using OneDiff.Documents.Model;
+using OneDiff.Documents.Pipeline;
 using OneDiff.Documents.Serialization;
 
 namespace OneDiff.GoldSets;
@@ -15,7 +16,7 @@ internal static class Program
 {
     private const string Usage = """
         OneDiff.GoldSets generate --out DIR [--role eval|dev|train] [--seed N] [--docs-per-lang N] [--langs en,de,...] [--verify]
-        OneDiff.GoldSets score --data DIR --out FILE [--cmp DIR] [--save-cmp DIR] [--pipeline NAME] [--jobs N] [--limit N]
+        OneDiff.GoldSets score --data DIR --out FILE [--oracle-alignment] [--cmp DIR] [--save-cmp DIR] [--pipeline NAME] [--jobs N] [--limit N]
         OneDiff.GoldSets check-split --a DIR --b DIR
 
           generate    writes DIR/pairs/<id>.docs.json and <id>.labels.json for the documents of the chosen role, split.json (every
@@ -45,6 +46,7 @@ internal static class Program
                 "generate" => Generate(opt),
                 "score" => Score(opt),
                 "check-split" => CheckSplit(opt),
+                "explain" => Explain(opt),
                 _ => Fail("unknown command " + args[0]),
             };
         }
@@ -269,7 +271,8 @@ internal static class Program
         string outFile = Path.GetFullPath(opt.GetValueOrDefault("out") ?? throw new ArgumentException("--out is required"));
         string? cmpDir = opt.GetValueOrDefault("cmp");
         string? saveCmp = opt.GetValueOrDefault("save-cmp");
-        string pipeline = opt.GetValueOrDefault("pipeline") ?? "reference";
+        bool oracleAlignment = opt.ContainsKey("oracle-alignment");
+        string pipeline = opt.GetValueOrDefault("pipeline") ?? (oracleAlignment ? "gold-alignment" : "reference");
         int jobs = int.Parse(opt.GetValueOrDefault("jobs") ?? "4", CultureInfo.InvariantCulture);
         int limit = int.Parse(opt.GetValueOrDefault("limit") ?? "0", CultureInfo.InvariantCulture);
         string setHash = File.ReadAllText(Path.Combine(data, "manifest.sha256")).Trim();
@@ -313,7 +316,9 @@ internal static class Program
             else
             {
                 var docs = GoldJson.Read<PairDocs>(File.ReadAllBytes(Path.Combine(data, "pairs", id + ".docs.json")));
-                cmp = Comparison.Of(GoldJson.Build(docs.Old), GoldJson.Build(docs.New), Pipeline.Settings);
+                CompareDocument o = GoldJson.Build(docs.Old);
+                CompareDocument n = GoldJson.Build(docs.New);
+                cmp = oracleAlignment ? Pipeline.OracleAlignment(o, n, labels) : Comparison.Of(o, n, Pipeline.Settings);
                 if (saveCmp is not null)
                 {
                     File.WriteAllBytes(Path.Combine(saveCmp, id + ".cmp.json"), ComparisonJson.Write(cmp));
@@ -390,6 +395,30 @@ internal static class Program
         Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"  {name,-14} {v[0]:F3} / {Q(0.5):F3} / {Q(0.9):F3} / {v[^1]:F3}  (n={v.Length})"));
     }
 
+    /// <summary>Lists, for one pair, the gold units and the engine's changes with their spans, to see where a score comes from.</summary>
+    private static int Explain(Dictionary<string, string> opt)
+    {
+        string data = opt.GetValueOrDefault("data") ?? throw new ArgumentException("--data is required");
+        string id = opt.GetValueOrDefault("id") ?? throw new ArgumentException("--id is required");
+        var labels = GoldJson.Read<PairLabels>(File.ReadAllBytes(Path.Combine(data, "pairs", id + ".labels.json")));
+        var docs = GoldJson.Read<PairDocs>(File.ReadAllBytes(Path.Combine(data, "pairs", id + ".docs.json")));
+        Comparison cmp = Comparison.Of(GoldJson.Build(docs.Old), GoldJson.Build(docs.New), Pipeline.Settings);
+        string Clip(string t, int s, int l) => t.Substring(Math.Min(s, t.Length), Math.Min(l, t.Length - Math.Min(s, t.Length)));
+        Console.WriteLine("gold units:");
+        foreach (Unit u in labels.Units)
+        {
+            Console.WriteLine($"  #{u.Id} {u.Type} {u.Group} old=[{string.Join("; ", u.Old.Select(s => $"{s.Node}:{s.Start}+{s.Len} '{Clip(cmp.Old[s.Node].Text, s.Start, s.Len)}'"))}] new=[{string.Join("; ", u.New.Select(s => $"{s.Node}:{s.Start}+{s.Len} '{Clip(cmp.New[s.Node].Text, s.Start, s.Len)}'"))}]");
+        }
+
+        Console.WriteLine("engine changes:");
+        foreach (Change c in cmp.Changes)
+        {
+            Console.WriteLine($"  #{c.Id} {c.Kind} old=[{string.Join(",", c.Old.Nodes)}]{c.Old.Start}+{c.Old.Length} '{c.Old.Text}' new=[{string.Join(",", c.New.Nodes)}]{c.New.Start}+{c.New.Length} '{c.New.Text}'");
+        }
+
+        return 0;
+    }
+
     // ---- check-split -----------------------------------------------------------------------------------------------
 
     private static int CheckSplit(Dictionary<string, string> opt)
@@ -417,4 +446,29 @@ internal static class Program
 internal static class Pipeline
 {
     public static CompareSettings Settings { get; } = CompareSettings.Strict with { ThrowOnFailure = false };
+
+    /// <summary>The later stages run on the gold alignment of content blocks: a check that the scorer gives 1.0 to the right answer.</summary>
+    public static Comparison OracleAlignment(CompareDocument o, CompareDocument n, PairLabels labels)
+    {
+        var links = labels.Links.Select(l => new AlignmentLink(0, l.Kind switch { "move" => LinkKind.Move, "split" => LinkKind.Split, "merge" => LinkKind.Merge, _ => LinkKind.Match }, [.. l.Old], [.. l.New], false, 1.0, LinkOrigin.User)).ToList();
+        // The containers above matched blocks (section, table, row, cell) are matched in step, so the structure stays consistent.
+        var usedOld = new HashSet<int>();
+        var usedNew = new HashSet<int>();
+        foreach (GoldLink l in labels.Links.Where(l => l.Kind == "match"))
+        {
+            int po = o[l.Old[0]].Parent;
+            int pn = n[l.New[0]].Parent;
+            while (po >= 0 && pn >= 0 && o[po].Kind == n[pn].Kind && !usedOld.Contains(po) && !usedNew.Contains(pn))
+            {
+                links.Add(new AlignmentLink(0, LinkKind.Match, [po], [pn], false, 1.0, LinkOrigin.User));
+                usedOld.Add(po);
+                usedNew.Add(pn);
+                po = o[po].Parent;
+                pn = n[pn].Parent;
+            }
+        }
+
+        Alignment al = Alignment.Create(o, n, Settings, links);
+        return Stages.Verify(Stages.Classify(Stages.Group(Stages.DiffPairs(al))));
+    }
 }
