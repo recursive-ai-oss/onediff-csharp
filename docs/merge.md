@@ -50,4 +50,4 @@ Observed: marker lines (and the ending added to an unterminated last line) use C
 
 ## Agreement with git
 
-On the 2,599 real merge triples of the corpus, the text produced equals the output of `git merge-file` 2.51.2 byte for byte in the merge, diff3 and zdiff3 styles, with git choosing its own alignment. The base-to-side alignments themselves still differ from `git diff` on a few corpus pairs (26 of 5,198); none of them changes a merge. Very large inputs may differ from git where git gives up searching for the shortest script, which is not modelled here; the cost cap of the library (`DiffDiagnostic.CostCapReached`) is the only limit that applies.
+On the 2,599 real merge triples of the corpus, the text produced equals the output of `git merge-file` 2.51.2 byte for byte in the merge, diff3 and zdiff3 styles, with git choosing its own alignment. The base-to-side alignments themselves still differ from `git diff` on a few corpus pairs (26 of 5,198); none of them changes a merge. Very large inputs may differ from git where git gives up searching for the shortest script, which is not modelled here; this alignment has no cost cap and is limited only by cancellation.
