@@ -219,7 +219,43 @@ internal static class UnifiedApplier
             return -1;
         }
 
-        long reach = Math.Min(maxOffset, Math.Max(Math.Abs(hi - guess), Math.Abs(guess - lo)));
+        // A header can name a line far outside the text. Then the nearest places are at the edge, so walk inward from there
+        // rather than step through the empty distance.
+        if (guess > hi || guess < lo)
+        {
+            long step = guess > hi ? -1 : 1;
+            for (long c = guess > hi ? hi : lo; c >= lo && c <= hi; c += step)
+            {
+                if (Math.Abs(guess - c) > maxOffset)
+                {
+                    break;
+                }
+
+                if (Fits((int)c))
+                {
+                    return (int)c;
+                }
+            }
+
+            return -1;
+        }
+
+        bool Fits(int c)
+        {
+            if (anchorStart && c - unstrippedLead != 0)
+            {
+                return false;
+            }
+
+            if (anchorEnd && c - unstrippedLead + old.Count != lines.Count)
+            {
+                return false;
+            }
+
+            return Matches(lines, old, skip, length, c);
+        }
+
+        long reach = Math.Min(maxOffset, Math.Max(hi - guess, guess - lo));
         for (long d = 0; d <= reach; d++)
         {
             for (int dir = 0; dir < (d == 0 ? 1 : 2); dir++)
@@ -230,20 +266,9 @@ internal static class UnifiedApplier
                     continue;
                 }
 
-                int c = (int)cand;
-                if (anchorStart && c - unstrippedLead != 0)
+                if (Fits((int)cand))
                 {
-                    continue;
-                }
-
-                if (anchorEnd && c - unstrippedLead + old.Count != lines.Count)
-                {
-                    continue;
-                }
-
-                if (Matches(lines, old, skip, length, c))
-                {
-                    return c;
+                    return (int)cand;
                 }
             }
         }

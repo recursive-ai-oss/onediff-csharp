@@ -130,7 +130,10 @@ public sealed partial class DmpPatcher
             Succeed(outcomes, patch, startLoc, delta);
         }
 
-        return new DmpApplyResult(text.Substring(padding.Length, text.Length - (2 * padding.Length)), outcomes);
+        // A hostile patch can delete the padding itself (it is ordinary text to the matcher), so clamp rather than trust the lengths.
+        int from = Math.Min(padding.Length, text.Length);
+        int to = Math.Max(from, text.Length - padding.Length);
+        return new DmpApplyResult(text.Substring(from, to - from), outcomes);
     }
 
     private static void Fail(DmpPatchResult[] outcomes, DmpPatch piece, DmpPatchOutcome why)
