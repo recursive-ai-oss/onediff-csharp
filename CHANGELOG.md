@@ -4,10 +4,40 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.1.0-preview.1]
+
+The first preview. Public API may change before 1.0.
+
 ### Added
 
+#### `RecursiveAI.OneDiff` (text core, no dependency beyond the .NET base class library)
+
+- Edit scripts as struct ranges (`Edit`, `EditScript`, `EditScriptBuilder`), `TokenInterner<T>`, and the `Diff` entry points for lines, words, characters and graphemes, with comparer-based variants (ignore case, ignore whitespace).
+- Myers (linear space, with a work cap and a `DiffDiagnostic` when it is reached), patience and histogram diff over any sequence with an equality comparer.
+- Line, word, character and grapheme tokenizers; word tokens are script-aware, so Han, Hiragana and similar scripts split per character.
+- Semantic and efficiency cleanup, with lossless shifting of changes to word, sentence and line boundaries.
+- Unified diff: make, parse and apply with offset and fuzz, reporting hunks that do not apply.
+- diff-match-patch patch text: make, parse and apply with fuzzy matching, with UTF-16 or code-point offsets.
+- Three-way (diff3) merge with `merge`, `diff3` and `zdiff3` conflict styles, resolution options and a structured conflict result.
+- Terminal and Markdown renderers for line and word diffs.
+
+#### `RecursiveAI.OneDiff.Documents` (document comparison engine)
+
+- The compare model: block trees with source anchors, formatting runs and normalization folds; `IDocumentSource` with a plain-text source.
+- The five stages (`Align`, `DiffPairs`, `Group`, `Classify`, `Verify`) over immutable values, an editable `Alignment`, and deterministic block alignment with moves, splits, merges and table-aware matching.
+- `Comparison` with a change ledger, diagnostics and `Verify`: every comparison is checked for completeness (old plus changes gives new, new minus changes gives old) and falls back stepwise to a coarser complete grouping, or throws in strict mode.
+- `CompareSettings` and `RedlineStyle` presets, and a versioned JSON form (schema v1) with a published schema.
+- Self-contained HTML redlines, inline and side by side, with cover page, change bars and footer; the `Redline` statics (`Create`, `Compare`), `Comparison.SaveAs`, `Save` and `ToBytes`, and a registration seam (`DocumentSources.Register`, `Redline.Register`, `RedlineForm`) for adapter packages.
+
+#### `RecursiveAI.OneDiff.Pdf` (PDF source and original-page markup)
+
 - `RecursiveAI.OneDiff.Pdf`: `PdfDocumentSource` reads digital PDFs into the compare model (paragraphs joined across lines, columns and pages, list items, tables, running headers and footers, formatting, glyph-quad anchors; line breaks, hyphenation and page numbers go to the ledger) and `PdfRedline` marks a comparison on the original pages with real highlight, caret, underline, squiggly and strike-out annotations carrying the old text in their pop-ups. See `docs/pdf.md`.
-- `RecursiveAI.OneDiff.Documents`: self-contained HTML redlines (`HtmlRedline`: inline and side by side, rendering `RedlineStyle` with cover page, change bars and footer), the `Redline` statics (`Create`, `Compare`), `Comparison.SaveAs` / `Save` / `ToBytes`, `Comparison.Of` over paths and inputs, and a registration seam (`DocumentSources.Register`, `Redline.Register`, `RedlineForm`) for adapter packages. `onediff compare`.
-- `RecursiveAI.OneDiff.Documents`: the document engine's contracts. The compare model (block trees with source anchors, formatting runs, normalization folds), `IDocumentSource` with a plain-text source, the five stages (`Align`, `DiffPairs`, `Group`, `Classify`, `Verify`) with reference implementations, an editable `Alignment`, `Comparison` with its change ledger and diagnostics, `CompareSettings` and `RedlineStyle` presets, and a versioned JSON form (schema v1). Verification proves every comparison complete and falls back stepwise to a coarser complete grouping when it is not.
-- Repository skeleton: the `RecursiveAI.OneDiff` core project, CI, tests and the command-line tool shell.
-- Edit-script types (`Edit`, `EditScript`, `EditScriptBuilder`), `TokenInterner<T>`, line, word, character and grapheme tokenizers, and the `Diff` entry points.
+
+#### Repository
+
+- CI on linux-x64, linux-arm64, osx-arm64 and win-x64, a NativeAOT smoke app, and the core tests run as a browser WebAssembly app in headless Chrome.
+- A release workflow that packs every packable project and publishes through nuget.org Trusted Publishing; see `docs/building.md`.
+
+### Changed
+
+- Building without `ONEDIFF_ARTIFACTS` set no longer fails on the default output folder.
