@@ -2,8 +2,16 @@
 
   <PropertyGroup>
     <AssemblyName>OneDiff.Documents</AssemblyName>
-    <!-- Not packed yet: this package arrives with its own content and references. -->
-    <IsPackable>false</IsPackable>
+    <Description>Text diff and document comparison for .NET. The document engine: a compare model with source anchors, staged alignment, diff, grouping, classification and verification, a change ledger, and a versioned JSON form, with a completeness check on every comparison.</Description>
+    <EnablePackageValidation>true</EnablePackageValidation>
   </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="OneDiff.Documents.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../OneDiff/OneDiff.csproj" />
+  </ItemGroup>
 
 </Project>
