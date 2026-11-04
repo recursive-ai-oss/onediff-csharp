@@ -92,6 +92,34 @@ public class AlignmentEdgeCaseTests
     }
 
     [Fact]
+    public void HeavilyEditedMovedClauseIsAMoveWhenItsPartnerIsUnique()
+    {
+        string moved = Fx.Para(60, 30);
+        string[] w = moved.Split(' ');
+        // Every third word replaced: about 0.67 similar, under the move threshold.
+        string edited = string.Join(' ', w.Select((x, i) => i % 3 == 0 ? "zz" + i : x));
+        CompareDocument a = Fx.Doc(Fx.Para(1), moved, Fx.Para(2), Fx.Para(3), Fx.Para(4), Fx.Para(5), Fx.Para(6), Fx.Para(7));
+        CompareDocument b = Fx.Doc(Fx.Para(1), Fx.Para(2), Fx.Para(3), Fx.Para(4), Fx.Para(5), Fx.Para(6), Fx.Para(7), edited);
+        AlignmentLink link = Fx.Align(a, b).LinkOfOld(Fx.P(1))!;
+        Assert.Equal(LinkKind.Move, link.Kind);
+        Assert.Equal([Fx.P(7)], link.NewNodes.ToArray());
+        Fx.Clean(a, b);
+    }
+
+    [Fact]
+    public void TwoSimilarCandidatesAreNotGuessedAsAMove()
+    {
+        string moved = Fx.Para(60, 30);
+        string[] w = moved.Split(' ');
+        string One(int shift) => string.Join(' ', w.Select((x, i) => (i + shift) % 3 == 0 ? "zz" + i + shift : x));
+        // Two new paragraphs far from the old one, equally similar to it: no way to tell which it became.
+        CompareDocument a = Fx.Doc(Fx.Para(1), moved, Fx.Para(2), Fx.Para(3), Fx.Para(4), Fx.Para(5), Fx.Para(6));
+        CompareDocument b = Fx.Doc(Fx.Para(1), Fx.Para(2), Fx.Para(3), Fx.Para(4), Fx.Para(5), Fx.Para(6), One(0), One(1));
+        Assert.Null(Fx.Align(a, b).LinkOfOld(Fx.P(1)));
+        Fx.Clean(a, b);
+    }
+
+    [Fact]
     public void ParagraphSplitIntoThree()
     {
         string whole = Fx.Para(7, 36);

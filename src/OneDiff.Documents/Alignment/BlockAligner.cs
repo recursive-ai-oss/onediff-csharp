@@ -46,6 +46,9 @@ internal static class BlockAligner
     // Stretches with at most this many old-by-new text blocks are compared in full, so short edits with no shared word pair are found.
     private const int AllPairsInStretch = 100;
 
+    // How far ahead of every other candidate a far pair must be to count as a move below the move threshold.
+    private const double UniqueMargin = 0.15;
+
     // A container needs this share of matched content to be paired by evidence.
     private const double ContainerFloor = 0.25;
 
@@ -629,6 +632,18 @@ internal static class BlockAligner
             }
 
             double[] final = Judge(live);
+
+            // For the unique-partner rule: the best and second-best judged similarity of every block.
+            var best1Old = new double[oldDoc.Count];
+            var best2Old = new double[oldDoc.Count];
+            var best1New = new double[newDoc.Count];
+            var best2New = new double[newDoc.Count];
+            for (int k = 0; k < live.Count; k++)
+            {
+                Top2(best1Old, best2Old, live[k].Old, final[k]);
+                Top2(best1New, best2New, live[k].New, final[k]);
+            }
+
             var pairs = new List<WeightedPair>(live.Count);
             var scoreOf = new Dictionary<long, (double Score, bool Local)>();
             for (int k = 0; k < live.Count; k++)
@@ -636,7 +651,7 @@ internal static class BlockAligner
                 Candidate c = live[k];
                 bool local = oldGap[c.Old] >= 0 && oldGap[c.Old] == newGap[c.New];
                 double s = final[k];
-                if (local ? s < settings.MatchThreshold : !settings.DetectMoves || s < settings.MoveThreshold)
+                if (local ? s < settings.MatchThreshold : !AdmitFar(c, s, best1Old, best2Old, best1New, best2New))
                 {
                     continue;
                 }
@@ -658,6 +673,40 @@ internal static class BlockAligner
             {
                 (double score, bool local) = scoreOf[Key(a, b)];
                 AddLink(LinkKind.Match, [a], [b], score, local ? LinkOrigin.Similar : LinkOrigin.Relocated);
+            }
+        }
+
+        // A pair outside its own stretch is a move. It needs the move threshold, or, failing that, to reach the match threshold
+        // and be the clear first choice of both blocks: no other candidate of either comes within the margin. An edited clause
+        // that moved has exactly one such partner; two similar clauses have two, and are left alone.
+        private bool AdmitFar(Candidate c, double s, double[] best1Old, double[] best2Old, double[] best1New, double[] best2New)
+        {
+            if (!settings.DetectMoves)
+            {
+                return false;
+            }
+
+            if (s >= settings.MoveThreshold)
+            {
+                return true;
+            }
+
+            return s >= settings.MatchThreshold
+                && s >= best1Old[c.Old] && s >= best1New[c.New]
+                && s - best2Old[c.Old] >= UniqueMargin
+                && s - best2New[c.New] >= UniqueMargin;
+        }
+
+        private static void Top2(double[] best1, double[] best2, int i, double s)
+        {
+            if (s > best1[i])
+            {
+                best2[i] = best1[i];
+                best1[i] = s;
+            }
+            else if (s > best2[i])
+            {
+                best2[i] = s;
             }
         }
 
