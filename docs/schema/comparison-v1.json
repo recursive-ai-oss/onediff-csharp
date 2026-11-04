@@ -1,0 +1,329 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recursiveai.org/onediff/schema/comparison-v1.json",
+  "title": "OneDiff comparison, version 1",
+  "description": "A comparison of two documents: both compare models, the alignment, the atomic changes, display groups, the ledger of hidden differences, diagnostics and provenance. Members marked optional are omitted when empty; a reader treats a missing optional member as empty.",
+  "type": "object",
+  "required": ["schema", "version", "provenance", "settings", "old", "new", "links", "changes", "groups", "ledger", "diagnostics", "verification"],
+  "properties": {
+    "schema": { "const": "onediff.comparison" },
+    "version": { "const": 1 },
+    "provenance": {
+      "type": "object",
+      "required": ["library", "oldName", "newName", "oldHash", "newHash"],
+      "properties": {
+        "library": { "type": "string", "description": "The library version that wrote the comparison." },
+        "oldName": { "type": "string" },
+        "newName": { "type": "string" },
+        "oldHash": { "type": "string", "description": "SHA-256 of the old input as lower-case hex; empty for a document built by hand." },
+        "newHash": { "type": "string" }
+      }
+    },
+    "settings": { "$ref": "#/$defs/settings" },
+    "old": { "$ref": "#/$defs/document" },
+    "new": { "$ref": "#/$defs/document" },
+    "links": {
+      "type": "array",
+      "description": "The alignment, ordered by first new node then first old node; a link's id is its index.",
+      "items": {
+        "type": "object",
+        "required": ["kind", "old", "new", "pinned", "score", "origin"],
+        "properties": {
+          "kind": { "enum": ["match", "move", "split", "merge"] },
+          "old": { "$ref": "#/$defs/ids" },
+          "new": { "$ref": "#/$defs/ids" },
+          "pinned": { "type": "boolean" },
+          "score": { "type": "number", "minimum": 0, "maximum": 1 },
+          "origin": { "enum": ["exact", "similar", "relocated", "splitMerge", "user", "fallback"] }
+        }
+      }
+    },
+    "changes": { "type": "array", "items": { "$ref": "#/$defs/change" } },
+    "groups": {
+      "type": "array",
+      "description": "Display grouping. Every change id appears in exactly one group; groups carry no change data.",
+      "items": {
+        "type": "object",
+        "required": ["id", "kind", "title", "changes"],
+        "properties": {
+          "id": { "type": "integer", "minimum": 0 },
+          "kind": { "enum": ["region", "cascade", "rename", "custom"] },
+          "title": { "type": "string" },
+          "changes": { "$ref": "#/$defs/ids" }
+        }
+      }
+    },
+    "ledger": {
+      "type": "array",
+      "description": "Differences the settings hide, one entry per category that hid anything, in category order.",
+      "items": {
+        "type": "object",
+        "required": ["category", "count", "locations"],
+        "properties": {
+          "category": { "$ref": "#/$defs/ledgerCategory" },
+          "count": { "type": "integer", "minimum": 0 },
+          "locations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["oldNode", "newNode", "detail", "oldAnchor", "newAnchor"],
+              "properties": {
+                "oldNode": { "type": "integer", "minimum": -1 },
+                "newNode": { "type": "integer", "minimum": -1 },
+                "detail": { "type": "string" },
+                "oldAnchor": { "$ref": "#/$defs/anchor" },
+                "newAnchor": { "$ref": "#/$defs/anchor" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["severity", "code", "message", "oldNode", "newNode"],
+        "properties": {
+          "severity": { "enum": ["info", "warning", "error"] },
+          "code": { "type": "string" },
+          "message": { "type": "string" },
+          "oldNode": { "type": "integer", "minimum": -1 },
+          "newNode": { "type": "integer", "minimum": -1 }
+        }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "required": ["passed", "fallbackLevel", "failureCount"],
+      "properties": {
+        "passed": { "type": "boolean" },
+        "fallbackLevel": { "type": "integer", "minimum": 0, "maximum": 3 },
+        "failureCount": { "type": "integer", "minimum": 0 }
+      }
+    }
+  },
+  "$defs": {
+    "ids": { "type": "array", "items": { "type": "integer", "minimum": 0 } },
+    "ledgerCategory": {
+      "enum": ["quotes", "dashes", "whitespace", "lineBreaks", "hyphenation", "pageNumbers", "runFormatting", "paragraphFormatting", "listFormatting", "sectionFormatting", "properties", "comments", "fieldCodes", "notItemized"]
+    },
+    "format": { "type": "object", "additionalProperties": { "type": "string" } },
+    "runs": {
+      "type": "array",
+      "description": "Sorted, non-overlapping character ranges with a non-empty attribute set.",
+      "items": {
+        "type": "object",
+        "required": ["start", "length", "format"],
+        "properties": {
+          "start": { "type": "integer", "minimum": 0 },
+          "length": { "type": "integer", "minimum": 1 },
+          "format": { "$ref": "#/$defs/format" }
+        }
+      }
+    },
+    "quad": {
+      "type": "array",
+      "description": "Page number, then x1 y1 x2 y2 x3 y3 x4 y4.",
+      "prefixItems": [{ "type": "integer", "minimum": 0 }],
+      "items": { "type": "number" },
+      "minItems": 9,
+      "maxItems": 9
+    },
+    "anchor": {
+      "description": "Where a piece of the model came from in its source. 'reference' is opaque to the engine.",
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": { "enum": ["none", "node", "pdfQuads", "ocrWords", "cell", "textSpan"] },
+        "reference": { "type": "string", "description": "node: adapter reference; textSpan: part name; cell: sheet." },
+        "start": { "type": "integer", "minimum": 0 },
+        "length": { "type": "integer", "minimum": 0 },
+        "address": { "type": "string", "description": "cell: A1 address." },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1, "description": "ocrWords: lowest word confidence." },
+        "quads": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/quad" } }
+      },
+      "allOf": [
+        { "if": { "properties": { "kind": { "const": "node" } } }, "then": { "required": ["reference"] } },
+        { "if": { "properties": { "kind": { "const": "textSpan" } } }, "then": { "required": ["reference", "start", "length"] } },
+        { "if": { "properties": { "kind": { "const": "cell" } } }, "then": { "required": ["reference", "address"] } },
+        { "if": { "properties": { "kind": { "const": "pdfQuads" } } }, "then": { "required": ["quads"] } },
+        { "if": { "properties": { "kind": { "const": "ocrWords" } } }, "then": { "required": ["quads", "confidence"] } }
+      ]
+    },
+    "document": {
+      "type": "object",
+      "required": ["kind", "name", "sourceHash", "sourceFormat", "nodes"],
+      "properties": {
+        "kind": { "enum": ["flowing", "slides", "grid"] },
+        "name": { "type": "string" },
+        "sourceHash": { "type": "string" },
+        "sourceFormat": { "type": "string" },
+        "nodes": {
+          "type": "array",
+          "description": "Nodes in document order; a node's id is its index and its parent has a smaller index.",
+          "items": {
+            "type": "object",
+            "required": ["parent", "kind"],
+            "properties": {
+              "parent": { "type": "integer", "minimum": -1 },
+              "kind": { "enum": ["section", "paragraph", "listItem", "table", "tableRow", "tableCell", "footnote", "endnote", "header", "footer", "comment", "field", "image", "textBox", "contentControl", "property"] },
+              "text": { "type": "string", "description": "Normalized text (optional when empty); never contains U+001E." },
+              "runs": { "$ref": "#/$defs/runs" },
+              "attributes": { "$ref": "#/$defs/format" },
+              "anchor": { "$ref": "#/$defs/anchor" },
+              "segments": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["start", "length", "anchor"],
+                  "properties": {
+                    "start": { "type": "integer", "minimum": 0 },
+                    "length": { "type": "integer", "minimum": 0 },
+                    "anchor": { "$ref": "#/$defs/anchor" }
+                  }
+                }
+              },
+              "folds": {
+                "type": "array",
+                "description": "What normalization replaced: 'original' stood where text[start, start+length) is.",
+                "items": {
+                  "type": "object",
+                  "required": ["category", "start", "length", "original"],
+                  "properties": {
+                    "category": { "$ref": "#/$defs/ledgerCategory" },
+                    "start": { "type": "integer", "minimum": 0 },
+                    "length": { "type": "integer", "minimum": 0 },
+                    "original": { "type": "string", "minLength": 1 }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "opaque": {
+          "type": "array",
+          "description": "Parts outside the compare model, known by hash.",
+          "items": {
+            "type": "object",
+            "required": ["name", "hash"],
+            "properties": {
+              "name": { "type": "string" },
+              "hash": { "type": "string" },
+              "anchor": { "$ref": "#/$defs/anchor" }
+            }
+          }
+        }
+      }
+    },
+    "side": {
+      "type": "object",
+      "description": "One side of a change. Nodes is empty for the absent side of an insertion or deletion. start/length address the joined text of the nodes (joined by U+001E).",
+      "required": ["nodes", "start", "length", "text", "anchor"],
+      "properties": {
+        "nodes": { "$ref": "#/$defs/ids" },
+        "start": { "type": "integer", "minimum": 0 },
+        "length": { "type": "integer", "minimum": 0 },
+        "text": { "type": "string" },
+        "anchor": { "$ref": "#/$defs/anchor" }
+      }
+    },
+    "change": {
+      "type": "object",
+      "required": ["id", "kind", "link", "old", "new", "decision"],
+      "properties": {
+        "id": { "type": "integer", "minimum": 0 },
+        "kind": { "enum": ["insert", "delete", "replace", "move", "split", "merge", "format", "attribute"] },
+        "link": { "type": "integer", "minimum": -1, "description": "The alignment link, or -1 for a node inserted or deleted whole." },
+        "old": { "$ref": "#/$defs/side" },
+        "new": { "$ref": "#/$defs/side" },
+        "edits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["oldStart", "oldLength", "newStart", "newLength", "oldText", "newText"],
+            "properties": {
+              "oldStart": { "type": "integer", "minimum": 0 },
+              "oldLength": { "type": "integer", "minimum": 0 },
+              "newStart": { "type": "integer", "minimum": 0 },
+              "newLength": { "type": "integer", "minimum": 0 },
+              "oldText": { "type": "string" },
+              "newText": { "type": "string" },
+              "oldRuns": { "$ref": "#/$defs/runs" },
+              "newRuns": { "$ref": "#/$defs/runs" }
+            }
+          }
+        },
+        "attributeEdits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["oldNode", "newNode", "key"],
+            "properties": {
+              "oldNode": { "type": "integer", "minimum": 0 },
+              "newNode": { "type": "integer", "minimum": 0 },
+              "key": { "type": "string" },
+              "oldValue": { "type": "string", "description": "Absent when the attribute did not exist." },
+              "newValue": { "type": "string", "description": "Absent when the attribute no longer exists." }
+            }
+          }
+        },
+        "decision": {
+          "type": "object",
+          "required": ["by", "source", "score"],
+          "properties": {
+            "by": { "enum": ["none", "rule", "model", "user"] },
+            "source": { "type": "string" },
+            "score": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        },
+        "properties": { "$ref": "#/$defs/format" }
+      }
+    },
+    "mark": {
+      "type": "object",
+      "required": ["color", "decoration", "glyph"],
+      "properties": {
+        "color": { "type": "string" },
+        "decoration": { "enum": ["none", "underline", "doubleUnderline", "strikeThrough", "doubleStrikeThrough", "highlight"] },
+        "glyph": { "type": "string" }
+      }
+    },
+    "settings": {
+      "type": "object",
+      "required": ["name", "hidden", "throwOnFailure", "costCap", "algorithm", "matchThreshold", "splitMergeThreshold", "moveThreshold", "detectMoves", "detectSplitsAndMerges", "collapseCascades", "typedChanges", "seed", "style"],
+      "properties": {
+        "name": { "type": "string" },
+        "hidden": { "type": "array", "items": { "$ref": "#/$defs/ledgerCategory" } },
+        "throwOnFailure": { "type": "boolean" },
+        "costCap": { "type": "integer", "minimum": 1 },
+        "algorithm": { "enum": ["myers", "patience", "histogram"] },
+        "matchThreshold": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "splitMergeThreshold": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "moveThreshold": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "detectMoves": { "type": "boolean" },
+        "detectSplitsAndMerges": { "type": "boolean" },
+        "collapseCascades": { "type": "boolean" },
+        "typedChanges": { "type": "boolean" },
+        "seed": { "type": "integer", "minimum": 0 },
+        "style": {
+          "type": "object",
+          "required": ["name", "insertion", "deletion", "moveFrom", "moveTo", "formatting", "changeBars", "changeBarColor", "coverPage", "footer", "typeTags"],
+          "properties": {
+            "name": { "type": "string" },
+            "insertion": { "$ref": "#/$defs/mark" },
+            "deletion": { "$ref": "#/$defs/mark" },
+            "moveFrom": { "$ref": "#/$defs/mark" },
+            "moveTo": { "$ref": "#/$defs/mark" },
+            "formatting": { "$ref": "#/$defs/mark" },
+            "changeBars": { "type": "boolean" },
+            "changeBarColor": { "type": "string" },
+            "coverPage": { "type": "boolean" },
+            "footer": { "type": "boolean" },
+            "typeTags": { "type": "boolean" }
+          }
+        }
+      }
+    }
+  }
+}
