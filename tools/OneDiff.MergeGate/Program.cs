@@ -10,7 +10,7 @@ namespace OneDiff.MergeGate;
 /// triples. git runs only as a separate process. Files are read as Latin-1 so every byte survives the round trip.
 /// </summary>
 /// <remarks>
-/// Usage: MergeGate &lt;git&gt; &lt;corpus-root&gt; &lt;out-dir&gt; [--align=builtin|git] [--limit=N] [--jobs=N] [--time]
+/// Usage: MergeGate &lt;git&gt; &lt;corpus-root&gt; &lt;out-dir&gt; [--align=builtin|git] [--algo=myers|patience|histogram] [--limit=N] [--jobs=N] [--time]
 /// <para>
 /// <c>--align=git</c> takes the base-to-side alignments from <c>git diff --no-index</c> instead of OneDiff's diff algorithm, which
 /// separates differences caused by a different alignment from differences in the merge rules themselves.
@@ -28,11 +28,13 @@ internal static class Program
 
     private static readonly string[] Statuses = ["identical", "differs-markers-only", "differs-content", "error"];
 
+    private static DiffAlgorithm algorithm = DiffAlgorithm.Myers;
+
     private static int Main(string[] args)
     {
         if (args.Length < 3)
         {
-            Console.Error.WriteLine("usage: MergeGate <git> <corpus-root> <out-dir> [--align=builtin|git] [--limit=N] [--jobs=N] [--time]");
+            Console.Error.WriteLine("usage: MergeGate <git> <corpus-root> <out-dir> [--align=builtin|git] [--algo=myers|patience|histogram] [--limit=N] [--jobs=N] [--time]");
             return 2;
         }
 
@@ -48,6 +50,10 @@ internal static class Program
             if (a.StartsWith("--limit=", StringComparison.Ordinal))
             {
                 limit = int.Parse(a["--limit=".Length..]);
+            }
+            else if (a.StartsWith("--algo=", StringComparison.Ordinal))
+            {
+                algorithm = Enum.Parse<DiffAlgorithm>(a["--algo=".Length..], true);
             }
             else if (a.StartsWith("--jobs=", StringComparison.Ordinal))
             {
@@ -72,7 +78,7 @@ internal static class Program
         var inputs = triples.Select(d => (Read(Path.Combine(d, "base")), Read(Path.Combine(d, "ours")), Read(Path.Combine(d, "theirs")))).ToArray();
         foreach ((string name, ConflictStyle style, _) in Styles)
         {
-            var settings = new MergeSettings { Style = style };
+            var settings = new MergeSettings { Style = style, Algorithm = algorithm };
             long conflicts = 0;
             var sw = Stopwatch.StartNew();
             foreach ((string b, string o, string t) in inputs)
@@ -108,7 +114,7 @@ internal static class Program
 
                 foreach ((string name, ConflictStyle style, string flag) in Styles)
                 {
-                    var settings = new MergeSettings { Style = style };
+                    var settings = new MergeSettings { Style = style, Algorithm = algorithm };
                     (string gitText, int gitRc) = RunGit(git, dir, flag);
                     TextMerge? ours = null;
                     string status;

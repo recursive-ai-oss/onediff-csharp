@@ -62,7 +62,31 @@ internal static class Diff3Core
 
             // Observed in output of git merge-file 2.51.2: hunks that merely touch (one ends where the other starts, or both insert
             // at the same point) are a conflict, so only a strict gap makes a hunk one-sided.
-            if (haveOurs && (!haveTheirs || oursHunks[i].FirstEnd < theirsHunks[j].FirstStart))
+            // Khanna et al. 2007 §3: both sides made the same change, so there is nothing to decide (a false conflict). Observed in
+            // output of git merge-file 2.51.2: only a pair of hunks that match exactly counts. Two sides that end up with equal text
+            // from differently shaped hunks still conflict (and in the merge style narrowing then finds nothing left to mark).
+            if (haveOurs && haveTheirs && SameHunk(oursHunks[i], theirsHunks[j], oursIds, theirsIds))
+            {
+                Hunk h = oursHunks[i++];
+                Hunk g = theirsHunks[j++];
+                AddUnchanged(h.FirstStart);
+                segments.Add(new Segment
+                {
+                    Kind = MergeRegionKind.BothSame,
+                    Stable = true,
+                    BaseStart = h.FirstStart,
+                    BaseEnd = h.FirstEnd,
+                    OursStart = h.SecondStart,
+                    OursEnd = h.SecondEnd,
+                    TheirsStart = g.SecondStart,
+                    TheirsEnd = g.SecondEnd,
+                    Anchor = h.FirstStart,
+                });
+                position = h.FirstEnd;
+                oursShift = h.SecondEnd - h.FirstEnd;
+                theirsShift = g.SecondEnd - g.FirstEnd;
+            }
+            else if (haveOurs && (!haveTheirs || oursHunks[i].FirstEnd < theirsHunks[j].FirstStart))
             {
                 Hunk h = oursHunks[i++];
                 AddUnchanged(h.FirstStart);
@@ -141,12 +165,6 @@ internal static class Diff3Core
                     TheirsEnd = end + theirsShift,
                     Anchor = start,
                 };
-
-                // Khanna et al. 2007 §3: a conflict whose sides are identical is a false conflict, settled without a marker.
-                if (SameItems(oursIds, conflict.OursStart, conflict.OursEnd, theirsIds, conflict.TheirsStart, conflict.TheirsEnd))
-                {
-                    conflict.Kind = MergeRegionKind.BothSame;
-                }
 
                 segments.Add(conflict);
                 position = end;
@@ -394,6 +412,13 @@ internal static class Diff3Core
         return result;
     }
 
+    private static bool SameHunk(Hunk ours, Hunk theirs, int[] oursIds, int[] theirsIds)
+    {
+        return ours.FirstStart == theirs.FirstStart
+            && ours.FirstEnd == theirs.FirstEnd
+            && SameItems(oursIds, ours.SecondStart, ours.SecondEnd, theirsIds, theirs.SecondStart, theirs.SecondEnd);
+    }
+
     private static bool SameItems(int[] a, int aStart, int aEnd, int[] b, int bStart, int bEnd)
     {
         return aEnd - aStart == bEnd - bStart
@@ -427,10 +452,8 @@ internal static class Diff3Core
             }
         }
 
-        // Observed in output of git merge-file 2.51.2: where a run of changed lines could sit in several places (the lines just
-        // after it repeat its first lines), the run is reported at the last place. Sliding each side's runs down reproduces that.
-        SlideDown(firstChanged, first);
-        SlideDown(secondChanged, second);
+        Compact(firstChanged, first);
+        Compact(secondChanged, second);
 
         var hunks = new List<Hunk>();
         int i = 0;
@@ -471,7 +494,10 @@ internal static class Diff3Core
         return hunks;
     }
 
-    private static void SlideDown(bool[] changed, int[] items)
+    // Observed in output of git merge-file 2.51.2: a run of changed items that could sit in several places (the neighbouring
+    // item equals the run's edge item) is reported at the last such place, and runs that meet on the way become one run.
+    // Sliding every run as far up as it goes (joining the runs it meets) and then as far down as it goes reproduces that.
+    private static void Compact(bool[] changed, int[] items)
     {
         int n = changed.Length;
         int i = 0;
@@ -490,7 +516,18 @@ internal static class Diff3Core
                 end++;
             }
 
-            // The item after the run equals the run's first item: the run can move down by one and still cover the same edit.
+            while (start > 0 && items[start - 1] == items[end - 1])
+            {
+                changed[end - 1] = false;
+                changed[start - 1] = true;
+                start--;
+                end--;
+                while (start > 0 && changed[start - 1])
+                {
+                    start--;
+                }
+            }
+
             while (end < n && items[end] == items[start])
             {
                 changed[start] = false;
