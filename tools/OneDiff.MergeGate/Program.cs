@@ -70,7 +70,192 @@ internal static class Program
             .Take(limit)
             .ToArray();
 
+        if (args.Contains("--one"))
+        {
+            int at = Array.IndexOf(args, "--one");
+            int[] x = args[at + 1].Select(ch => ch - (int)'a').ToArray();
+            int[] y = args[at + 2].Select(ch => ch - (int)'a').ToArray();
+            Console.WriteLine(Show(Diff3Core.Hunks(x, y, algorithm, default)));
+            return 0;
+        }
+
+        if (args.Contains("--small"))
+        {
+            return CompareSmall(git, outDir, jobs);
+        }
+
+        if (args.Contains("--pairs"))
+        {
+            return ComparePairs(git, root, outDir, triples, jobs);
+        }
+
         return timeOnly ? Time(triples) : Compare(git, root, outDir, triples, alignWithGit, jobs);
+    }
+
+    // Every pair of short sequences over three letters, plus random longer ones over four: our alignment against git's.
+    private static int CompareSmall(string git, string outDir, int jobs)
+    {
+        string[] letters = Enumerable.Range(0, 26).Select(i => ((char)('a' + i)).ToString() + "\n").ToArray();
+        bool medium = Environment.GetEnvironmentVariable("GATE_MEDIUM") != null;
+        var cases = new List<(int[] A, int[] B)>();
+        var all = new List<int[]>();
+        for (int len = 0; len <= (medium ? 0 : 4); len++)
+        {
+            int count = (int)Math.Pow(3, len);
+            for (int code = 0; code < count; code++)
+            {
+                int[] seq = new int[len];
+                int c = code;
+                for (int i = 0; i < len; i++)
+                {
+                    seq[i] = c % 3;
+                    c /= 3;
+                }
+
+                all.Add(seq);
+            }
+        }
+
+        foreach (int[] x in all)
+        {
+            foreach (int[] y in all)
+            {
+                cases.Add((x, y));
+            }
+        }
+
+        var random = new Random(77);
+        if (medium)
+        {
+            cases.Clear();
+            // Longer inputs where one line (letter a) is common and the rest are mostly rare: the shapes of blank lines in real files.
+            int Pick() => random.NextDouble() < 0.4 ? 0 : 1 + random.Next(9);
+            for (int i = 0; i < 60000; i++)
+            {
+                int[] x = Enumerable.Range(0, random.Next(6, 17)).Select(_ => Pick()).ToArray();
+                int[] y = Enumerable.Range(0, random.Next(0, 13)).Select(_ => Pick()).ToArray();
+                cases.Add((x, y));
+            }
+        }
+        else
+        {
+            for (int i = 0; i < 20000; i++)
+            {
+                int[] x = Enumerable.Range(0, random.Next(0, 9)).Select(_ => random.Next(4)).ToArray();
+                int[] y = Enumerable.Range(0, random.Next(0, 9)).Select(_ => random.Next(4)).ToArray();
+                cases.Add((x, y));
+            }
+        }
+
+        var bad = new ConcurrentBag<string>();
+        string cachePath = Path.Combine(Path.GetDirectoryName(outDir.TrimEnd('/'))!, medium ? "medium-git.cache" : "small-git.cache");
+        var cache = new ConcurrentDictionary<string, string>();
+        if (File.Exists(cachePath))
+        {
+            foreach (string line in File.ReadAllLines(cachePath))
+            {
+                int tab = line.IndexOf('\t', StringComparison.Ordinal);
+                cache[line[..tab]] = line[(tab + 1)..];
+            }
+        }
+
+        Parallel.ForEach(cases, new ParallelOptions { MaxDegreeOfParallelism = jobs }, c =>
+        {
+            string scratch = Path.Combine(outDir, $"s{Environment.CurrentManagedThreadId}");
+            Directory.CreateDirectory(scratch);
+            List<Hunk> mine = Diff3Core.Hunks(c.A, c.B, algorithm, default);
+            string key = string.Join(',', c.A) + "|" + string.Join(',', c.B);
+            List<Hunk> theirs;
+            if (cache.TryGetValue(key, out string? cached))
+            {
+                theirs = cached.Length == 0 ? [] : cached.Split(';').Select(h => h.Split(',').Select(int.Parse).ToArray()).Select(v => new Hunk(v[0], v[1], v[2], v[3])).ToList();
+            }
+            else
+            {
+                theirs = GitAligner(git, letters, scratch)(c.A, c.B);
+                cache[key] = string.Join(';', theirs.Select(h => $"{h.FirstStart},{h.FirstEnd},{h.SecondStart},{h.SecondEnd}"));
+            }
+
+            if (!mine.SequenceEqual(theirs))
+            {
+                string Text(int[] s) => string.Concat(s.Select(i => letters[i][0]));
+                bad.Add($"{Text(c.A),-9} {Text(c.B),-9} cost={Cost(mine)}/{Cost(theirs)} mine={Show(mine)} git={Show(theirs)}");
+            }
+        });
+        File.WriteAllLines(cachePath, cache.OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => kv.Key + "\t" + kv.Value));
+        string[] ordered = bad.OrderBy(l => l.Length).ThenBy(l => l, StringComparer.Ordinal).ToArray();
+        File.WriteAllLines(Path.Combine(outDir, "small.txt"), ordered);
+        Console.WriteLine($"cases={cases.Count} differing={bad.Count}");
+        return 0;
+    }
+
+    // Compares our base-to-side alignment with the one `git diff` reports, for both sides of every triple.
+    private static int ComparePairs(string git, string root, string outDir, string[] triples, int jobs)
+    {
+        var bad = new ConcurrentBag<string>();
+        int total = 0;
+        // git's hunks are cached beside the report so that reruns while tuning only run our side.
+        string cachePath = Path.Combine(Path.GetDirectoryName(outDir.TrimEnd('/'))!, "git-hunks.cache");
+        var cache = new ConcurrentDictionary<string, string>();
+        if (File.Exists(cachePath))
+        {
+            foreach (string line in File.ReadAllLines(cachePath))
+            {
+                int tab = line.IndexOf('\t', StringComparison.Ordinal);
+                cache[line[..tab]] = line[(tab + 1)..];
+            }
+        }
+
+        Parallel.ForEach(triples, new ParallelOptions { MaxDegreeOfParallelism = jobs }, dir =>
+        {
+            string scratch = Path.Combine(outDir, $"p{Environment.CurrentManagedThreadId}");
+            Directory.CreateDirectory(scratch);
+            string[] texts = [Read(Path.Combine(dir, "base")), Read(Path.Combine(dir, "ours")), Read(Path.Combine(dir, "theirs"))];
+            var ids = new Dictionary<string, int>(StringComparer.Ordinal);
+            int[][] lines = texts.Select(t => Lines(t).Select(l => ids.TryAdd(l, ids.Count) ? ids[l] : ids[l]).ToArray()).ToArray();
+            string[] byId = ids.OrderBy(kv => kv.Value).Select(kv => kv.Key).ToArray();
+            for (int side = 1; side <= 2; side++)
+            {
+                Interlocked.Increment(ref total);
+                List<Hunk> mine = Diff3Core.Hunks(lines[0], lines[side], algorithm, default);
+                string key = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.Latin1.GetBytes(texts[0] + "\0" + texts[side])));
+                List<Hunk> theirs;
+                if (cache.TryGetValue(key, out string? cached))
+                {
+                    theirs = cached.Length == 0 ? [] : cached.Split(';').Select(h => h.Split(',').Select(int.Parse).ToArray()).Select(v => new Hunk(v[0], v[1], v[2], v[3])).ToList();
+                }
+                else
+                {
+                    theirs = GitAligner(git, byId, scratch)(lines[0], lines[side]);
+                    cache[key] = string.Join(';', theirs.Select(h => $"{h.FirstStart},{h.FirstEnd},{h.SecondStart},{h.SecondEnd}"));
+                }
+
+                if (!mine.SequenceEqual(theirs))
+                {
+                    bad.Add($"{Path.GetRelativePath(root, dir)}\t{(side == 1 ? "ours" : "theirs")}\tcost={Cost(mine)}/{Cost(theirs)}\tmine={Show(mine)} git={Show(theirs)}");
+                }
+            }
+        });
+        File.WriteAllLines(cachePath, cache.OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => kv.Key + "\t" + kv.Value));
+        File.WriteAllLines(Path.Combine(outDir, "pairs.tsv"), bad.Order(StringComparer.Ordinal));
+        Console.WriteLine($"pairs={total} differing={bad.Count}");
+        return 0;
+    }
+
+    private static int Cost(List<Hunk> hunks) => hunks.Sum(h => (h.FirstEnd - h.FirstStart) + (h.SecondEnd - h.SecondStart));
+
+    private static string Show(List<Hunk> hunks) => string.Join(" ", hunks.Select(h => $"[{h.FirstStart}:{h.FirstEnd}>{h.SecondStart}:{h.SecondEnd}]"));
+
+    private static IEnumerable<string> Lines(string text)
+    {
+        int at = 0;
+        while (at < text.Length)
+        {
+            int nl = text.IndexOf('\n', at);
+            int end = nl < 0 ? text.Length : nl + 1;
+            yield return text[at..end];
+            at = end;
+        }
     }
 
     private static int Time(string[] triples)
