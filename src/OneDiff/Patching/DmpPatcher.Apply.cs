@@ -48,10 +48,12 @@ public sealed partial class DmpPatcher
 
         // Patches are positioned in the text as it stands after the earlier ones; delta is how far reality has drifted from that.
         int delta = 0;
+        bool codePoints = offsetUnit == DmpOffsetUnit.CodePoint;
         foreach (DmpPatch patch in work)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            int expected = patch.Start2 + delta;
+            int expectedStart = patch.Start2 + delta; // in OffsetUnit
+            int expected = codePoints ? UnitIndex(text, expectedStart) : expectedStart;
             string text1 = patch.OldText();
             int startLoc;
             int endLoc = -1;
@@ -76,17 +78,17 @@ public sealed partial class DmpPatcher
             if (startLoc == -1)
             {
                 Fail(outcomes, patch, DmpPatchOutcome.NotFound);
-                delta -= patch.Length2 - patch.Length1;
+                delta -= Measure(patch.NewText()) - Measure(patch.OldText());
                 continue;
             }
 
-            delta = startLoc - expected;
+            delta = (codePoints ? CodePointIndex(text, startLoc) : startLoc) - expectedStart;
             int foundEnd = endLoc == -1 ? Math.Min(startLoc + text1.Length, text.Length) : Math.Min(endLoc + matchMaxBits, text.Length);
             string text2 = text.Substring(startLoc, foundEnd - startLoc);
             if (string.Equals(text1, text2, StringComparison.Ordinal))
             {
                 text = string.Concat(text.AsSpan(0, startLoc), patch.NewText(), text.AsSpan(startLoc + text1.Length));
-                Succeed(outcomes, patch, startLoc, delta);
+                Succeed(outcomes, patch, Math.Max(0, startLoc - padding.Length), delta);
                 continue;
             }
 
@@ -127,7 +129,7 @@ public sealed partial class DmpPatcher
             }
 
             text = sb.ToString();
-            Succeed(outcomes, patch, startLoc, delta);
+            Succeed(outcomes, patch, Math.Max(0, startLoc - padding.Length), delta);
         }
 
         // A hostile patch can delete the padding itself (it is ordinary text to the matcher), so clamp rather than trust the lengths.
@@ -237,8 +239,8 @@ public sealed partial class DmpPatcher
             {
                 var piece = new DmpPatch { Origin = big.Origin };
                 bool empty = true;
-                piece.Start1 = start1 - pre.Length;
-                piece.Start2 = start2 - pre.Length;
+                piece.Start1 = start1 - Measure(pre);
+                piece.Start2 = start2 - Measure(pre);
                 if (pre.Length > 0)
                 {
                     piece.Length1 = piece.Length2 = pre.Length;
@@ -251,7 +253,7 @@ public sealed partial class DmpPatcher
                     if (d.Operation == DmpOperation.Insert)
                     {
                         piece.Length2 += d.Text.Length;
-                        start2 += d.Text.Length;
+                        start2 += Measure(d.Text);
                         piece.MutableDiffs.Add(d);
                         head++;
                         empty = false;
@@ -260,7 +262,7 @@ public sealed partial class DmpPatcher
                     {
                         // A deletion longer than two searches goes in one piece; it is checked by its ends.
                         piece.Length1 += d.Text.Length;
-                        start1 += d.Text.Length;
+                        start1 += Measure(d.Text);
                         empty = false;
                         piece.MutableDiffs.Add(d);
                         head++;
@@ -270,11 +272,11 @@ public sealed partial class DmpPatcher
                         string take = d.Text.Substring(0, Math.Min(d.Text.Length, size - piece.Length1 - patchMargin));
                         take = KeepPairs(d.Text, take);
                         piece.Length1 += take.Length;
-                        start1 += take.Length;
+                        start1 += Measure(take);
                         if (d.Operation == DmpOperation.Equal)
                         {
                             piece.Length2 += take.Length;
-                            start2 += take.Length;
+                            start2 += Measure(take);
                         }
                         else
                         {
@@ -331,6 +333,51 @@ public sealed partial class DmpPatcher
             x = insertAt - 1; // continue after the pieces
         }
     }
+
+    // Length of a text in the unit the patches' offsets use.
+    private int Measure(string text)
+    {
+        if (offsetUnit != DmpOffsetUnit.CodePoint)
+        {
+            return text.Length;
+        }
+
+        return HasSurrogate(text) ? text.Length - PairCount(text, text.Length) : text.Length;
+    }
+
+    private static int PairCount(string text, int units)
+    {
+        int pairs = 0;
+        for (int i = 1; i < units; i++)
+        {
+            if (char.IsLowSurrogate(text[i]) && char.IsHighSurrogate(text[i - 1]))
+            {
+                pairs++;
+                i++;
+            }
+        }
+
+        return pairs;
+    }
+
+    // Code point offset -> UTF-16 index (clamped to the text), and back.
+    private static int UnitIndex(string text, int codePoints)
+    {
+        if (!HasSurrogate(text))
+        {
+            return Math.Clamp(codePoints, 0, text.Length);
+        }
+
+        int i = 0;
+        for (int seen = 0; seen < codePoints && i < text.Length; seen++)
+        {
+            i += char.IsHighSurrogate(text[i]) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]) ? 2 : 1;
+        }
+
+        return i;
+    }
+
+    private static int CodePointIndex(string text, int unitIndex) => HasSurrogate(text) ? unitIndex - PairCount(text, Math.Min(unitIndex, text.Length)) : unitIndex;
 
     // Do not cut a surrogate pair when taking a prefix of a run.
     private static string KeepPairs(string whole, string take)

@@ -2,6 +2,16 @@ using System.Text;
 
 namespace OneDiff.Patching;
 
+/// <summary>The unit patch header offsets count in.</summary>
+public enum DmpOffsetUnit
+{
+    /// <summary>UTF-16 code units (the JavaScript, Java and C# ports of diff-match-patch).</summary>
+    Utf16CodeUnit = 0,
+
+    /// <summary>Unicode code points (the Python package).</summary>
+    CodePoint = 1,
+}
+
 /// <summary>What a diff-match-patch diff does.</summary>
 public enum DmpOperation : byte
 {

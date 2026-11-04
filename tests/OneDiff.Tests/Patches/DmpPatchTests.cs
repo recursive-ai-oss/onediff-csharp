@@ -44,6 +44,31 @@ public class DmpPatchTests
     }
 
     [Fact]
+    public void CodePointOffsetsCountPairsOnce()
+    {
+        string emoji = string.Concat(Enumerable.Repeat("\U0001F600", 700)); // 1400 UTF-16 units, 700 code points
+        string a = emoji + " the quick brown fox jumps over the lazy dog and keeps running far away";
+        string b = emoji + " the quick brown fox leaps over the lazy dog and keeps running far away";
+        var cp = new DmpPatcher { OffsetUnit = DmpOffsetUnit.CodePoint };
+        IReadOnlyList<DmpPatch> units = Patcher.Make(a, ReferenceDmp.Diffs(a, b));
+        IReadOnlyList<DmpPatch> points = cp.Make(a, ReferenceDmp.Diffs(a, b));
+        Assert.Equal(units[0].Start2 - 700, points[0].Start2);
+        // Both read the same text; the code point patch applies even where the unit offset would be 700 characters off.
+        Assert.Equal(b, cp.Apply(DmpPatcher.FromText(DmpPatcher.ToText(points)), a).Text);
+        Assert.Equal(b, Patcher.Apply(units, a).Text);
+        DmpApplyResult wrongUnit = Patcher.Apply(points, a);
+        Assert.True(!wrongUnit.Success || wrongUnit.Text != b);
+        // Random round trips in both units.
+        var random = new Random(3);
+        for (int i = 0; i < 100; i++)
+        {
+            string x = RandomString(random, 300);
+            string y = MutateString(random, x);
+            Assert.Equal(y, cp.Apply(cp.Make(x, y), x).Text);
+        }
+    }
+
+    [Fact]
     public void LoneSurrogatesSurviveTheTextForm()
     {
         string a = "x\uD800y";

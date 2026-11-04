@@ -15,6 +15,7 @@ public sealed partial class DmpPatcher
     private int matchMaxBits = 32;
     private double patchDeleteThreshold = 0.5;
     private int patchMargin = 4;
+    private DmpOffsetUnit offsetUnit = DmpOffsetUnit.Utf16CodeUnit;
 
     /// <summary>
     /// How strict fuzzy matching is: 0.0 accepts only a perfect match at the expected place, 1.0 accepts anything. Default 0.5.
@@ -82,6 +83,26 @@ public sealed partial class DmpPatcher
         }
     }
 
+    /// <summary>
+    /// What the offsets in patch headers count. UTF-16 code units by default, as the JavaScript, Java and C# ports of diff-match-patch
+    /// count them; <see cref="DmpOffsetUnit.CodePoint"/> is how the Python package counts, and is needed to exchange patch text with it
+    /// for text outside the Basic Multilingual Plane. Applies to <see cref="Make(string, string, CancellationToken)"/> and
+    /// <see cref="Apply"/>; lengths inside the text (<see cref="MatchMaxBits"/>, <see cref="DmpPatch.Length1"/>) stay in UTF-16 units.
+    /// </summary>
+    public DmpOffsetUnit OffsetUnit
+    {
+        get => offsetUnit;
+        init
+        {
+            if (!Enum.IsDefined(value))
+            {
+                throw new ArgumentOutOfRangeException(nameof(value));
+            }
+
+            offsetUnit = value;
+        }
+    }
+
     // ---------------------------------------------------------------- make
 
     /// <summary>
@@ -135,7 +156,9 @@ public sealed partial class DmpPatcher
             throw new ArgumentException("The diffs do not describe text1.", nameof(diffs));
         }
 
-        var pre = new Rolling(t2.ToString(), 0, text1, 0);
+        string newText = t2.ToString();
+        bool pairs = offsetUnit == DmpOffsetUnit.CodePoint && (HasSurrogate(text1) || HasSurrogate(newText));
+        var pre = new Rolling(newText, 0, text1, 0, pairs);
         var patch = new DmpPatch();
         int count1 = 0; // offsets in the rolling text, reset to count2 when a patch closes
         int count2 = 0;
@@ -172,9 +195,10 @@ public sealed partial class DmpPatcher
                     {
                         // A long equality ends the patch. The next one is cut from the text with this one already applied.
                         AddContext(patch, pre);
+                        ToOffsetUnit(patch, pre);
                         patches.Add(patch);
                         patch = new DmpPatch();
-                        pre = new Rolling(pre.Source2, abs2, text1, abs1);
+                        pre = new Rolling(pre.Source2, abs2, text1, abs1, pairs);
                         count1 = count2;
                     }
 
@@ -197,10 +221,25 @@ public sealed partial class DmpPatcher
         if (patch.MutableDiffs.Count > 0)
         {
             AddContext(patch, pre);
+            ToOffsetUnit(patch, pre);
             patches.Add(patch);
         }
 
         return patches;
+    }
+
+    // Starts are computed in UTF-16 units of the rolling text; in code point mode they are restated by dropping the second unit of
+    // every pair before them. Both starts name the same place in the rolling text, so one count serves.
+    private static bool HasSurrogate(string s) => s.AsSpan().IndexOfAnyInRange('\uD800', '\uDFFF') >= 0;
+
+    private void ToOffsetUnit(DmpPatch patch, Rolling text)
+    {
+        if (offsetUnit == DmpOffsetUnit.CodePoint)
+        {
+            int pairs = text.PairsBefore(patch.Start2);
+            patch.Start1 -= pairs;
+            patch.Start2 -= pairs;
+        }
     }
 
     // Grows the context until the patch's old text is unique in the text, then adds one more margin ("for good luck", wiki "API").
@@ -247,16 +286,40 @@ public sealed partial class DmpPatcher
         private readonly int p2;
         private readonly string source1;
         private readonly int p1;
+        private readonly bool hasPairs;
 
-        public Rolling(string source2, int p2, string source1, int p1)
+        public Rolling(string source2, int p2, string source1, int p1, bool hasPairs)
         {
             Source2 = source2;
             this.p2 = p2;
             this.source1 = source1;
             this.p1 = p1;
+            this.hasPairs = hasPairs;
         }
 
         public string Source2 { get; }
+
+        /// <summary>Surrogate pairs among the first <paramref name="pos"/> characters of the text.</summary>
+        public int PairsBefore(int pos)
+        {
+            pos = Math.Min(pos, Length);
+            int pairs = 0;
+            if (!hasPairs)
+            {
+                return 0;
+            }
+
+            for (int i = 1; i < pos; i++)
+            {
+                if (char.IsLowSurrogate(At(i)) && char.IsHighSurrogate(At(i - 1)))
+                {
+                    pairs++;
+                    i++;
+                }
+            }
+
+            return pairs;
+        }
 
         public int Length => p2 + source1.Length - p1;
 
