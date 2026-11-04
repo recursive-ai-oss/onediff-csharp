@@ -6,7 +6,10 @@ namespace OneDiff.Documents.Pipeline;
 /// <summary>The reference grouping and classification: one change per diff region, plain kinds, no typing.</summary>
 internal static class ReferenceGrouper
 {
-    public static ChangeSet Group(PairDiffs diffs, CancellationToken ct)
+    /// <summary>Makes the changes for the text and format edits of one ordinary link (not a split or merge), each with the new-text position it sorts by.</summary>
+    internal delegate List<(int Position, Change Change)> LinkUnitizer(AlignmentLink link, ProjectedGroup oldText, ProjectedGroup newText, LinkDiff diff, Alignment alignment);
+
+    public static ChangeSet Group(PairDiffs diffs, CancellationToken ct, LinkUnitizer? unitizer = null)
     {
         Alignment al = diffs.Alignment;
         CompareSettings settings = al.Settings;
@@ -72,16 +75,26 @@ internal static class ReferenceGrouper
                 items.Add((primary, 1, -1, Make(ChangeKind.Move, link.Id, wholeOld, wholeNew, [], [])));
             }
 
-            foreach (RegionEdit e in diff.Edits)
+            if (unitizer is not null)
             {
-                ChangeKind kind = e.IsFormatOnly ? ChangeKind.Format : e.OldLength == 0 ? ChangeKind.Insert : e.NewLength == 0 ? ChangeKind.Delete : ChangeKind.Replace;
-                items.Add((primary, 1, e.NewStart, Make(
-                    kind,
-                    link.Id,
-                    Side(al.Old, og, link.OldNodes, e.OldStart, e.OldLength),
-                    Side(al.New, ng, link.NewNodes, e.NewStart, e.NewLength),
-                    [e],
-                    [])));
+                foreach ((int position, Change change) in unitizer(link, og, ng, diff, al))
+                {
+                    items.Add((primary, 1, position, change));
+                }
+            }
+            else
+            {
+                foreach (RegionEdit e in diff.Edits)
+                {
+                    ChangeKind kind = e.IsFormatOnly ? ChangeKind.Format : e.OldLength == 0 ? ChangeKind.Insert : e.NewLength == 0 ? ChangeKind.Delete : ChangeKind.Replace;
+                    items.Add((primary, 1, e.NewStart, Make(
+                        kind,
+                        link.Id,
+                        Side(al.Old, og, link.OldNodes, e.OldStart, e.OldLength),
+                        Side(al.New, ng, link.NewNodes, e.NewStart, e.NewLength),
+                        [e],
+                        [])));
+                }
             }
 
             if (!diff.AttributeEdits.IsEmpty)
@@ -139,6 +152,6 @@ internal static class ReferenceGrouper
     public static ChangeSide Side(CompareDocument doc, ProjectedGroup g, ImmutableArray<int> nodes, int start, int length) =>
         new(nodes, start, length, g.Text.Substring(start, length), g.ResolveAnchor(doc, start, length));
 
-    private static Change Make(ChangeKind kind, int linkId, ChangeSide old, ChangeSide @new, ImmutableArray<RegionEdit> edits, ImmutableArray<AttributeEdit> attributeEdits) =>
+    internal static Change Make(ChangeKind kind, int linkId, ChangeSide old, ChangeSide @new, ImmutableArray<RegionEdit> edits, ImmutableArray<AttributeEdit> attributeEdits) =>
         new(0, kind, linkId, old, @new, edits, attributeEdits, Decision.Unclassified, FormatSet.Empty);
 }

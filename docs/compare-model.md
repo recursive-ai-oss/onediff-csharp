@@ -103,7 +103,7 @@ Seams: `IPairScorer` (`Score`, `ScoreBatch`) for alignment candidates, `ITextNor
 | Code | Check |
 |---|---|
 | V100–V104 | change ids unique and non-negative; groups unique; groups list only known changes; every change in exactly one group; sides and edit lists present |
-| V105–V113 | a change attached to no link is a whole-node insert/delete of an unmatched node with no edits; link ids valid; the change names the link's nodes; sides have well-formed ranges, the text of that range, and an anchor equal to the one the model resolves; single-edit changes cover their edit's ranges |
+| V105–V113 | a change attached to no link is a whole-node insert/delete of an unmatched node with no edits; link ids valid; the change names the link's nodes; sides have well-formed ranges, the text of that range, and an anchor equal to the one the model resolves; a change's sides contain all of its edits (they may show more, such as a whole number or sentence) |
 | V200 | every visible old node is in exactly one link or deleted exactly once; every visible new node likewise inserted |
 | V300–V304 | hidden links have no changes; a `Move`/`Split`/`Merge` link has exactly one change of that kind; the link's edits replay old → new **and** new → old over text and formatting; attribute edits replay both ways |
 | V400–V401 | every `Match` keeps its parent and its sibling order |

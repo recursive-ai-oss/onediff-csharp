@@ -246,12 +246,15 @@ internal static class Verifier
 
             CheckSide(c, c.Old, true, link);
             CheckSide(c, c.New, false, link);
-            if (c.Edits.Length == 1 && c.Kind is ChangeKind.Insert or ChangeKind.Delete or ChangeKind.Replace or ChangeKind.Format)
+            if (c.Kind is ChangeKind.Insert or ChangeKind.Delete or ChangeKind.Replace or ChangeKind.Format)
             {
-                RegionEdit e = c.Edits[0];
-                if (c.Old.Start != e.OldStart || c.Old.Length != e.OldLength || c.New.Start != e.NewStart || c.New.Length != e.NewLength)
+                // A change may show more than its edits (a whole number, a whole sentence) but never less or elsewhere.
+                foreach (RegionEdit e in c.Edits)
                 {
-                    Fail("V109", $"change {c.Id} shows other ranges than its edit covers");
+                    if (e.OldStart < c.Old.Start || e.OldEnd > c.Old.Start + c.Old.Length || e.NewStart < c.New.Start || e.NewEnd > c.New.Start + c.New.Length)
+                    {
+                        Fail("V109", $"change {c.Id} shows ranges that do not contain its edit at {e.OldStart}/{e.NewStart}");
+                    }
                 }
             }
         }
