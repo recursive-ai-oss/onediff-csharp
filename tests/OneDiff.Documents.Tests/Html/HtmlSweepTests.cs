@@ -165,4 +165,128 @@ public class HtmlSweepTests
         Report($"corpus: pairs={pairs} pages={pages} mismatches={failures} skipped={skipped} sets=" + string.Join(',', perSet.Select(kv => kv.Key + ":" + kv.Value.ToString(CultureInfo.InvariantCulture))));
         Assert.True(failures == 0, firstFailure);
     }
+
+    /// <summary>
+    /// With ONEDIFF_HTML_HASHES set to a file, writes the SHA-256 of every page for a fixed set of comparisons, so two machines
+    /// can be compared line by line: seeded random documents in every preset and layout, the sample pair, and (when a corpus is
+    /// given) the first plain-text pairs of the wiki and synthetic sets.
+    /// </summary>
+    [Fact]
+    public void PageHashesForCrossMachineComparison()
+    {
+        if (Environment.GetEnvironmentVariable("ONEDIFF_HTML_HASHES") is not { Length: > 0 } path)
+        {
+            return;
+        }
+
+        var lines = new List<string>();
+        void Add(string label, Comparison c)
+        {
+            foreach (RedlineStyle style in HtmlWriterTests.Styles)
+            {
+                foreach (bool sbs in new[] { false, true })
+                {
+                    string html = sbs ? HtmlRedline.SideBySide(c, style) : HtmlRedline.Inline(c, style);
+                    lines.Add($"{label} {style.Name} {(sbs ? "sbs" : "inline")} {html.Length} {Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(html)))}");
+                }
+            }
+        }
+
+        Add("sample", HtmlSampleTests.SampleComparison());
+        for (int seed = 0; seed < 1000; seed++)
+        {
+            var r = new Random(seed);
+            GNode a = DocumentGenerator.Random(r);
+            GNode b = a.Clone();
+            for (int k = r.Next(0, 7); k > 0; k--)
+            {
+                DocumentGenerator.Mutate(b, r);
+            }
+
+            Add($"random-{seed}", Comparison.Of(DocumentGenerator.Build(a, "old-" + seed), DocumentGenerator.BuildWithOpaque(b, r.Next(4) == 0 ? "ff" : "00"), SettingsFor(seed)));
+        }
+
+        if (Environment.GetEnvironmentVariable("ONEDIFF_TEXT_CORPUS") is { Length: > 0 } root && Directory.Exists(root))
+        {
+            foreach (string set in Directory.GetDirectories(root).Order(StringComparer.Ordinal).Where(d => Path.GetFileName(d).StartsWith("wiki-", StringComparison.Ordinal) || Path.GetFileName(d) == "synthetic"))
+            {
+                foreach (string dir in Directory.GetDirectories(set).Order(StringComparer.Ordinal).Take(40))
+                {
+                    string o = Path.Combine(dir, "old"), n = Path.Combine(dir, "new");
+                    if (!File.Exists(o) || !File.Exists(n) || new FileInfo(o).Length + new FileInfo(n).Length > 400_000)
+                    {
+                        continue;
+                    }
+
+                    var oi = DocumentInput.FromBytes(File.ReadAllBytes(o), "old");
+                    var ni = DocumentInput.FromBytes(File.ReadAllBytes(n), "new");
+                    if (PlainTextSource.Instance.CanRead(oi) && PlainTextSource.Instance.CanRead(ni))
+                    {
+                        Add($"{Path.GetFileName(set)}-{Path.GetFileName(dir)}", Comparison.Of(oi, ni, CompareSettings.Legal with { ThrowOnFailure = false }));
+                    }
+                }
+            }
+        }
+
+        File.WriteAllLines(path, lines);
+    }
+
+    /// <summary>
+    /// With ONEDIFF_HTML_COST=1, times the writers on a synthetic contract of 3,000 blocks with about 300 edits (indicative:
+    /// run it alone on a quiet machine). Prints size, time and allocation per page.
+    /// </summary>
+    [Fact]
+    public void WriteCostOfALargeContract()
+    {
+        if (Environment.GetEnvironmentVariable("ONEDIFF_HTML_COST") != "1")
+        {
+            return;
+        }
+
+        var r = new Random(7);
+        GNode a = new() { Kind = NodeKind.Section };
+        for (int i = 0; i < 3000; i++)
+        {
+            a.Children.Add(new GNode { Kind = NodeKind.Paragraph, Text = DocumentGenerator.RandomText(r, 18, 40) });
+        }
+
+        GNode b = a.Clone();
+        for (int i = 0; i < 300; i++)
+        {
+            GNode p = b.Children[r.Next(b.Children.Count)];
+            string[] words = p.Text.Split(' ');
+            words[r.Next(words.Length)] = DocumentGenerator.RandomText(r, 1, 3);
+            p.Text = string.Join(' ', words);
+        }
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        Comparison c = Comparison.Of(DocumentGenerator.Build(a, "contract-v1"), DocumentGenerator.Build(b, "contract-v2"));
+        double compareMs = sw.Elapsed.TotalMilliseconds;
+        foreach (bool sbs in new[] { false, true })
+        {
+            var times = new List<double>();
+            long bytes = 0, alloc = 0;
+            for (int rep = 0; rep < 7; rep++)
+            {
+                long before = GC.GetAllocatedBytesForCurrentThread();
+                sw.Restart();
+                using var ms = new MemoryStream();
+                if (sbs)
+                {
+                    HtmlRedline.WriteSideBySide(c, ms);
+                }
+                else
+                {
+                    HtmlRedline.WriteInline(c, ms);
+                }
+
+                times.Add(sw.Elapsed.TotalMilliseconds);
+                bytes = ms.Length;
+                alloc = GC.GetAllocatedBytesForCurrentThread() - before;
+            }
+
+            times.Sort();
+            Report($"cost: layout={(sbs ? "side-by-side" : "inline")} blocks=3000 changes={c.Changes.Length} compare_ms={compareMs:F0} write_ms_median={times[times.Count / 2]:F1} write_ms_min={times[0]:F1} bytes={bytes} alloc_bytes={alloc}");
+        }
+    }
 }
