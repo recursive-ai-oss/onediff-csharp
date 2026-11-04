@@ -134,16 +134,54 @@ internal static class RuleGrouper
     /// <summary>Makes each side of a unit cover every value its edits touch on that side.</summary>
     private static void WidenToValues(Unit u, string a, string b)
     {
-        foreach ((int s, int e) in ValueSpans.Overlapping(a, u.OldFrom, u.OldTo))
+        int oldFrom = u.OldFrom, oldTo = u.OldTo, newFrom = u.NewFrom, newTo = u.NewTo;
+        List<(int Start, int End)> oldValues = ValueSpans.Overlapping(a, oldFrom, oldTo);
+        List<(int Start, int End)> newValues = ValueSpans.Overlapping(b, newFrom, newTo);
+
+        // An edit that only drops or only adds characters of a value ("15%" to "5%") is empty on one side, and that side only touches
+        // the value it still has. Without it the unit would read "15%" deleted, as if the "5%" were gone. The value is taken in when
+        // it is the other side's value with exactly the edit's characters left out.
+        if (oldFrom == oldTo)
+        {
+            TakeInSurvivingValue(ValueSpans.Overlapping(a, oldFrom, oldTo, touching: true), a, newValues, b, newFrom, newTo, oldValues);
+        }
+        else if (newFrom == newTo)
+        {
+            TakeInSurvivingValue(ValueSpans.Overlapping(b, newFrom, newTo, touching: true), b, oldValues, a, oldFrom, oldTo, newValues);
+        }
+
+        foreach ((int s, int e) in oldValues)
         {
             u.OldFrom = Math.Min(u.OldFrom, s);
             u.OldTo = Math.Max(u.OldTo, e);
         }
 
-        foreach ((int s, int e) in ValueSpans.Overlapping(b, u.NewFrom, u.NewTo))
+        foreach ((int s, int e) in newValues)
         {
             u.NewFrom = Math.Min(u.NewFrom, s);
             u.NewTo = Math.Max(u.NewTo, e);
+        }
+    }
+
+    /// <summary>
+    /// Adds to <paramref name="emptyValues"/> the value on the empty side that touches the edit when it equals a value of the other
+    /// side (<paramref name="otherText"/>, edit range [otherFrom, otherTo)) with the edit's characters removed.
+    /// </summary>
+    private static void TakeInSurvivingValue(List<(int Start, int End)> touching, string emptyText, List<(int Start, int End)> otherValues, string otherText, int otherFrom, int otherTo, List<(int Start, int End)> emptyValues)
+    {
+        foreach ((int s, int e) in touching)
+        {
+            foreach ((int os, int oe) in otherValues)
+            {
+                int keptBefore = otherFrom - os, keptAfter = oe - otherTo;
+                if (os <= otherFrom && otherTo <= oe && keptBefore + keptAfter == e - s
+                    && string.CompareOrdinal(otherText, os, emptyText, s, keptBefore) == 0
+                    && string.CompareOrdinal(otherText, otherTo, emptyText, s + keptBefore, keptAfter) == 0)
+                {
+                    emptyValues.Add((s, e));
+                    return;
+                }
+            }
         }
     }
 

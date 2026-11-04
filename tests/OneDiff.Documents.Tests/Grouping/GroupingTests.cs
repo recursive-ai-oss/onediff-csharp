@@ -61,6 +61,34 @@ public class GroupingTests
     }
 
     [Fact]
+    public void ADroppedLeadingDigitShowsTheWholeValueOnBothSides()
+    {
+        Comparison c = Cmp("Late payments bear interest at 15% per year until paid in full.", "Late payments bear interest at 5% per year until paid in full.");
+        Change ch = Single(c);
+        Assert.Equal("15%", ch.Old.Text);
+        Assert.Equal("5%", ch.New.Text);
+        Assert.Equal(ChangeKind.Replace, ch.Kind);
+    }
+
+    [Fact]
+    public void AnAddedLeadingDigitShowsTheWholeValueOnBothSides()
+    {
+        Comparison c = Cmp("The monthly fee is 2 500 EUR and is payable in advance.", "The monthly fee is 12 500 EUR and is payable in advance.");
+        Change ch = Single(c);
+        Assert.Equal("2 500 EUR", ch.Old.Text);
+        Assert.Equal("12 500 EUR", ch.New.Text);
+    }
+
+    [Fact]
+    public void AValueInsertedBesideAnotherStaysAnInsert()
+    {
+        Comparison c = Cmp("Interest of 5% per year applies to late payments.", "Interest of 30 days 5% per year applies to late payments.");
+        Change ch = Single(c);
+        Assert.Equal(ChangeKind.Insert, ch.Kind);
+        Assert.DoesNotContain("5%", ch.Old.Text);
+    }
+
+    [Fact]
     public void ADateChangeIsOneChange()
     {
         Comparison c = Cmp("This agreement takes effect on March 3, 2025 and continues.", "This agreement takes effect on April 5, 2025 and continues.");

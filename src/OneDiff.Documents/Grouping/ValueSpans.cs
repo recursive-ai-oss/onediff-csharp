@@ -43,9 +43,10 @@ internal static partial class ValueSpans
     /// <summary>
     /// The value spans that overlap [<paramref name="from"/>, <paramref name="to"/>) of <paramref name="text"/>, as (start, end)
     /// pairs. An empty range overlaps a span that contains its position strictly inside. Only the neighbourhood of the range is
-    /// searched, so the cost does not depend on the size of the text.
+    /// searched, so the cost does not depend on the size of the text. With <paramref name="touching"/>, an empty range also overlaps
+    /// a span that starts or ends exactly at its position.
     /// </summary>
-    public static List<(int Start, int End)> Overlapping(string text, int from, int to)
+    public static List<(int Start, int End)> Overlapping(string text, int from, int to, bool touching = false)
     {
         var result = new List<(int, int)>();
         int w0 = Math.Max(0, from - Margin), w1 = Math.Min(text.Length, to + Margin);
@@ -64,7 +65,7 @@ internal static partial class ValueSpans
                 continue;
             }
 
-            bool overlaps = from == to ? s < from && from < e : s < to && e > from;
+            bool overlaps = from == to ? (touching ? s <= from && from <= e : s < from && from < e) : s < to && e > from;
             if (overlaps)
             {
                 result.Add((s, e));
