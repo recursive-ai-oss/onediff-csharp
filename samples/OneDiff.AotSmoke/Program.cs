@@ -136,6 +136,28 @@ internal static class Program
             failures++;
         }
 
+        // The happy path: register once, then Redline.Create writes the markup chosen by the .pdf extension.
+        string dir = Path.Combine(Path.GetTempPath(), "onediff-aot-pdf-" + Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            string pa = Path.Combine(dir, "a.pdf"), pb = Path.Combine(dir, "b.pdf"), po = Path.Combine(dir, "out.pdf");
+            File.WriteAllBytes(pa, oldPdf);
+            File.WriteAllBytes(pb, newPdf);
+            PdfRedline.Register();
+            Redline.Create(pa, pb, po);
+            using PdfDocument registered = PdfDocument.Open(File.ReadAllBytes(po));
+            if (registered.Pages[0].Annotations.Count(x => x.Subtype is "Highlight" or "Caret") != result.Marks.Length)
+            {
+                Console.Error.WriteLine("pdf: Register + Redline.Create did not write the markup");
+                failures++;
+            }
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+
         return failures;
     }
 

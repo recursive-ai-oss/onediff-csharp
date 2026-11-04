@@ -99,7 +99,9 @@ public sealed class PdfDocumentSource : IDocumentSource
 
             var builder = new CompareDocumentBuilder(DocumentKind.Flowing).WithMetadata(input.Name, input.Sha256Hex(), MediaType);
             new PdfModelBuilder(options, builder, cancellationToken).Build(pages, labels);
-            return builder.Build();
+            CompareDocument result = builder.Build();
+            PdfOrigins.Remember(result, input.Content, options.Password);
+            return result;
         }
         catch (Exception ex) when (ex is not (OperationCanceledException or InvalidDataException or OutOfMemoryException))
         {

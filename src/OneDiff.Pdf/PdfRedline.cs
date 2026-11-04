@@ -56,9 +56,14 @@ public sealed record PdfMarkupResult(ImmutableArray<PdfMark> Marks, ImmutableArr
 /// </para>
 /// <para>Output is deterministic: the same comparison, input and settings give the same bytes.</para>
 /// </remarks>
-public sealed record PdfRedline
+public sealed class PdfRedline : RedlineForm
 {
     private const int MaxQuadsPerAnnotation = 2048;
+
+    /// <summary>Creates the default markup (same as <see cref="OnPages"/>).</summary>
+    public PdfRedline() : base("pdf", [".pdf"], RedlineStyle.SideBySide)
+    {
+    }
 
     /// <summary>The preset for marking PDF pages: colour-blind-safe blue and orange highlights with "+" and "−" glyphs, author "OneDiff", no modification date, incremental save.</summary>
     public static PdfRedline OnPages { get; } = new();
@@ -81,6 +86,36 @@ public sealed record PdfRedline
 
     /// <summary>The password of an encrypted input, or null.</summary>
     public string? Password { get; init; }
+
+    /// <summary>
+    /// Registers the PDF source and this markup as the output form of <c>.pdf</c> files, process-wide, so that
+    /// <c>Redline.Create("a.pdf", "b.pdf", "out.pdf")</c> works. Safe to call more than once.
+    /// </summary>
+    public static void Register()
+    {
+        Redline.Register(new PdfDocumentSource());
+        Redline.Register(OnPages);
+    }
+
+    /// <summary>
+    /// Writes the new PDF with the changes marked on its pages (<see cref="MarkNewDocument"/>), as a registered or explicit output
+    /// form. The PDF's bytes are those the comparison's new document was read from by <see cref="PdfDocumentSource"/>; a style
+    /// passed by the caller or chosen from the settings replaces <see cref="Style"/>.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The comparison's new document was not read from a PDF by <see cref="PdfDocumentSource"/> in this process (for example it was read back from JSON); use <see cref="MarkNewDocument"/> with the bytes.</exception>
+    public override void Write(Comparison comparison, Stream output, RedlineStyle style, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(comparison);
+        ArgumentNullException.ThrowIfNull(output);
+        ArgumentNullException.ThrowIfNull(style);
+        if (!PdfOrigins.TryGet(comparison.New, out PdfOrigin origin))
+        {
+            throw new InvalidOperationException("the new document was not read from a PDF by PdfDocumentSource, so its bytes are not known; call MarkNewDocument with the PDF's bytes");
+        }
+
+        var use = new PdfRedline { Style = style, Author = Author, ModifiedDate = ModifiedDate, Incremental = Incremental, Password = Password ?? origin.Password };
+        use.MarkNewDocument(comparison, origin.Bytes, output, cancellationToken);
+    }
 
     /// <summary>Splits an annotation's <c>/Contents</c> written by this type into its first line and the old (or, on the old document, new) text after it.</summary>
     /// <param name="contents">The annotation text.</param>
@@ -217,7 +252,7 @@ public sealed record PdfRedline
                 Color = color,
                 Contents = plan.Contents,
                 Title = Author,
-                Name = Name(changeId, pp.Page, 0),
+                Name = AnnotationName(changeId, pp.Page, 0),
                 ModifiedDate = ModifiedDate,
                 Popup = Popup(rect, page),
             }, marks);
@@ -247,7 +282,7 @@ public sealed record PdfRedline
                 Color = color,
                 Contents = part == 0 ? plan.Contents : plan.Contents.Split('\n')[0],
                 Title = Author,
-                Name = Name(changeId, pp.Page, part),
+                Name = AnnotationName(changeId, pp.Page, part),
                 ModifiedDate = ModifiedDate,
                 Popup = part == 0 ? Popup(bounds, page) : null,
             }, marks);
@@ -260,7 +295,7 @@ public sealed record PdfRedline
         marks.Add(new PdfMark(changeId, pageIndex, options.Name!, options.Kind, options.Quads.Count));
     }
 
-    private static string Name(int changeId, int page, int part) =>
+    private static string AnnotationName(int changeId, int page, int part) =>
         "onediff-c" + changeId.ToString(CultureInfo.InvariantCulture) + "-p" + page.ToString(CultureInfo.InvariantCulture)
         + (part == 0 ? "" : "." + part.ToString(CultureInfo.InvariantCulture));
 

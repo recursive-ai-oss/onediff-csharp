@@ -691,6 +691,49 @@ internal sealed class PdfModelBuilder
         return new Quad(left.Page, x0, bottom, x1, bottom, x1, top, x0, top);
     }
 
+    /// <summary>
+    /// The anchor of a block: its line boxes (a list item's include the marker). The extraction's line box can reach across columns
+    /// or table cells that are other blocks, so for a block without a marker the boxes are the hulls of its own words, line by line.
+    /// </summary>
+    private static Anchor? NodeAnchor(Piece p)
+    {
+        if (p.Label is not null || p.Tokens.Count == 0)
+        {
+            return p.LineQuads.Count > 0 ? Anchor.ForPdfQuads(p.LineQuads) : null;
+        }
+
+        var lines = new List<Quad>();
+        int page = -1;
+        double x0 = 0, x1 = 0, y0 = 0, y1 = 0;
+        foreach (TokenRef t in p.Tokens)
+        {
+            Quad q = t.Quad;
+            double qx0 = Math.Min(Math.Min(q.X1, q.X2), Math.Min(q.X3, q.X4)), qx1 = Math.Max(Math.Max(q.X1, q.X2), Math.Max(q.X3, q.X4));
+            double qy0 = Math.Min(Math.Min(q.Y1, q.Y2), Math.Min(q.Y3, q.Y4)), qy1 = Math.Max(Math.Max(q.Y1, q.Y2), Math.Max(q.Y3, q.Y4));
+            double centre = (qy0 + qy1) / 2;
+            if (page == q.Page && centre >= y0 && centre <= y1)
+            {
+                x0 = Math.Min(x0, qx0);
+                x1 = Math.Max(x1, qx1);
+                continue;
+            }
+
+            if (page >= 0)
+            {
+                lines.Add(new Quad(page, x0, y0, x1, y0, x1, y1, x0, y1));
+            }
+
+            page = q.Page;
+            x0 = qx0;
+            x1 = qx1;
+            y0 = qy0;
+            y1 = qy1;
+        }
+
+        lines.Add(new Quad(page, x0, y0, x1, y0, x1, y1, x0, y1));
+        return Anchor.ForPdfQuads(lines);
+    }
+
     private void EmitParagraph(Piece p, NormalizedText norm)
     {
         var segments = ImmutableArray.CreateBuilder<AnchoredSpan>(p.Tokens.Count * 2);
@@ -740,7 +783,7 @@ internal sealed class PdfModelBuilder
             Folds = norm.Folds,
             Runs = [.. runs],
             Attributes = attributes,
-            Anchor = p.LineQuads.Count > 0 ? Anchor.ForPdfQuads(p.LineQuads) : null,
+            Anchor = NodeAnchor(p),
             Segments = segments.ToImmutable(),
         });
     }

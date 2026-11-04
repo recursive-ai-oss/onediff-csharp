@@ -173,7 +173,7 @@ public class SourceTests
         byte[] a = Doc(new Fixtures.Spec { Paragraphs = [Long(3)] });
         byte[] b = Doc(new Fixtures.Spec { Paragraphs = [Long(3).Replace("thirty", "forty", StringComparison.Ordinal)] });
         Run inc = Run.Of(a, b);
-        Run full = Run.Of(a, b, redline: PdfRedline.OnPages with { Incremental = false });
+        Run full = Run.Of(a, b, redline: new PdfRedline { Incremental = false });
         inc.AssertReextraction();
         full.AssertReextraction();
         Assert.True(inc.Result.SavedIncrementally);
@@ -188,7 +188,7 @@ public class SourceTests
         byte[] a = Doc(new Fixtures.Spec { Paragraphs = ["Alpha beta gamma."] });
         byte[] b = Doc(new Fixtures.Spec { Paragraphs = ["Alpha delta gamma."] });
         var stamp = new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero);
-        Run r = Run.Of(a, b, redline: PdfRedline.OnPages with { Author = "Reviewer", ModifiedDate = stamp });
+        Run r = Run.Of(a, b, redline: new PdfRedline { Author = "Reviewer", ModifiedDate = stamp });
         using PdfDocument pdf = PdfDocument.Open(r.Marked);
         PdfAnnotation ann = pdf.Pages[0].Annotations.First(x => x.Subtype == "Highlight");
         Assert.Equal("Reviewer", ann.Title);

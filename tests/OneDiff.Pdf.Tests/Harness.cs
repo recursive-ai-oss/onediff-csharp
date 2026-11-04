@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using OneDiff.Documents;
 using OneDiff.Documents.Model;
 using OneDiff.Pdf.Internal;
+using OneDiff.Tokenization;
 using OnePdf;
 using OnePdf.Text;
 
@@ -233,18 +234,56 @@ internal sealed class Run
 
         Node node = doc[side.Nodes[0]];
         // Pieces of the compared text, each with the characters the page shows for it.
-        var shown = new System.Text.StringBuilder();
-        int projected = 0, pos = 0, from = side.Start, to = side.Start + side.Length;
-        void Piece(string compared, string page)
+        var pieces = new List<(string Compared, string Page)>();
+        int pos = 0;
+        foreach (NormalizationFold f in node.Folds)
         {
-            int a = projected, b = projected + compared.Length;
+            if (f.Start > pos)
+            {
+                string plain = node.Text.Substring(pos, f.Start - pos);
+                pieces.Add((plain, plain));
+            }
+
+            pieces.Add(settings.Hidden.Contains(f.Category) ? (node.Text.Substring(f.Start, f.Length), f.Original) : (f.Original, f.Original));
+            pos = f.Start + f.Length;
+        }
+
+        if (pos < node.Text.Length)
+        {
+            string plain = node.Text.Substring(pos);
+            pieces.Add((plain, plain));
+        }
+
+        // The page marks whole words: a change that cuts a word (a character-level refinement of a word diff) marks the word.
+        int from = side.Start, to = side.Start + side.Length;
+        string compared = string.Concat(pieces.Select(p => p.Compared));
+        var tokens = new List<TokenRange>();
+        Tokenizer.Tokenize(compared, TokenKind.Word, tokens);
+        foreach (TokenRange t in tokens)
+        {
+            if (t.Start < from && from < t.End)
+            {
+                from = t.Start;
+            }
+
+            if (t.Start < to && to < t.End)
+            {
+                to = t.End;
+            }
+        }
+
+        var shown = new System.Text.StringBuilder();
+        int projected = 0;
+        foreach ((string text, string page) in pieces)
+        {
+            int a = projected, b = projected + text.Length;
             projected = b;
             if (b <= from || a >= to)
             {
-                return;
+                continue;
             }
 
-            if (compared == page)
+            if (text == page)
             {
                 shown.Append(page, Math.Max(from, a) - a, Math.Min(to, b) - Math.Max(from, a));
             }
@@ -252,30 +291,6 @@ internal sealed class Run
             {
                 shown.Append(page);
             }
-        }
-
-        foreach (NormalizationFold f in node.Folds)
-        {
-            if (f.Start > pos)
-            {
-                Piece(node.Text.Substring(pos, f.Start - pos), node.Text.Substring(pos, f.Start - pos));
-            }
-
-            if (settings.Hidden.Contains(f.Category))
-            {
-                Piece(node.Text.Substring(f.Start, f.Length), f.Original);
-            }
-            else
-            {
-                Piece(f.Original, f.Original);
-            }
-
-            pos = f.Start + f.Length;
-        }
-
-        if (pos < node.Text.Length)
-        {
-            Piece(node.Text.Substring(pos), node.Text.Substring(pos));
         }
 
         return shown.ToString();

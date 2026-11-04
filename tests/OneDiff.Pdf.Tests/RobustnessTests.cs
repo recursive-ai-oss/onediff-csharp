@@ -95,7 +95,7 @@ public class RobustnessTests
         var source = new PdfDocumentSource(new PdfSourceOptions { Password = "secret" });
         Comparison c = Comparison.Of(source.Read(DocumentInput.FromBytes(a)), source.Read(DocumentInput.FromBytes(b)));
         using var ms = new MemoryStream();
-        PdfMarkupResult r = (PdfRedline.OnPages with { Password = "secret" }).MarkNewDocument(c, b, ms);
+        PdfMarkupResult r = new PdfRedline { Password = "secret" }.MarkNewDocument(c, b, ms);
         Assert.NotEmpty(r.Marks);
         Assert.Throws<PdfPasswordException>(() => PdfDocument.Open(ms.ToArray()).Pages[0].Annotations.Count);
         Assert.Equal(r.Marks.Length, Run.ReadAnnotations(ms.ToArray(), "secret").Count);
