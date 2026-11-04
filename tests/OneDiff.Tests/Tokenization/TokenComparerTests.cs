@@ -40,7 +40,7 @@ public class TokenComparerTests
     [Fact]
     public void LinesIgnoringWhiteSpaceAndCaseDiffOnTheRealChange()
     {
-        TextDiff d = Diff.Lines("Alpha\n  beta  \ngamma\n", "alpha\nbeta\ndelta\n", TokenComparer.Create(true, WhiteSpaceHandling.IgnoreChanges));
+        TextDiff d = Diff.LinesUsing("Alpha\n  beta  \ngamma\n", "alpha\nbeta\ndelta\n", TokenComparer.Create(true, WhiteSpaceHandling.IgnoreChanges));
         Assert.Equal(1, d.Script.DeletedCount);
         Assert.Equal(1, d.Script.InsertedCount);
         Assert.Equal("gamma\n", d.OldSpan(d.Script.Single(e => e.Kind == EditKind.Delete)).ToString());
@@ -51,7 +51,7 @@ public class TokenComparerTests
     [Fact]
     public void AnyStringComparerWorksWithoutSpanLookup()
     {
-        TextDiff d = Diff.Words("A b", "a B", StringComparer.OrdinalIgnoreCase);
+        TextDiff d = Diff.WordsUsing("A b", "a B", StringComparer.OrdinalIgnoreCase);
         Assert.True(d.Script.IsIdentical);
     }
 }

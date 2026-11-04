@@ -43,11 +43,11 @@ public static partial class Diff
     }
 
     /// <summary>Compares two strings line by line under <paramref name="comparer"/>. Shorthand for <see cref="TextUsing"/> with lines.</summary>
-    public static TextDiff Lines(string oldText, string newText, IEqualityComparer<string> comparer, DiffAlgorithm algorithm = DiffAlgorithm.Myers, CancellationToken cancellationToken = default)
+    public static TextDiff LinesUsing(string oldText, string newText, IEqualityComparer<string> comparer, DiffAlgorithm algorithm = DiffAlgorithm.Myers, CancellationToken cancellationToken = default)
         => TextUsing(oldText, newText, comparer, TokenKind.Line, algorithm, cancellationToken);
 
     /// <summary>Compares two strings word by word under <paramref name="comparer"/>. Shorthand for <see cref="TextUsing"/> with words.</summary>
-    public static TextDiff Words(string oldText, string newText, IEqualityComparer<string> comparer, DiffAlgorithm algorithm = DiffAlgorithm.Myers, CancellationToken cancellationToken = default)
+    public static TextDiff WordsUsing(string oldText, string newText, IEqualityComparer<string> comparer, DiffAlgorithm algorithm = DiffAlgorithm.Myers, CancellationToken cancellationToken = default)
         => TextUsing(oldText, newText, comparer, TokenKind.Word, algorithm, cancellationToken);
 
     private static int[] InternWith(

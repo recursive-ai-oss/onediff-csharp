@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Globalization;
 
 namespace OneDiff.Cleanup;
@@ -18,10 +19,24 @@ internal static class LosslessShift
             return script;
         }
 
-        // Mutable copy of the run lengths: kind, old length, new length.
-        var kinds = new EditKind[n];
-        var oldLengths = new int[n];
-        var newLengths = new int[n];
+        // Mutable copy of the run lengths (kind, old length, new length), in pooled buffers: most scripts need no change at all.
+        EditKind[] kinds = ArrayPool<EditKind>.Shared.Rent(n);
+        int[] oldLengths = ArrayPool<int>.Shared.Rent(n);
+        int[] newLengths = ArrayPool<int>.Shared.Rent(n);
+        try
+        {
+            return Slide(script, n, kinds, oldLengths, newLengths, oldText, newText, equality, scoreMoves);
+        }
+        finally
+        {
+            ArrayPool<EditKind>.Shared.Return(kinds);
+            ArrayPool<int>.Shared.Return(oldLengths);
+            ArrayPool<int>.Shared.Return(newLengths);
+        }
+    }
+
+    private static EditScript Slide(EditScript script, int n, EditKind[] kinds, int[] oldLengths, int[] newLengths, TokenText oldText, TokenText newText, TokenEquality equality, bool scoreMoves)
+    {
         for (int i = 0; i < n; i++)
         {
             kinds[i] = script[i].Kind;

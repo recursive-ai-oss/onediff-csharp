@@ -16,9 +16,9 @@ internal sealed class ChangeRegions
     private readonly bool[] alive;
     private readonly int count;
 
-    private ChangeRegions(List<(int OldStart, int OldEnd, int NewStart, int NewEnd)> regions)
+    private ChangeRegions(int count)
     {
-        count = regions.Count;
+        this.count = count;
         oldStart = new int[count];
         oldEnd = new int[count];
         newStart = new int[count];
@@ -28,10 +28,6 @@ internal sealed class ChangeRegions
         alive = new bool[count];
         for (int i = 0; i < count; i++)
         {
-            oldStart[i] = regions[i].OldStart;
-            oldEnd[i] = regions[i].OldEnd;
-            newStart[i] = regions[i].NewStart;
-            newEnd[i] = regions[i].NewEnd;
             next[i] = i + 1 < count ? i + 1 : -1;
             previous[i] = i - 1;
             alive[i] = true;
@@ -42,39 +38,39 @@ internal sealed class ChangeRegions
 
     public static ChangeRegions From(EditScript script)
     {
-        var regions = new List<(int, int, int, int)>();
-        bool open = false;
-        int os = 0, oe = 0, ns = 0, ne = 0;
-        foreach (Edit e in script.Edits)
+        // A region is a maximal run of non-equal edits; count them, then fill.
+        ReadOnlySpan<Edit> edits = script.Edits;
+        int regions = 0;
+        for (int i = 0; i < edits.Length; i++)
         {
+            if (edits[i].Kind != EditKind.Equal && (i == 0 || edits[i - 1].Kind == EditKind.Equal))
+            {
+                regions++;
+            }
+        }
+
+        var result = new ChangeRegions(regions);
+        int r = -1;
+        for (int i = 0; i < edits.Length; i++)
+        {
+            Edit e = edits[i];
             if (e.Kind == EditKind.Equal)
             {
-                if (open)
-                {
-                    regions.Add((os, oe, ns, ne));
-                    open = false;
-                }
-
                 continue;
             }
 
-            if (!open)
+            if (i == 0 || edits[i - 1].Kind == EditKind.Equal)
             {
-                os = e.OldStart;
-                ns = e.NewStart;
-                open = true;
+                r++;
+                result.oldStart[r] = e.OldStart;
+                result.newStart[r] = e.NewStart;
             }
 
-            oe = e.OldEnd;
-            ne = e.NewEnd;
+            result.oldEnd[r] = e.OldEnd;
+            result.newEnd[r] = e.NewEnd;
         }
 
-        if (open)
-        {
-            regions.Add((os, oe, ns, ne));
-        }
-
-        return new ChangeRegions(regions);
+        return result;
     }
 
     /// <summary>Which rule decides that an equality between two changes is not worth keeping.</summary>
@@ -82,28 +78,24 @@ internal sealed class ChangeRegions
 
     /// <summary>
     /// Merges regions across the equalities <paramref name="rule"/> calls trivial, until none is left. A merge can make the
-    /// neighbouring equalities trivial in turn, so the two equalities beside a merged region are checked again. Every merge
-    /// removes a region, so the work is linear in the number of regions.
+    /// neighbouring equalities trivial in turn, so after each merge the walk steps back one region. Every merge removes a region
+    /// and every step back is paid for by one, so the work is linear in the number of regions.
     /// </summary>
     public void Eliminate(TokenText oldText, TokenText newText, Rule rule, int editCost)
     {
-        var stack = new Stack<int>(count);
-        for (int i = count - 1; i >= 0; i--)
+        // Walk left to right; after a merge step back one region, because the equality before the merged region may have become trivial.
+        int left = count > 0 ? 0 : -1;
+        while (left >= 0)
         {
-            stack.Push(i);
-        }
-
-        while (stack.Count > 0)
-        {
-            int left = stack.Pop();
-            if (!alive[left] || next[left] < 0)
+            int right = next[left];
+            if (right < 0)
             {
-                continue;
+                break;
             }
 
-            int right = next[left];
             if (!IsTrivial(oldText, newText, left, right, rule, editCost))
             {
+                left = right;
                 continue;
             }
 
@@ -119,10 +111,8 @@ internal sealed class ChangeRegions
             alive[right] = false;
             if (previous[left] >= 0)
             {
-                stack.Push(previous[left]);
+                left = previous[left];
             }
-
-            stack.Push(left);
         }
     }
 

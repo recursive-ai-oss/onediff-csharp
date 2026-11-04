@@ -3,7 +3,7 @@ namespace OneDiff.Tokenization;
 /// <summary>Lines end at <c>\n</c>, <c>\r\n</c> or a lone <c>\r</c>; the terminator stays in the token.</summary>
 internal static class LineTokenizer
 {
-    public static void Tokenize(ReadOnlySpan<char> text, List<TokenRange> destination)
+    public static void Tokenize(ReadOnlySpan<char> text, ref TokenWriter destination)
     {
         int start = 0;
         while (start < text.Length)
@@ -21,13 +21,13 @@ internal static class LineTokenizer
                 end++;
             }
 
-            destination.Add(new TokenRange(start, end - start));
+            destination.Add(start, end - start);
             start = end;
         }
 
         if (start < text.Length)
         {
-            destination.Add(new TokenRange(start, text.Length - start));
+            destination.Add(start, text.Length - start);
         }
     }
 }

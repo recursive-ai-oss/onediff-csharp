@@ -93,10 +93,10 @@ public static class DiffCleanup
     }
 
     private static (TokenText Old, TokenText New, TokenEquality Equality) Prepare(TextDiff diff) =>
-        (new TokenText(diff.OldText, diff.OldTokenArray), new TokenText(diff.NewText, diff.NewTokenArray), new TokenEquality(diff.Comparer));
+        (new TokenText(diff.OldText, diff.OldTokenRanges), new TokenText(diff.NewText, diff.NewTokenRanges), new TokenEquality(diff.Comparer));
 
     private static TextDiff With(TextDiff diff, EditScript script) =>
         ReferenceEquals(script, diff.Script)
             ? diff
-            : new TextDiff(diff.OldText, diff.NewText, diff.Kind, diff.OldTokenArray, diff.NewTokenArray, script, diff.Comparer);
+            : new TextDiff(diff.OldText, diff.NewText, diff.Kind, diff.OldTokenRanges, diff.NewTokenRanges, script, diff.Comparer);
 }

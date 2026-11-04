@@ -30,11 +30,71 @@ internal static class WordTokenizer
     // ASCII classes, built once; avoids Rune work in the common case.
     private static readonly Class[] Ascii = BuildAscii();
 
-    public static void Tokenize(ReadOnlySpan<char> text, List<TokenRange> destination)
+    public static void Tokenize(ReadOnlySpan<char> text, ref TokenWriter destination)
     {
         int i = 0;
         while (i < text.Length)
         {
+            char first = text[i];
+            if (first < 0x80)
+            {
+                // ASCII fast path: no rune decoding for the characters that make up most text.
+                int stop = i + 1;
+                switch (Ascii[first])
+                {
+                    case Class.Space:
+                        while (stop < text.Length)
+                        {
+                            char next = text[stop];
+                            if (next < 0x80)
+                            {
+                                if (Ascii[next] != Class.Space)
+                                {
+                                    break;
+                                }
+
+                                stop++;
+                            }
+                            else
+                            {
+                                if (ClassAt(text, stop, out int spaceWidth, out _) != Class.Space)
+                                {
+                                    break;
+                                }
+
+                                stop += spaceWidth;
+                            }
+                        }
+
+                        break;
+                    case Class.Letter:
+                        while (stop < text.Length && text[stop] < 0x80 && Ascii[text[stop]] == Class.Letter)
+                        {
+                            stop++;
+                        }
+
+                        // Anything else that may continue the word (marks, apostrophes, non-ASCII letters) takes the general path.
+                        if (stop < text.Length)
+                        {
+                            stop = ExtendRun(text, stop, new Rune(text[stop - 1]));
+                        }
+
+                        break;
+                    default:
+                        // Punctuation: one grapheme cluster, which is just this char unless a combining character follows.
+                        if (stop < text.Length && text[stop] >= 0x300)
+                        {
+                            stop = i + Math.Max(1, StringInfo.GetNextTextElementLength(text.Slice(i)));
+                        }
+
+                        break;
+                }
+
+                destination.Add(i, stop - i);
+                i = stop;
+                continue;
+            }
+
             Class cls = ClassAt(text, i, out int width, out Rune rune);
             int end = i + width;
             switch (cls)
@@ -67,7 +127,7 @@ internal static class WordTokenizer
                     break;
             }
 
-            destination.Add(new TokenRange(i, end - i));
+            destination.Add(i, end - i);
             i = end;
         }
     }

@@ -7,7 +7,7 @@ namespace OneDiff.Tokenization;
 /// </summary>
 internal static class GraphemeTokenizer
 {
-    public static void Tokenize(ReadOnlySpan<char> text, List<TokenRange> destination)
+    public static void Tokenize(ReadOnlySpan<char> text, ref TokenWriter destination)
     {
         int i = 0;
         while (i < text.Length)
@@ -26,7 +26,7 @@ internal static class GraphemeTokenizer
                 length = Math.Max(1, StringInfo.GetNextTextElementLength(text.Slice(i)));
             }
 
-            destination.Add(new TokenRange(i, length));
+            destination.Add(i, length);
             i += length;
         }
     }

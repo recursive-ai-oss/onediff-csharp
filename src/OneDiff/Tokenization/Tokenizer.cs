@@ -10,9 +10,16 @@ public static class Tokenizer
     /// <summary>Tokenizes <paramref name="text"/> and returns the ranges in a new array.</summary>
     public static TokenRange[] Tokenize(ReadOnlySpan<char> text, TokenKind kind)
     {
-        var ranges = new List<TokenRange>();
-        Tokenize(text, kind, ranges);
-        return ranges.ToArray();
+        var writer = new TokenWriter(text.Length, kind);
+        try
+        {
+            Run(text, kind, ref writer);
+            return writer.Tokens.ToArray();
+        }
+        finally
+        {
+            writer.Dispose();
+        }
     }
 
     /// <summary>
@@ -22,12 +29,26 @@ public static class Tokenizer
     public static void Tokenize(ReadOnlySpan<char> text, TokenKind kind, List<TokenRange> destination)
     {
         ArgumentNullException.ThrowIfNull(destination);
+        var writer = new TokenWriter(text.Length, kind);
+        try
+        {
+            Run(text, kind, ref writer);
+            destination.AddRange(writer.Tokens);
+        }
+        finally
+        {
+            writer.Dispose();
+        }
+    }
+
+    private static void Run(ReadOnlySpan<char> text, TokenKind kind, ref TokenWriter writer)
+    {
         switch (kind)
         {
-            case TokenKind.Line: LineTokenizer.Tokenize(text, destination); break;
-            case TokenKind.Word: WordTokenizer.Tokenize(text, destination); break;
-            case TokenKind.Character: CharacterTokenizer.Tokenize(text, destination); break;
-            case TokenKind.Grapheme: GraphemeTokenizer.Tokenize(text, destination); break;
+            case TokenKind.Line: LineTokenizer.Tokenize(text, ref writer); break;
+            case TokenKind.Word: WordTokenizer.Tokenize(text, ref writer); break;
+            case TokenKind.Character: CharacterTokenizer.Tokenize(text, ref writer); break;
+            case TokenKind.Grapheme: GraphemeTokenizer.Tokenize(text, ref writer); break;
             default: throw new ArgumentOutOfRangeException(nameof(kind));
         }
     }
