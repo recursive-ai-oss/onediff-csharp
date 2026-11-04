@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   Copy this file to NuGet.Config at the repository root (that path is not tracked) and set
-  ONEDIFF_PREVIEW_FEED to a folder holding the sister-library preview .nupkg files.
+  ONEDIFF_PREVIEW_FEED to a folder or a NuGet feed URL holding the sister-library preview packages
+  (docs/building.md).
   Only the packages named in the mapping are taken from that folder; everything else comes from nuget.org.
 -->
 <configuration>
@@ -17,6 +18,7 @@
     <packageSource key="sister-previews">
       <package pattern="RecursiveAI.OnePdf" />
       <package pattern="RecursiveAI.OnePdf.*" />
+      <package pattern="RecursiveAI.OneFont" />
     </packageSource>
   </packageSourceMapping>
 </configuration>
