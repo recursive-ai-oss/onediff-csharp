@@ -26,7 +26,7 @@ internal static class Availability
 
     public static bool Cleanup => false;
 
-    public static bool Patches => false;
+    public static bool Patches => true;
 
     public static bool Has(Feature feature) => feature switch
     {

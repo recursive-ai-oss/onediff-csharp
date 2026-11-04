@@ -1,3 +1,5 @@
+using OneDiff.Patching;
+
 namespace OneDiff.Oracles;
 
 /// <summary>Which merge conflict style to produce, named as git names them.</summary>
@@ -45,20 +47,47 @@ internal interface ITextCoreSeam
 }
 
 /// <summary>
-/// The library under test. Nothing here is wired yet: each member is a one-line call into the public API once it ships.
-/// To switch a gate on, implement its members and return true from <see cref="Has"/> for its feature.
+/// The library under test. Patches are wired; merge is not yet. To switch a gate on, implement its members and return true from
+/// <see cref="Has"/> for its feature.
 /// </summary>
 internal sealed class OneDiffSeam : ITextCoreSeam
 {
-    public bool Has(Feature feature) => false;
+    // The package counts patch offsets in code points, so the diff-match-patch gates use the same unit.
+    private static readonly DmpPatcher Dmp = new() { OffsetUnit = DmpOffsetUnit.CodePoint };
 
-    public string MakeUnified(string oldText, string newText) => throw Pending();
+    public bool Has(Feature feature) => feature is Feature.UnifiedPatch or Feature.DmpPatch;
 
-    public bool TryApplyUnified(string patch, string text, out string result) => throw Pending();
+    public string MakeUnified(string oldText, string newText) => Diff.Unified(oldText, newText, "a/f", "b/f", 3);
 
-    public string MakeDmp(string oldText, string newText) => throw Pending();
+    public bool TryApplyUnified(string patch, string text, out string result)
+    {
+        try
+        {
+            UnifiedApplyResult r = Diff.ApplyUnified(text, patch);
+            result = r.Text;
+            return r.Success;
+        }
+        catch (PatchFormatException)
+        {
+            result = string.Empty;
+            return false;
+        }
+    }
 
-    public bool TryApplyDmp(string patchText, string text, out string result) => throw Pending();
+    public string MakeDmp(string oldText, string newText) => DmpPatcher.ToText(Dmp.Make(oldText, newText));
+
+    public bool TryApplyDmp(string patchText, string text, out string result)
+    {
+        if (!DmpPatcher.TryFromText(patchText, out IReadOnlyList<DmpPatch>? patches, out _))
+        {
+            result = string.Empty;
+            return false;
+        }
+
+        DmpApplyResult r = Dmp.Apply(patches, text);
+        result = r.Text;
+        return r.Success;
+    }
 
     public MergeOutcome Merge(string baseText, string ours, string theirs, MergeStyle style) => throw Pending();
 

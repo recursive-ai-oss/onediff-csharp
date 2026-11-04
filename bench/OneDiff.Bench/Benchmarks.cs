@@ -182,6 +182,9 @@ public class PatchBench
     private string patchText = "";
     private List<Patch> patches = [];
     private diff_match_patch dmp = Impl.NewDmp();
+    private readonly OneDiff.Patching.DmpPatcher ours = new();
+    private IReadOnlyList<OneDiff.Patching.DmpPatch> oursPatches = [];
+    private string oursText = "";
 
     [Params(Sizes.Small, Sizes.Medium)]
     public string Size { get; set; } = Sizes.Small;
@@ -193,7 +196,8 @@ public class PatchBench
         patches = dmp.patch_make(a, b);
         patchText = dmp.patch_toText(patches);
 
-        // Library side, once patches exist: build the same four inputs with the library here.
+        oursPatches = ours.Make(a, b);
+        oursText = OneDiff.Patching.DmpPatcher.ToText(oursPatches);
     }
 
     [Benchmark] public int DmpMake() => dmp.patch_make(a, b).Count;
@@ -204,11 +208,11 @@ public class PatchBench
 
     [Benchmark] public int DmpApply() => ((string)dmp.patch_apply(patches, a)[0]).Length;
 
-    [Benchmark, Needs(Feature.Patches)] public int OursMake() => throw new NotSupportedException("the library's patches are not wired into this row yet");
+    [Benchmark, Needs(Feature.Patches)] public int OursMake() => ours.Make(a, b).Count;
 
-    [Benchmark, Needs(Feature.Patches)] public int OursToText() => throw new NotSupportedException("the library's patches are not wired into this row yet");
+    [Benchmark, Needs(Feature.Patches)] public int OursToText() => OneDiff.Patching.DmpPatcher.ToText(oursPatches).Length;
 
-    [Benchmark, Needs(Feature.Patches)] public int OursFromText() => throw new NotSupportedException("the library's patches are not wired into this row yet");
+    [Benchmark, Needs(Feature.Patches)] public int OursFromText() => OneDiff.Patching.DmpPatcher.FromText(oursText).Count;
 
-    [Benchmark, Needs(Feature.Patches)] public int OursApply() => throw new NotSupportedException("the library's patches are not wired into this row yet");
+    [Benchmark, Needs(Feature.Patches)] public int OursApply() => ours.Apply(oursPatches, a).Text.Length;
 }
