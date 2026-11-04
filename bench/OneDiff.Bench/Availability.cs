@@ -22,7 +22,7 @@ internal enum Feature
 internal static class Availability
 {
     /// <summary>True once the Myers, patience and histogram implementations are the real ones, not the prefix/suffix stand-in.</summary>
-    public static bool AlgorithmsAreReal => false;
+    public static bool AlgorithmsAreReal => true;
 
     public static bool Cleanup => false;
 
