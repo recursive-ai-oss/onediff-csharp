@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Renders gold-set documents to PDF with OnePDF's layout engine. Tooling only: nothing here ships. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>$(LibName).GoldSets.Pdf</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="RecursiveAI.OnePdf" />
+    <PackageReference Include="RecursiveAI.OnePdf.Layout" />
+    <PackageReference Include="RecursiveAI.OnePdf.Fonts" />
+    <PackageReference Include="RecursiveAI.OnePdf.Hyphenation" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Copy this file to NuGet.Config at the repository root (that path is not tracked) and set
+  ONEDIFF_PREVIEW_FEED to a folder holding the sister-library preview .nupkg files.
+  Only the packages named in the mapping are taken from that folder; everything else comes from nuget.org.
+-->
+<configuration>
+  <packageSources>
+    <clear />
+    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+    <add key="sister-previews" value="%ONEDIFF_PREVIEW_FEED%" />
+  </packageSources>
+  <packageSourceMapping>
+    <packageSource key="nuget.org">
+      <package pattern="*" />
+    </packageSource>
+    <packageSource key="sister-previews">
+      <package pattern="RecursiveAI.OnePdf" />
+      <package pattern="RecursiveAI.OnePdf.*" />
+    </packageSource>
+  </packageSourceMapping>
+</configuration>

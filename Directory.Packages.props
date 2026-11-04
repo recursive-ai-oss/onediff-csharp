@@ -11,5 +11,10 @@
     <!-- Comparators, restored for the benchmark project only and used as released binaries through their public API. -->
     <PackageVersion Include="DiffPlex" Version="1.9.0" />
     <PackageVersion Include="DiffMatchPatch" Version="5.0.0" />
+    <!-- Sister libraries (Recursive AI). The OnePDF pin is a preview until it is published on nuget.org; see docs/measurement.md for the extra restore source. -->
+    <PackageVersion Include="RecursiveAI.OnePdf" Version="1.18.0-preview.1" />
+    <PackageVersion Include="RecursiveAI.OnePdf.Layout" Version="1.18.0-preview.1" />
+    <PackageVersion Include="RecursiveAI.OnePdf.Fonts" Version="1.18.0-preview.1" />
+    <PackageVersion Include="RecursiveAI.OnePdf.Hyphenation" Version="1.18.0-preview.1" />
   </ItemGroup>
 </Project>
