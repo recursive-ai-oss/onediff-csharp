@@ -82,7 +82,7 @@ internal static class LosslessShift
             return script;
         }
 
-        var builder = new EditScriptBuilder();
+        var builder = new EditScriptBuilder(n);
         for (int i = 0; i < n; i++)
         {
             switch ((EditKind)kinds[i])

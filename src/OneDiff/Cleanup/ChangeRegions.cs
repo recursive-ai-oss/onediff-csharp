@@ -137,7 +137,7 @@ internal static class ChangeRegions
             }
         }
 
-        var builder = new EditScriptBuilder();
+        var builder = new EditScriptBuilder(original.Count + 2);
         int oldPos = 0;
         for (int r = 0; r < count; r++)
         {
