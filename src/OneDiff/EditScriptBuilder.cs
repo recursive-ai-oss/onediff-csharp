@@ -7,11 +7,23 @@ namespace OneDiff;
 /// </summary>
 public sealed class EditScriptBuilder
 {
-    private readonly List<Edit> edits = [];
+    private readonly List<Edit> edits;
     private int oldPos;
     private int newPos;
     private int pendingDeletes;
     private int pendingInserts;
+
+    /// <summary>Creates an empty builder.</summary>
+    public EditScriptBuilder()
+    {
+        edits = [];
+    }
+
+    // For callers that know roughly how many runs they will report: avoids regrowing the run list.
+    internal EditScriptBuilder(int capacity)
+    {
+        edits = new List<Edit>(capacity);
+    }
 
     /// <summary>Items of the old sequence passed so far.</summary>
     public int OldLength => oldPos + pendingDeletes;

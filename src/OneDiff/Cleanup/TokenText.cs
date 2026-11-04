@@ -16,6 +16,9 @@ internal readonly struct TokenText
 
     public string Text => text;
 
+    /// <summary>True when every token is exactly one char (character tokens over text without surrogates).</summary>
+    public bool IsChars => tokens is null;
+
     public int Count => tokens?.Length ?? text.Length;
 
     public ReadOnlySpan<char> Token(int index) => tokens is null ? text.AsSpan(index, 1) : text.AsSpan(tokens[index].Start, tokens[index].Length);
@@ -33,6 +36,9 @@ internal readonly struct TokenEquality
     private readonly IEqualityComparer<string>? comparer;
 
     public TokenEquality(IEqualityComparer<string>? comparer) => this.comparer = comparer;
+
+    /// <summary>True for exact (ordinal) comparison.</summary>
+    public bool IsOrdinal => comparer is null;
 
     public bool Equal(ReadOnlySpan<char> a, ReadOnlySpan<char> b)
     {
