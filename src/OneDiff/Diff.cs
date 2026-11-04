@@ -56,6 +56,14 @@ public static partial class Diff
         TokenRange[] oldRanges = Tokenizer.Tokenize(oldText, tokens);
         TokenRange[] newRanges = Tokenizer.Tokenize(newText, tokens);
 
+        if (tokens == TokenKind.Character)
+        {
+            // A character token is its own id (its code point): no dictionary needed, and equal text gets equal ids.
+            int[] oldCodes = CodePoints(oldText, oldRanges);
+            int[] newCodes = CodePoints(newText, newRanges);
+            return new TextDiff(oldText, newText, tokens, oldRanges, newRanges, Run(oldCodes, newCodes, algorithm, cancellationToken));
+        }
+
         // Ordinal token text -> id; the alternate lookup finds an existing token without allocating a string for it.
         var ids = new Dictionary<string, int>(StringComparer.Ordinal);
         var lookup = ids.GetAlternateLookup<ReadOnlySpan<char>>();
@@ -81,6 +89,18 @@ public static partial class Diff
     /// <summary>Compares two strings grapheme cluster by grapheme cluster. Shorthand for <see cref="Text"/> with <see cref="TokenKind.Grapheme"/>.</summary>
     public static TextDiff Graphemes(string oldText, string newText, DiffAlgorithm algorithm = DiffAlgorithm.Myers, CancellationToken cancellationToken = default)
         => Text(oldText, newText, TokenKind.Grapheme, algorithm, cancellationToken);
+
+    private static int[] CodePoints(string text, TokenRange[] ranges)
+    {
+        int[] result = new int[ranges.Length];
+        for (int i = 0; i < ranges.Length; i++)
+        {
+            int start = ranges[i].Start;
+            result[i] = ranges[i].Length == 2 ? char.ConvertToUtf32(text[start], text[start + 1]) : text[start];
+        }
+
+        return result;
+    }
 
     private static int[] InternTokens(
         string text,
