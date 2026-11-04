@@ -24,6 +24,52 @@ public sealed class TextDiff
         Script = script;
     }
 
+    /// <summary>
+    /// Wraps a script computed over tokens you cut yourself (for example Unicode word segments), so the cleanup methods and the
+    /// text accessors work on it. Tokens are compared exactly, as in the diffs this library computes.
+    /// </summary>
+    /// <param name="oldText">The old string.</param>
+    /// <param name="newText">The new string.</param>
+    /// <param name="kind">The kind of tokens the ranges are; cleanup uses it only to describe the diff.</param>
+    /// <param name="oldTokens">The old tokens: contiguous, non-empty ranges that cover <paramref name="oldText"/> exactly.</param>
+    /// <param name="newTokens">The new tokens, likewise for <paramref name="newText"/>.</param>
+    /// <param name="script">A script whose indices count these tokens; the equal tokens must be equal text.</param>
+    /// <exception cref="ArgumentNullException">A string or the script is null.</exception>
+    /// <exception cref="ArgumentException">The ranges do not partition their text, or the script does not span the token counts.</exception>
+    public static TextDiff Create(string oldText, string newText, TokenKind kind, ReadOnlySpan<TokenRange> oldTokens, ReadOnlySpan<TokenRange> newTokens, EditScript script)
+    {
+        ArgumentNullException.ThrowIfNull(oldText);
+        ArgumentNullException.ThrowIfNull(newText);
+        ArgumentNullException.ThrowIfNull(script);
+        CheckPartition(oldText, oldTokens, nameof(oldTokens));
+        CheckPartition(newText, newTokens, nameof(newTokens));
+        if (script.OldLength != oldTokens.Length || script.NewLength != newTokens.Length)
+        {
+            throw new ArgumentException("the script does not span the tokens", nameof(script));
+        }
+
+        return new TextDiff(oldText, newText, kind, oldTokens.ToArray(), newTokens.ToArray(), script);
+    }
+
+    private static void CheckPartition(string text, ReadOnlySpan<TokenRange> tokens, string name)
+    {
+        int pos = 0;
+        foreach (TokenRange t in tokens)
+        {
+            if (t.Start != pos || t.Length <= 0)
+            {
+                throw new ArgumentException("tokens must be contiguous, non-empty ranges", name);
+            }
+
+            pos = t.End;
+        }
+
+        if (pos != text.Length)
+        {
+            throw new ArgumentException("tokens must cover the whole text", name);
+        }
+    }
+
     /// <summary>The comparer that decided which tokens are equal; null for exact (ordinal) comparison. Cleanup compares tokens the same way.</summary>
     internal IEqualityComparer<string>? Comparer { get; }
 

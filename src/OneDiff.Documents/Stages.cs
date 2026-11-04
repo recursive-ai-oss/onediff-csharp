@@ -63,7 +63,7 @@ public static class Stages
     public static PairDiffs DiffPairs(Alignment alignment, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(alignment);
-        return ReferenceDiff.Run(alignment, false, cancellationToken);
+        return InPair.InPairDiff.Run(alignment, cancellationToken);
     }
 
     /// <summary>
