@@ -63,7 +63,7 @@ public static class Stages
     public static PairDiffs DiffPairs(Alignment alignment, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(alignment);
-        return ReferenceDiff.Run(alignment, false, cancellationToken);
+        return InPair.InPairDiff.Run(alignment, cancellationToken);
     }
 
     /// <summary>
@@ -75,7 +75,7 @@ public static class Stages
     public static ChangeSet Group(PairDiffs diffs, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(diffs);
-        return ReferenceGrouper.Group(diffs, cancellationToken);
+        return Grouping.RuleGrouper.Group(diffs, cancellationToken);
     }
 
     /// <summary>Records who decided each change. The reference classification is plain: kinds stay as grouped, every decision is the reference rule at score 1, nothing is typed.</summary>

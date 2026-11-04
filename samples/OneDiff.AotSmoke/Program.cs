@@ -84,8 +84,8 @@ internal static class Program
     /// <summary>Compares two plain-text documents through every stage and round-trips the result through JSON.</summary>
     private static int CheckDocuments()
     {
-        CompareDocument a = CompareDocument.FromText("The supplier shall deliver within thirty days.\n\nPayment is due in sixty days.\n\nHe said \u201Chi\u201D.");
-        CompareDocument b = CompareDocument.FromText("The supplier shall deliver within forty days.\n\nHe said \"hi\".\n\nPayment is due in sixty days.");
+        CompareDocument a = CompareDocument.FromText("The supplier shall deliver within 30 days of 3 March 2025; 买方应在三十日内支付。ผู้ซื้อชำระราคา.\n\nPayment is due in sixty days.\n\nHe said \u201Chi\u201D.");
+        CompareDocument b = CompareDocument.FromText("The supplier shall deliver within 45 days of 4 March 2025; 买方应在六十日内支付。ผู้ซื้อชำระราคาทั้งหมด.\n\nHe said \"hi\".\n\nPayment is due in sixty days.");
         int failures = 0;
         foreach (CompareSettings settings in new[] { CompareSettings.Legal, CompareSettings.Strict, CompareSettings.TextOnly })
         {

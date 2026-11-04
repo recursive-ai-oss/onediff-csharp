@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../OneDiff/OneDiff.csproj" />
+    <PackageReference Include="RecursiveAI.OneFont" />
   </ItemGroup>
 
 </Project>

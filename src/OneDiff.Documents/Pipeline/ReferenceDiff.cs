@@ -70,40 +70,7 @@ internal static class ReferenceDiff
         int oldTokens = Tokenizer.Tokenize(a, TokenKind.Word).Length, newTokens = Tokenizer.Tokenize(b, TokenKind.Word).Length;
         if ((long)oldTokens * newTokens > settings.CostCap)
         {
-            // Too big to diff word by word: keep the common start and end, replace the middle. Still complete.
-            if (!capReported)
-            {
-                diagnostics.Add(new Diagnostic(DiagnosticSeverity.Warning, "diffpairs.cap", $"link {linkId} is too large for a word diff; its changed middle is shown as one replacement"));
-                capReported = true;
-            }
-
-            int pre = 0;
-            while (pre < a.Length && pre < b.Length && a[pre] == b[pre])
-            {
-                pre++;
-            }
-
-            int suf = 0;
-            while (suf < a.Length - pre && suf < b.Length - pre && a[^(suf + 1)] == b[^(suf + 1)])
-            {
-                suf++;
-            }
-
-            // Do not split a surrogate pair.
-            if (pre > 0 && pre < a.Length && char.IsLowSurrogate(a[pre]))
-            {
-                pre--;
-            }
-
-            while (suf > 0 && char.IsLowSurrogate(a[a.Length - suf]))
-            {
-                suf--;
-            }
-
-            FormatEditsFor(og, ng, 0, 0, pre, edits);
-            AddRegion(og, ng, pre, a.Length - pre - suf, pre, b.Length - pre - suf, edits);
-            FormatEditsFor(og, ng, a.Length - suf, b.Length - suf, suf, edits);
-            return edits.ToImmutable();
+            return CappedEdits(og, ng, linkId, diagnostics, ref capReported);
         }
 
         TextDiff td = Diff.Text(a, b, TokenKind.Word, settings.Algorithm, ct);
@@ -144,7 +111,47 @@ internal static class ReferenceDiff
         return edits.ToImmutable();
     }
 
-    private static void AddRegion(ProjectedGroup og, ProjectedGroup ng, int oldStart, int oldLength, int newStart, int newLength, ImmutableArray<RegionEdit>.Builder edits)
+    /// <summary>Too big to diff word by word: keeps the common start and end and replaces the middle. Still complete.</summary>
+    internal static ImmutableArray<RegionEdit> CappedEdits(ProjectedGroup og, ProjectedGroup ng, int linkId, List<Diagnostic> diagnostics, ref bool capReported)
+    {
+        string a = og.Text, b = ng.Text;
+        var edits = ImmutableArray.CreateBuilder<RegionEdit>();
+        if (!capReported)
+        {
+            diagnostics.Add(new Diagnostic(DiagnosticSeverity.Warning, "diffpairs.cap", $"link {linkId} is too large for a word diff; its changed middle is shown as one replacement"));
+            capReported = true;
+        }
+
+        int pre = 0;
+        while (pre < a.Length && pre < b.Length && a[pre] == b[pre])
+        {
+            pre++;
+        }
+
+        int suf = 0;
+        while (suf < a.Length - pre && suf < b.Length - pre && a[^(suf + 1)] == b[^(suf + 1)])
+        {
+            suf++;
+        }
+
+        // Do not split a surrogate pair.
+        if (pre > 0 && pre < a.Length && char.IsLowSurrogate(a[pre]))
+        {
+            pre--;
+        }
+
+        while (suf > 0 && char.IsLowSurrogate(a[a.Length - suf]))
+        {
+            suf--;
+        }
+
+        FormatEditsFor(og, ng, 0, 0, pre, edits);
+        AddRegion(og, ng, pre, a.Length - pre - suf, pre, b.Length - pre - suf, edits);
+        FormatEditsFor(og, ng, a.Length - suf, b.Length - suf, suf, edits);
+        return edits.ToImmutable();
+    }
+
+    internal static void AddRegion(ProjectedGroup og, ProjectedGroup ng, int oldStart, int oldLength, int newStart, int newLength, ImmutableArray<RegionEdit>.Builder edits)
     {
         if (oldLength == 0 && newLength == 0)
         {
@@ -185,7 +192,7 @@ internal static class ReferenceDiff
         }
     }
 
-    private static ImmutableArray<AttributeEdit> AttributeEdits(ProjectedGroup og, ProjectedGroup ng)
+    internal static ImmutableArray<AttributeEdit> AttributeEdits(ProjectedGroup og, ProjectedGroup ng)
     {
         var result = ImmutableArray.CreateBuilder<AttributeEdit>();
         foreach (ProjectedGroup.Member mo in og.Members)
