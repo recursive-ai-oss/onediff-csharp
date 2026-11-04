@@ -91,24 +91,25 @@ internal static class ChangeRegions
         int rightOldStart, int rightOldEnd, int rightNewStart, int rightNewEnd,
         Rule rule, int editCost)
     {
+        if (rule == Rule.Efficiency)
+        {
+            // Efficiency: every deletion or insertion run costs `editCost` to process and every character costs 1. Merging two regions
+            // leaves one deletion and one insertion (2 runs) and adds the equality's characters to both. Merge when that is cheaper.
+            // Which runs exist needs no character counts, and with fewer than three runs nothing is saved, so most pairs end here.
+            int runsBefore = (leftOldEnd > leftOldStart ? 1 : 0) + (leftNewEnd > leftNewStart ? 1 : 0)
+                + (rightOldEnd > rightOldStart ? 1 : 0) + (rightNewEnd > rightNewStart ? 1 : 0);
+            long saved = (long)(runsBefore - 2) * editCost;
+            return saved > 0 && saved > 2L * oldText.Chars(leftOldEnd, rightOldStart);
+        }
+
+        // Semantic: an equality no longer than the changes on both sides is noise between them. Reading "quick brown" -> "slow red"
+        // as one replacement is easier than a keep-the-space patchwork.
         int equal = oldText.Chars(leftOldEnd, rightOldStart);
         int delLeft = oldText.Chars(leftOldStart, leftOldEnd);
         int insLeft = newText.Chars(leftNewStart, leftNewEnd);
         int delRight = oldText.Chars(rightOldStart, rightOldEnd);
         int insRight = newText.Chars(rightNewStart, rightNewEnd);
-
-        if (rule == Rule.Semantic)
-        {
-            // Semantic: an equality no longer than the changes on both sides is noise between them. Reading "quick brown" -> "slow red"
-            // as one replacement is easier than a keep-the-space patchwork.
-            return equal <= Math.Max(delLeft, insLeft) && equal <= Math.Max(delRight, insRight);
-        }
-
-        // Efficiency: every deletion or insertion run costs `editCost` to process and every character costs 1. Merging two regions
-        // leaves one deletion and one insertion (2 runs) and adds the equality's characters to both. Merge when that is cheaper.
-        int runsBefore = (delLeft > 0 ? 1 : 0) + (insLeft > 0 ? 1 : 0) + (delRight > 0 ? 1 : 0) + (insRight > 0 ? 1 : 0);
-        long saved = (long)(runsBefore - 2) * editCost;
-        return saved > 2L * equal;
+        return equal <= Math.Max(delLeft, insLeft) && equal <= Math.Max(delRight, insRight);
     }
 
     /// <summary>
