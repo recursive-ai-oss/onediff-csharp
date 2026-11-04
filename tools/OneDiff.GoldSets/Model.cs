@@ -394,9 +394,19 @@ internal sealed class DocBuilder
             counters[b] = k + 1;
         }
 
+        // Every kind of slot must occur somewhere, so each edit type has a place in every document.
+        var allClauses = doc.Blocks().Where(b => b.Role == BK.Clause).ToList();
+        foreach (int must in new[] { 0, 1, 2, 3, 6, 7, 9, 11 })
+        {
+            if (!doc.Blocks().SelectMany(b => b.Sentences).Any(s => s.Template == must))
+            {
+                r.Pick(allClauses).Sentences.Add(NewSentence(r, doc, must, 0, refTargets));
+            }
+        }
+
         // Make sure the notice template (the one that carries a reference) appears at least three times.
         int refSentences = doc.Blocks().SelectMany(b => b.Sentences).Count(s => s.Pieces.Any(p => p.Kind == PK.Ref));
-        var clauseBlocks = doc.Blocks().Where(b => b.Role == BK.Clause).ToList();
+        var clauseBlocks = allClauses;
         for (int guard = 0; refSentences < 3 && guard < 20; guard++)
         {
             Block b = r.Pick(clauseBlocks);

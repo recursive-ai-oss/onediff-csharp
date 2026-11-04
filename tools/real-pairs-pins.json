@@ -1,0 +1,349 @@
+{
+ "version": 1,
+ "licences": {
+  "documents": [
+   {
+    "id": "gpl-2.0",
+    "name": "GNU General Public License v2",
+    "url": "https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt"
+   },
+   {
+    "id": "gpl-3.0",
+    "name": "GNU General Public License v3",
+    "url": "https://www.gnu.org/licenses/gpl-3.0.txt"
+   },
+   {
+    "id": "lgpl-2.1",
+    "name": "GNU Lesser General Public License v2.1",
+    "url": "https://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt"
+   },
+   {
+    "id": "lgpl-3.0",
+    "name": "GNU Lesser General Public License v3",
+    "url": "https://www.gnu.org/licenses/lgpl-3.0.txt"
+   },
+   {
+    "id": "agpl-3.0",
+    "name": "GNU Affero General Public License v3",
+    "url": "https://www.gnu.org/licenses/agpl-3.0.txt"
+   },
+   {
+    "id": "mpl-1.1",
+    "name": "Mozilla Public License 1.1",
+    "url": "https://www.mozilla.org/media/MPL/1.1/index.txt"
+   },
+   {
+    "id": "mpl-2.0",
+    "name": "Mozilla Public License 2.0",
+    "url": "https://www.mozilla.org/media/MPL/2.0/index.txt"
+   }
+  ],
+  "pairs": [
+   {
+    "id": "gpl-2.0-to-gpl-3.0",
+    "old": "gpl-2.0",
+    "new": "gpl-3.0"
+   },
+   {
+    "id": "lgpl-2.1-to-lgpl-3.0",
+    "old": "lgpl-2.1",
+    "new": "lgpl-3.0"
+   },
+   {
+    "id": "mpl-1.1-to-mpl-2.0",
+    "old": "mpl-1.1",
+    "new": "mpl-2.0"
+   },
+   {
+    "id": "gpl-3.0-to-agpl-3.0",
+    "old": "gpl-3.0",
+    "new": "agpl-3.0"
+   },
+   {
+    "id": "gpl-3.0-to-lgpl-3.0",
+    "old": "gpl-3.0",
+    "new": "lgpl-3.0"
+   }
+  ]
+ },
+ "yc": {
+  "documents": [
+   {
+    "id": "safe-us-cap",
+    "name": "SAFE post-money, valuation cap, no discount (US)",
+    "url": "https://bookface-static.ycombinator.com/assets/ycdc/Postmoney%20Safe%20-%20Valuation%20Cap%20Only%20-%20FINAL-f2a64add6d21039ab347ee2e7194141a4239e364ffed54bad0fe9cf623bf1691.docx"
+   },
+   {
+    "id": "safe-us-discount",
+    "name": "SAFE post-money, discount, no valuation cap (US)",
+    "url": "https://bookface-static.ycombinator.com/assets/ycdc/Postmoney%20Safe%20-%20Discount%20Only%20-%20FINAL-b9ecb516615d60c6c4653507442aa2561023004368232b7d6e75edc9629acc99.docx"
+   },
+   {
+    "id": "safe-us-mfn",
+    "name": "SAFE post-money, MFN, no cap, no discount (US)",
+    "url": "https://bookface-static.ycombinator.com/assets/ycdc/Postmoney%20Safe%20-%20MFN%20Only%20-%20FINAL-2bc87fa3d2ec5072a60d653aec9a885fb43879781e44341fa720a8e7d1cc42ff.docx"
+   },
+   {
+    "id": "side-us",
+    "name": "Pro Rata Side Letter (US)",
+    "url": "https://bookface-static.ycombinator.com/assets/ycdc/Pro%20Rata%20Side%20Letter-d6dd8d827741862b18fba0f658da17fb4e787e5f2dda49584b9caea89bf42302.docx"
+   },
+   {
+    "id": "safe-ca-cap",
+    "name": "SAFE post-money, valuation cap (Canada)",
+    "url": "https://bookface-static.ycombinator.com/assets/ycdc/Postmoney%20Safe%20-%20Valuation%20Cap%20Only%20(Canada)%20FINAL-908361f232fb25ff961560a0b959cd4f656ca944f84d6009f7cab56e629f79f2.docx"
+   },
+   {
+    "id": "side-ca",
+    "name": "Pro Rata Side Letter (Canada)",
+    "url": "https://bookface-static.ycombinator.com/assets/ycdc/Pro%20Rata%20Side%20Letter%20(Canada)-199957825465a7b592b0a04464b22a76dc7ced40bc828cce858cb5f39527084f.docx"
+   },
+   {
+    "id": "safe-ky-cap",
+    "name": "SAFE post-money, valuation cap (Cayman Islands)",
+    "url": "https://bookface-static.ycombinator.com/assets/ycdc/Postmoney%20Safe%20-%20Valuation%20Cap%20Only%20(Cayman)%20FINAL-7b3206e15466942b218b31118667593d735ee05a39d5390ad78dc7cc74310d33.docx"
+   },
+   {
+    "id": "side-ky",
+    "name": "Pro Rata Side Letter (Cayman Islands)",
+    "url": "https://bookface-static.ycombinator.com/assets/ycdc/Pro%20Rata%20Side%20Letter%20(Cayman)-ec1289f5f228237488f011bce2279d8cb4fd90db676a89e7fa4e02abe441b93a.docx"
+   },
+   {
+    "id": "safe-sg-cap",
+    "name": "SAFE post-money, valuation cap (Singapore)",
+    "url": "https://bookface-static.ycombinator.com/assets/ycdc/Postmoney%20Safe%20-%20Valuation%20Cap%20Only%20(Singapore)%20FINAL-3ce53fbce48b42a5a2a4e657654d78ec40310d43b318802ef7039cb9260783ce.docx"
+   },
+   {
+    "id": "side-sg",
+    "name": "Pro Rata Side Letter (Singapore)",
+    "url": "https://bookface-static.ycombinator.com/assets/ycdc/Pro%20Rata%20Side%20Letter%20(Singapore)-22ef48dda1009ab83ab9162cbdaae846ec480b9796bb453532dd747edb5d9c25.docx"
+   }
+  ],
+  "pairs": [
+   {
+    "id": "safe-us-cap-vs-safe-us-discount",
+    "old": "safe-us-cap",
+    "new": "safe-us-discount"
+   },
+   {
+    "id": "safe-us-cap-vs-safe-us-mfn",
+    "old": "safe-us-cap",
+    "new": "safe-us-mfn"
+   },
+   {
+    "id": "safe-us-discount-vs-safe-us-mfn",
+    "old": "safe-us-discount",
+    "new": "safe-us-mfn"
+   },
+   {
+    "id": "safe-us-cap-vs-safe-ca-cap",
+    "old": "safe-us-cap",
+    "new": "safe-ca-cap"
+   },
+   {
+    "id": "safe-us-cap-vs-safe-ky-cap",
+    "old": "safe-us-cap",
+    "new": "safe-ky-cap"
+   },
+   {
+    "id": "safe-us-cap-vs-safe-sg-cap",
+    "old": "safe-us-cap",
+    "new": "safe-sg-cap"
+   },
+   {
+    "id": "safe-ca-cap-vs-safe-ky-cap",
+    "old": "safe-ca-cap",
+    "new": "safe-ky-cap"
+   },
+   {
+    "id": "safe-ky-cap-vs-safe-sg-cap",
+    "old": "safe-ky-cap",
+    "new": "safe-sg-cap"
+   },
+   {
+    "id": "side-us-vs-side-ca",
+    "old": "side-us",
+    "new": "side-ca"
+   },
+   {
+    "id": "side-us-vs-side-ky",
+    "old": "side-us",
+    "new": "side-ky"
+   },
+   {
+    "id": "side-us-vs-side-sg",
+    "old": "side-us",
+    "new": "side-sg"
+   }
+  ]
+ },
+ "github": {
+  "repos": [
+   {
+    "org": "commonpaper",
+    "name": "commonpaper-CSA",
+    "url": "https://github.com/CommonPaper/CSA.git",
+    "terms": "README: \"Common Paper agreements are free to use and modify under CC BY 4.0.\"",
+    "attribution": "Common Paper, commonpaper.com",
+    "commit": "",
+    "pairs": []
+   },
+   {
+    "org": "commonpaper",
+    "name": "commonpaper-Mutual-NDA",
+    "url": "https://github.com/CommonPaper/Mutual-NDA.git",
+    "terms": "README: \"Common Paper agreements are free to use and modify under CC BY 4.0.\"",
+    "attribution": "Common Paper, commonpaper.com",
+    "commit": "",
+    "pairs": []
+   },
+   {
+    "org": "commonpaper",
+    "name": "commonpaper-SLA",
+    "url": "https://github.com/CommonPaper/SLA.git",
+    "terms": "README: \"Common Paper agreements are free to use and modify under CC BY 4.0.\"",
+    "attribution": "Common Paper, commonpaper.com",
+    "commit": "",
+    "pairs": []
+   },
+   {
+    "org": "commonpaper",
+    "name": "commonpaper-DPA",
+    "url": "https://github.com/CommonPaper/DPA.git",
+    "terms": "README: \"Common Paper agreements are free to use and modify under CC BY 4.0.\"",
+    "attribution": "Common Paper, commonpaper.com",
+    "commit": "",
+    "pairs": []
+   },
+   {
+    "org": "commonpaper",
+    "name": "commonpaper-Design-Partner-Agreement",
+    "url": "https://github.com/CommonPaper/Design-Partner-Agreement.git",
+    "terms": "README: \"Common Paper agreements are free to use and modify under CC BY 4.0.\"",
+    "attribution": "Common Paper, commonpaper.com",
+    "commit": "",
+    "pairs": []
+   },
+   {
+    "org": "commonpaper",
+    "name": "commonpaper-PSA",
+    "url": "https://github.com/CommonPaper/PSA.git",
+    "terms": "README: \"Common Paper agreements are free to use and modify under CC BY 4.0.\"",
+    "attribution": "Common Paper, commonpaper.com",
+    "commit": "",
+    "pairs": []
+   },
+   {
+    "org": "commonpaper",
+    "name": "commonpaper-Partnership-Agreement",
+    "url": "https://github.com/CommonPaper/Partnership-Agreement.git",
+    "terms": "README: \"Common Paper agreements are free to use and modify under CC BY 4.0.\"",
+    "attribution": "Common Paper, commonpaper.com",
+    "commit": "",
+    "pairs": []
+   },
+   {
+    "org": "commonpaper",
+    "name": "commonpaper-BAA",
+    "url": "https://github.com/CommonPaper/BAA.git",
+    "terms": "README: \"Common Paper agreements are free to use and modify under CC BY 4.0.\"",
+    "attribution": "Common Paper, commonpaper.com",
+    "commit": "",
+    "pairs": []
+   },
+   {
+    "org": "commonpaper",
+    "name": "commonpaper-Software-License-Agreement",
+    "url": "https://github.com/CommonPaper/Software-License-Agreement.git",
+    "terms": "README: \"Common Paper agreements are free to use and modify under CC BY 4.0.\"",
+    "attribution": "Common Paper, commonpaper.com",
+    "commit": "",
+    "pairs": []
+   },
+   {
+    "org": "commonpaper",
+    "name": "commonpaper-Pilot-Agreement",
+    "url": "https://github.com/CommonPaper/Pilot-Agreement.git",
+    "terms": "README: \"Common Paper agreements are free to use and modify under CC BY 4.0.\"",
+    "attribution": "Common Paper, commonpaper.com",
+    "commit": "",
+    "pairs": []
+   },
+   {
+    "org": "commonpaper",
+    "name": "commonpaper-AI-Addendum",
+    "url": "https://github.com/CommonPaper/AI-Addendum.git",
+    "terms": "README: \"Common Paper agreements are free to use and modify under CC BY 4.0.\"",
+    "attribution": "Common Paper, commonpaper.com",
+    "commit": "",
+    "pairs": []
+   },
+   {
+    "org": "bonterms",
+    "name": "bonterms-Cloud-Terms",
+    "url": "https://github.com/Bonterms/Cloud-Terms.git",
+    "terms": "README: \"... Bonterms Standard Agreements are free to use under CC BY 4.0.\"",
+    "attribution": "Bonterms, bonterms.com",
+    "commit": "",
+    "pairs": []
+   },
+   {
+    "org": "bonterms",
+    "name": "bonterms-Mutual-NDA",
+    "url": "https://github.com/Bonterms/Mutual-NDA.git",
+    "terms": "README: \"... Bonterms Standard Agreements are free to use under CC BY 4.0.\"",
+    "attribution": "Bonterms, bonterms.com",
+    "commit": "",
+    "pairs": []
+   },
+   {
+    "org": "bonterms",
+    "name": "bonterms-Service-Level-Agreement",
+    "url": "https://github.com/Bonterms/Service-Level-Agreement.git",
+    "terms": "README: \"... Bonterms Standard Agreements are free to use under CC BY 4.0.\"",
+    "attribution": "Bonterms, bonterms.com",
+    "commit": "",
+    "pairs": []
+   },
+   {
+    "org": "bonterms",
+    "name": "bonterms-Data-Protection-Addendum",
+    "url": "https://github.com/Bonterms/Data-Protection-Addendum.git",
+    "terms": "README: \"... Bonterms Standard Agreements are free to use under CC BY 4.0.\"",
+    "attribution": "Bonterms, bonterms.com",
+    "commit": "",
+    "pairs": []
+   },
+   {
+    "org": "bonterms",
+    "name": "bonterms-Professional-Services-Agreement",
+    "url": "https://github.com/Bonterms/Professional-Services-Agreement.git",
+    "terms": "README: \"... Bonterms Standard Agreements are free to use under CC BY 4.0.\"",
+    "attribution": "Bonterms, bonterms.com",
+    "commit": "",
+    "pairs": []
+   },
+   {
+    "org": "bonterms",
+    "name": "bonterms-Business-Associate-Agreement",
+    "url": "https://github.com/Bonterms/Business-Associate-Agreement.git",
+    "terms": "README: \"... Bonterms Standard Agreements are free to use under CC BY 4.0.\"",
+    "attribution": "Bonterms, bonterms.com",
+    "commit": "",
+    "pairs": []
+   },
+   {
+    "org": "bonterms",
+    "name": "bonterms-Online-Cloud-Terms",
+    "url": "https://github.com/Bonterms/Online-Cloud-Terms.git",
+    "terms": "README: \"... Bonterms Standard Agreements are free to use under CC BY 4.0.\"",
+    "attribution": "Bonterms, bonterms.com",
+    "commit": "",
+    "pairs": []
+   }
+  ]
+ },
+ "edgar": {
+  "pairs": []
+ }
+}

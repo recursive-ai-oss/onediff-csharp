@@ -313,6 +313,7 @@ internal sealed class PairMaker
 
         Block nb = db.NewClause(r, newDoc, RefTargets());
         nb.WholeUnit = NewUnit(cascade ? "cascade" : "para-insert");
+        touched.Add(nb.Uid);
         foreach (Sentence s in nb.Sentences)
         {
             Protect(s);
@@ -574,6 +575,7 @@ internal sealed class PairMaker
         foreach (Block c in row.Cells)
         {
             c.WholeUnit = u;
+            touched.Add(c.Uid);
         }
 
         t.Rows.Insert(r.Next(1, t.Rows.Count), row);
@@ -588,7 +590,13 @@ internal sealed class PairMaker
             return false;
         }
 
-        int i = r.Next(1, t.Rows.Count - 1);
+        var deletable = Enumerable.Range(1, t.Rows.Count - 1).Where(k => t.Rows[k].Cells.All(c => oldBlocks.ContainsKey(c.Uid) && !touched.Contains(c.Uid))).ToList();
+        if (deletable.Count == 0)
+        {
+            return false;
+        }
+
+        int i = r.Pick(deletable);
         Row row = t.Rows[i];
         int u = NewUnit("table-row-delete");
         foreach (Block c in row.Cells)
