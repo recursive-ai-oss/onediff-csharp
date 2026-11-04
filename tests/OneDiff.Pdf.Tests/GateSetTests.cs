@@ -64,8 +64,9 @@ public class GateSetTests
                     int cut = d[i].IndexOf(". ", StringComparison.Ordinal);
                     if (cut > 0)
                     {
-                        d[i] = d[i][..(cut + 1)];
-                        d.Insert(i + 1, doc[Math.Min(i, doc.Count - 1)][(cut + 2)..]);
+                        string whole = d[i];
+                        d[i] = whole[..(cut + 1)];
+                        d.Insert(i + 1, whole[(cut + 2)..]);
                     }
 
                     break;

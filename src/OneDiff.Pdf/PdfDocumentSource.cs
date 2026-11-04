@@ -89,7 +89,7 @@ public sealed class PdfDocumentSource : IDocumentSource
 
             cancellationToken.ThrowIfCancellationRequested();
             IReadOnlyList<PdfPageText> pages = pdf.ExtractText(
-                new PdfTextOptions { RetainGlyphs = true, DetectHeadersAndFooters = true, MaxDegreeOfParallelism = 1 },
+                new PdfTextOptions { RetainGlyphs = true, DetectHeadersAndFooters = true },
                 cancellationToken);
             var labels = new string?[pages.Count];
             for (int i = 0; i < labels.Length; i++)

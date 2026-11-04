@@ -1,3 +1,4 @@
+using OnePdf;
 using OnePdf.Hyphenation;
 using OnePdf.Layout;
 
@@ -113,7 +114,7 @@ internal static class Fixtures
                 }
             });
         });
-        return doc.ToBytes();
+        return doc.ToBytes(new PdfDocumentWriterOptions { DocumentId = new byte[16] });
     }
 
     private static void Para(Slot slot, string text, Spec spec)

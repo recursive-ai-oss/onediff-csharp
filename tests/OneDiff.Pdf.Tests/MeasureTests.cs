@@ -50,10 +50,10 @@ public class MeasureTests
         }
 
         var r = new Random(2026);
-        List<string> before = [.. Enumerable.Range(0, 520).Select(_ => GateSetTests.Paragraph(r))];
+        List<string> before = [.. Enumerable.Range(0, 1700).Select(_ => GateSetTests.Paragraph(r))];
         List<string> after = before;
         // About 300 edits, a few at a time so that each kind of edit is exercised.
-        for (int i = 0; i < 100; i++)
+        for (int i = 0; i < 120; i++)
         {
             after = GateSetTests.Edit(r, after);
         }
@@ -63,6 +63,13 @@ public class MeasureTests
         byte[] b = Fixtures.Make(spec with { Paragraphs = [.. after] });
 
         var sw = Stopwatch.StartNew();
+        using (OnePdf.PdfDocument raw = OnePdf.PdfDocument.Open(b))
+        {
+            _ = raw.ExtractText(new OnePdf.Text.PdfTextOptions { RetainGlyphs = true, DetectHeadersAndFooters = true, MaxDegreeOfParallelism = 1 });
+        }
+
+        long extractOne = sw.ElapsedMilliseconds;
+        sw.Restart();
         CompareDocument da = Run.Read(a, "old.pdf"), db = Run.Read(b, "new.pdf");
         long read = sw.ElapsedMilliseconds;
         sw.Restart();
@@ -76,7 +83,7 @@ public class MeasureTests
         int nodes = db.Nodes.Length;
         File.WriteAllText(path,
             $"pagesOld={PageCount(a)} pagesNew={PageCount(b)} bytesOld={a.Length} bytesNew={b.Length} nodesNew={nodes}\n" +
-            $"readBothMs={read} compareMs={compare} markMs={mark} totalMs={read + compare + mark}\n" +
+            $"extractNewDocOnlyMs={extractOne} readBothMs={read} compareMs={compare} markMs={mark} totalMs={read + compare + mark}\n" +
             $"changes={c.Changes.Length} marks={res.Marks.Length} skipped={res.Skipped.Length} fallback={c.Verification.FallbackLevel} check={c.Check().Length}\n" +
             $"peakWorkingSetMB={proc.PeakWorkingSet64 / (1024 * 1024)}\n");
         Assert.Empty(c.Check());
