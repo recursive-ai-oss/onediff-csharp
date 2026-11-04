@@ -138,7 +138,12 @@ public class SourceTests
         }
 
         // One segment per word and per punctuation mark, so a change's anchor can start and end inside a phrase.
-        Assert.Equal(["Plain", "words", "(", "a", ")", "and", "3", ".", "5", "%", "here", "."], p.Segments.Select(s => p.Text.Substring(s.Start, s.Length)));
+        Assert.Equal(["Plain", "words", "(", "a", ")", "and", "3.5", "%", "here", "."], p.Segments.Select(s => p.Text.Substring(s.Start, s.Length)).Where(t => t.Trim().Length > 0));
+
+        // A space between two words on a line is a segment of its own, between the two word boxes.
+        AnchoredSpan space = p.Segments.First(s => p.Text.Substring(s.Start, s.Length) == " ");
+        Quad gap = Assert.Single(space.Anchor.Quads);
+        Assert.True(gap.X2 > gap.X1);
     }
 
     [Fact]

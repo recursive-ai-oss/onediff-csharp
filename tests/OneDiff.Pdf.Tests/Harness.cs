@@ -115,18 +115,46 @@ internal sealed class Run
                     }
                     else
                     {
-                        if (line.Direction == PdfTextDirection.RightToLeft)
-                        {
-                            picked.Reverse();
-                        }
-
-                        parts.Add(string.Concat(picked));
+                        parts.Add(line.Direction == PdfTextDirection.RightToLeft ? LogicalOrder(picked) : string.Concat(picked));
                     }
                 }
             }
         }
 
         return string.Join(' ', parts);
+    }
+
+    /// <summary>
+    /// Visual-order glyphs of a right-to-left line back to logical order: the order reverses, but a run of digits or Latin letters
+    /// inside it reads left to right in both orders and keeps its own direction.
+    /// </summary>
+    private static string LogicalOrder(List<string> visual)
+    {
+        static bool Ltr(string g) => g.Length > 0 && (char.IsAsciiLetterOrDigit(g[0]) || g[0] == '.' || g[0] == ',');
+        var sb = new System.Text.StringBuilder();
+        int i = visual.Count - 1;
+        while (i >= 0)
+        {
+            if (!Ltr(visual[i]))
+            {
+                sb.Append(visual[i--]);
+                continue;
+            }
+
+            // A left-to-right run, read from its left end (the higher index in the reversed walk) to its right end.
+            int end = i;
+            while (i >= 0 && Ltr(visual[i]))
+            {
+                i--;
+            }
+
+            for (int k = i + 1; k <= end; k++)
+            {
+                sb.Append(visual[k]);
+            }
+        }
+
+        return sb.ToString();
     }
 
     /// <summary>Spaces, line-end hyphens and typographic variants do not count when text under a highlight is compared with a change's text.</summary>
@@ -173,7 +201,10 @@ internal sealed class Run
             {
                 // The text under the quadrilaterals of every annotation of the change, taken together, is the change's new text.
                 string under = string.Concat(Result.Marks.Where(x => x.ChangeId == c.Id && x.Kind != PdfMarkupKind.Caret).OrderBy(x => x.Page).ThenBy(x => x.Name, StringComparer.Ordinal).Select(x => byName[x.Name].TextUnder));
-                Assert.Equal(Canon(ExpectedPageText(c.New, Comparison.New)), Canon(under));
+                string expected = Canon(c.Kind == ChangeKind.Attribute ? AttributeMarkText(c.New, Comparison.New) : ExpectedPageText(c.New, Comparison.New, Comparison.Alignment.Settings)), got = Canon(under);
+                // A change that is only a space across a line break rests on the word before it; there is no text to compare.
+                bool spaceOnly = expected.Length == 0 && c.New.Text.All(ch => char.IsWhiteSpace(ch) || ch == '\u001E');
+                Assert.True(spaceOnly || expected == got, $"change {c.Id} {c.Kind} mark {m.Kind} page {m.Page}: expected [{Clip(expected)}] got [{Clip(got)}]");
             }
             else
             {
@@ -182,15 +213,72 @@ internal sealed class Run
         }
     }
 
-    /// <summary>What the page shows for a change side: the text as the source had it when the side covers a whole node (folded page numbers are digits on the page), else the compared text.</summary>
-    private static string ExpectedPageText(ChangeSide side, CompareDocument doc)
+    private static string Clip(string s) => s.Length <= 90 ? s : s[..90] + "...";
+
+    /// <summary>An attribute change marks its whole block's text (the list marker is an attribute, not text) as the source had it.</summary>
+    private static string AttributeMarkText(ChangeSide side, CompareDocument doc) =>
+        string.Concat(side.Nodes.Select(n => doc[n].RawText));
+
+    /// <summary>
+    /// What the page shows for a change side. The side's range is in the compared text, which is the node's text with the folds
+    /// of categories that are not hidden undone; the page shows the original characters of every fold the range touches (a folded
+    /// page number is the digits on the page). A whitespace-only side has no text to check, so it returns empty.
+    /// </summary>
+    private static string ExpectedPageText(ChangeSide side, CompareDocument doc, CompareSettings settings)
     {
-        if (side.Nodes.Length == 1 && side.Length > 0 && side.Start == 0 && side.Text == doc[side.Nodes[0]].Text)
+        if (side.Nodes.Length != 1 || side.Length == 0)
         {
-            return doc[side.Nodes[0]].RawText;
+            return side.Text;
         }
 
-        return side.Text;
+        Node node = doc[side.Nodes[0]];
+        // Pieces of the compared text, each with the characters the page shows for it.
+        var shown = new System.Text.StringBuilder();
+        int projected = 0, pos = 0, from = side.Start, to = side.Start + side.Length;
+        void Piece(string compared, string page)
+        {
+            int a = projected, b = projected + compared.Length;
+            projected = b;
+            if (b <= from || a >= to)
+            {
+                return;
+            }
+
+            if (compared == page)
+            {
+                shown.Append(page, Math.Max(from, a) - a, Math.Min(to, b) - Math.Max(from, a));
+            }
+            else
+            {
+                shown.Append(page);
+            }
+        }
+
+        foreach (NormalizationFold f in node.Folds)
+        {
+            if (f.Start > pos)
+            {
+                Piece(node.Text.Substring(pos, f.Start - pos), node.Text.Substring(pos, f.Start - pos));
+            }
+
+            if (settings.Hidden.Contains(f.Category))
+            {
+                Piece(node.Text.Substring(f.Start, f.Length), f.Original);
+            }
+            else
+            {
+                Piece(f.Original, f.Original);
+            }
+
+            pos = f.Start + f.Length;
+        }
+
+        if (pos < node.Text.Length)
+        {
+            Piece(node.Text.Substring(pos), node.Text.Substring(pos));
+        }
+
+        return shown.ToString();
     }
 
     public ImmutableArray<Change> Of(ChangeKind kind) => [.. Comparison.Changes.Where(c => c.Kind == kind)];

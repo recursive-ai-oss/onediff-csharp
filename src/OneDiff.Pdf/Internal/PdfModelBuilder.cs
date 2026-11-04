@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Text;
 using OneDiff.Documents;
 using OneDiff.Documents.Model;
+using OneDiff.Tokenization;
 using OnePdf;
 using OnePdf.Text;
 
@@ -351,6 +352,7 @@ internal sealed class PdfModelBuilder
     {
         string text = word.Text.Replace('\n', ' ').Replace('\r', ' ');
         int rawStart = p.Raw.Length;
+        IReadOnlyList<int>? glyphForTokens = null;
         p.Raw.Append(text);
         if (text.Length == 0)
         {
@@ -359,28 +361,35 @@ internal sealed class PdfModelBuilder
 
         IReadOnlyList<int> glyphIndices = word.GlyphIndices;
         int[]? prefix = null;
-        if (glyphIndices.Count > 0 && !line.IsVertical && line.Direction == PdfTextDirection.LeftToRight)
+        bool rtl = line.Direction == PdfTextDirection.RightToLeft;
+        if (glyphIndices.Count > 0 && !line.IsVertical && line.Direction is PdfTextDirection.LeftToRight or PdfTextDirection.RightToLeft)
         {
+            // In a right-to-left line the glyph order is not stated precisely enough to rely on, so the order whose glyph texts
+            // spell the word's text is found by trying the plausible ones; when none spells it, the word's box is shared out.
+            IReadOnlyList<int> logical = rtl ? SpellingOrder(page, glyphIndices, word.Text) ?? glyphIndices : glyphIndices;
             // Glyph boxes pin a token exactly when the glyphs spell the word.
             int total = 0;
-            var sums = new int[glyphIndices.Count + 1];
-            for (int g = 0; g < glyphIndices.Count; g++)
+            var sums = new int[logical.Count + 1];
+            for (int g = 0; g < logical.Count; g++)
             {
                 sums[g] = total;
-                int gi = glyphIndices[g];
+                int gi = logical[g];
                 total += (uint)gi < (uint)page.Glyphs.Count ? page.Glyphs[gi].Text.Length : -1_000_000;
             }
 
-            sums[glyphIndices.Count] = total;
-            if (total == word.Text.Length)
+            sums[logical.Count] = total;
+            if (total == word.Text.Length && (!rtl || Spells(page, logical, word.Text)))
             {
                 prefix = sums;
+                glyphForTokens = logical;
             }
         }
 
         foreach ((int a, int b) in TokenSpans(text))
         {
-            Quad q = prefix is not null ? GlyphQuad(page, glyphIndices, prefix, a, b) : Proportional(page.PageIndex, word.Bounds, line, a, b, text.Length);
+            Quad q = prefix is not null && glyphForTokens is not null
+                ? (rtl ? GlyphBox(page, glyphForTokens, prefix, a, b) : GlyphQuad(page, glyphForTokens, prefix, a, b))
+                : Proportional(page.PageIndex, word.Bounds, line, a, b, text.Length);
             p.Tokens.Add(new TokenRef(rawStart + a, rawStart + b, q));
         }
 
@@ -446,6 +455,131 @@ internal sealed class PdfModelBuilder
 
     private static bool Has(string name, string part) => name.Contains(part, StringComparison.OrdinalIgnoreCase);
 
+    private static bool Spells(PdfPageText page, IReadOnlyList<int> order, string text)
+    {
+        int at = 0;
+        foreach (int gi in order)
+        {
+            if ((uint)gi >= (uint)page.Glyphs.Count)
+            {
+                return false;
+            }
+
+            string t = page.Glyphs[gi].Text;
+            if (at + t.Length > text.Length || string.CompareOrdinal(text, at, t, 0, t.Length) != 0)
+            {
+                return false;
+            }
+
+            at += t.Length;
+        }
+
+        return at == text.Length;
+    }
+
+    /// <summary>The order of a right-to-left word's glyphs in which their texts spell the word: as given, reversed, or with numbers and Latin runs kept left to right; null when none does.</summary>
+    private static IReadOnlyList<int>? SpellingOrder(PdfPageText page, IReadOnlyList<int> given, string text)
+    {
+        if (Spells(page, given, text))
+        {
+            return given;
+        }
+
+        var reversed = new List<int>(given);
+        reversed.Reverse();
+        if (Spells(page, reversed, text))
+        {
+            return reversed;
+        }
+
+        List<int> a = LogicalGlyphOrder(page, given);
+        if (Spells(page, a, text))
+        {
+            return a;
+        }
+
+        List<int> b = LogicalGlyphOrder(page, reversed);
+        return Spells(page, b, text) ? b : null;
+    }
+
+    /// <summary>
+    /// The glyphs of a right-to-left word in logical order. They arrive in visual order, so the order reverses, except that a run
+    /// of digits and Latin letters (with the signs inside and beside it) reads left to right in both orders.
+    /// </summary>
+    private static List<int> LogicalGlyphOrder(PdfPageText page, IReadOnlyList<int> visual)
+    {
+        static bool Strong(string t) => t.Length > 0 && char.IsAsciiLetterOrDigit(t[0]);
+        static bool Sign(string t) => t.Length > 0 && t[0] is '.' or ',' or ':' or '/' or '%' or '-' or '+';
+        int n = visual.Count;
+        var ltr = new bool[n];
+        for (int i = 0; i < n; i++)
+        {
+            string t = (uint)visual[i] < (uint)page.Glyphs.Count ? page.Glyphs[visual[i]].Text : "";
+            ltr[i] = Strong(t);
+        }
+
+        for (int i = 0; i < n; i++)
+        {
+            string t = (uint)visual[i] < (uint)page.Glyphs.Count ? page.Glyphs[visual[i]].Text : "";
+            if (Sign(t) && ((i > 0 && ltr[i - 1]) || (i + 1 < n && ltr[i + 1])))
+            {
+                ltr[i] = true;
+            }
+        }
+
+        var logical = new List<int>(n);
+        int k = n - 1;
+        while (k >= 0)
+        {
+            if (!ltr[k])
+            {
+                logical.Add(visual[k--]);
+                continue;
+            }
+
+            int end = k;
+            while (k >= 0 && ltr[k])
+            {
+                k--;
+            }
+
+            for (int j = k + 1; j <= end; j++)
+            {
+                logical.Add(visual[j]);
+            }
+        }
+
+        return logical;
+    }
+
+    /// <summary>The box around the glyphs that spell characters [a, b) of a word whose glyphs are in logical order (right-to-left text).</summary>
+    private static Quad GlyphBox(PdfPageText page, IReadOnlyList<int> logical, int[] prefix, int a, int b)
+    {
+        int first = 0;
+        while (first + 1 < logical.Count && prefix[first + 1] <= a)
+        {
+            first++;
+        }
+
+        int last = first;
+        while (last + 1 < logical.Count && prefix[last + 1] < b)
+        {
+            last++;
+        }
+
+        double x0 = double.MaxValue, y0 = double.MaxValue, x1 = double.MinValue, y1 = double.MinValue;
+        for (int g = first; g <= last; g++)
+        {
+            PdfQuad q = page.Glyphs[logical[g]].Quad;
+            x0 = Math.Min(x0, Math.Min(Math.Min(q.X0, q.X1), Math.Min(q.X2, q.X3)));
+            x1 = Math.Max(x1, Math.Max(Math.Max(q.X0, q.X1), Math.Max(q.X2, q.X3)));
+            y0 = Math.Min(y0, Math.Min(Math.Min(q.Y0, q.Y1), Math.Min(q.Y2, q.Y3)));
+            y1 = Math.Max(y1, Math.Max(Math.Max(q.Y0, q.Y1), Math.Max(q.Y2, q.Y3)));
+        }
+
+        return new Quad(page.PageIndex, x0, y0, x1, y0, x1, y1, x0, y1);
+    }
+
     private static Quad GlyphQuad(PdfPageText page, IReadOnlyList<int> glyphIndices, int[] prefix, int a, int b)
     {
         int first = 0;
@@ -492,62 +626,94 @@ internal sealed class PdfModelBuilder
 
     private static Quad ToQuad(int pageIndex, PdfRectangle r) => new(pageIndex, r.Left, r.Bottom, r.Right, r.Bottom, r.Right, r.Top, r.Left, r.Top);
 
+    private readonly List<TokenRange> tokenScratch = [];
+
     /// <summary>
-    /// The tokens of a word, cut as the text core's word tokenizer cuts: a run of letters, digits, underscores and combining
-    /// marks is one token and every other character is its own. A change found by a word diff therefore always starts and ends
-    /// on a token boundary, which is what lets its anchor cover exactly the changed text.
+    /// The tokens of a word, cut by the text core's own word tokenizer (not a copy of it), so a change found by a word diff
+    /// always starts and ends on a token boundary and its anchor covers exactly the changed text.
     /// </summary>
-    internal static IEnumerable<(int Start, int End)> TokenSpans(string text)
+    internal IEnumerable<(int Start, int End)> TokenSpans(string text)
     {
-        int i = 0;
-        while (i < text.Length)
+        tokenScratch.Clear();
+        Tokenizer.Tokenize(text, TokenKind.Word, tokenScratch);
+        foreach (TokenRange t in tokenScratch)
         {
-            Rune.DecodeFromUtf16(text.AsSpan(i), out Rune r, out int w);
-            if (!IsWordRune(r))
-            {
-                yield return (i, i + w);
-                i += w;
-                continue;
-            }
-
-            int end = i + w;
-            while (end < text.Length)
-            {
-                Rune.DecodeFromUtf16(text.AsSpan(end), out Rune next, out int nw);
-                if (!IsWordRune(next))
-                {
-                    break;
-                }
-
-                end += nw;
-            }
-
-            yield return (i, end);
-            i = end;
+            yield return (t.Start, t.End);
         }
     }
 
-    private static bool IsWordRune(Rune r)
+    private static bool IsBlank(string text, int from, int to)
     {
-        if (Rune.IsLetterOrDigit(r) || r.Value == '_')
+        for (int i = from; i < to; i++)
         {
-            return true;
+            if (!char.IsWhiteSpace(text[i]))
+            {
+                return false;
+            }
         }
 
-        UnicodeCategory c = Rune.GetUnicodeCategory(r);
-        return c is UnicodeCategory.NonSpacingMark or UnicodeCategory.SpacingCombiningMark or UnicodeCategory.EnclosingMark;
+        return true;
+    }
+
+    /// <summary>The box between two words of one horizontal line (either direction), or null when they are not on one line or touch.</summary>
+    private static Quad? GapBetween(Quad left, Quad right)
+    {
+        if (left.Page != right.Page)
+        {
+            return null;
+        }
+
+        double lMin = Math.Min(Math.Min(left.X1, left.X2), Math.Min(left.X3, left.X4)), lMax = Math.Max(Math.Max(left.X1, left.X2), Math.Max(left.X3, left.X4));
+        double rMin = Math.Min(Math.Min(right.X1, right.X2), Math.Min(right.X3, right.X4)), rMax = Math.Max(Math.Max(right.X1, right.X2), Math.Max(right.X3, right.X4));
+        double bottom = Math.Min(left.Y1, right.Y1), top = Math.Max(left.Y4, right.Y4);
+        double height = Math.Max(left.Y4 - left.Y1, right.Y4 - right.Y1);
+        if (!(height > 0) || Math.Abs(left.Y1 - right.Y1) > height * 0.5 || Math.Abs(left.Y4 - right.Y4) > height * 0.5)
+        {
+            return null;
+        }
+
+        double x0, x1;
+        if (lMax < rMin)
+        {
+            x0 = lMax;
+            x1 = rMin;
+        }
+        else if (rMax < lMin)
+        {
+            x0 = rMax;
+            x1 = lMin;
+        }
+        else
+        {
+            return null;
+        }
+
+        return new Quad(left.Page, x0, bottom, x1, bottom, x1, top, x0, top);
     }
 
     private void EmitParagraph(Piece p, NormalizedText norm)
     {
-        var segments = ImmutableArray.CreateBuilder<AnchoredSpan>(p.Tokens.Count);
+        var segments = ImmutableArray.CreateBuilder<AnchoredSpan>(p.Tokens.Count * 2);
+        int previousEnd = -1;
+        Quad previousQuad = default;
         foreach (TokenRef t in p.Tokens)
         {
             int a = norm.MapRawIndex(t.RawStart), b = norm.MapRawIndex(t.RawEnd);
-            if (b > a)
+            if (b <= a || a < previousEnd)
             {
-                segments.Add(new AnchoredSpan(a, b - a, Anchor.ForPdfQuads([t.Quad])));
+                continue;
             }
+
+            // A space between two words on one line gets its own segment, so a change that is only a space is anchored on that
+            // space and not on the whole paragraph. A space at a line or page break has no box and no segment.
+            if (previousEnd >= 0 && a > previousEnd && IsBlank(norm.Text, previousEnd, a) && GapBetween(previousQuad, t.Quad) is Quad gap)
+            {
+                segments.Add(new AnchoredSpan(previousEnd, a - previousEnd, Anchor.ForPdfQuads([gap])));
+            }
+
+            segments.Add(new AnchoredSpan(a, b - a, Anchor.ForPdfQuads([t.Quad])));
+            previousEnd = b;
+            previousQuad = t.Quad;
         }
 
         var runs = new List<FormatRun>();
