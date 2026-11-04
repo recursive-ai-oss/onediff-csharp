@@ -138,6 +138,7 @@ public class CharDiffBench
 public class CleanupBench
 {
     private List<DmpDiff> dmpDiffs = [];
+    private TextDiff oursDiff = null!;
     private diff_match_patch dmp = Impl.NewDmp();
 
     [Params(Sizes.Small, Sizes.Medium)]
@@ -149,7 +150,8 @@ public class CleanupBench
         (string a, string b) = LineDiffBench.LoadPair(Inputs.SourceFor("chars"), Size);
         dmpDiffs = dmp.diff_main(a, b, false);
 
-        // Library side, once cleanup exists: Diff.Characters(a, b) is the input and each call cleans a copy of it.
+        // Cleanup returns a new diff and leaves its input alone, so no copy is needed on our side.
+        oursDiff = Diff.Characters(a, b);
     }
 
     [Benchmark] public int DmpSemantic()
@@ -166,9 +168,9 @@ public class CleanupBench
         return copy.Count;
     }
 
-    [Benchmark, Needs(Feature.Cleanup)] public int OursSemantic() => throw new NotSupportedException("the library's cleanup is not wired into this row yet");
+    [Benchmark, Needs(Feature.Cleanup)] public int OursSemantic() => OneDiff.Cleanup.DiffCleanup.Semantic(oursDiff).Script.Count;
 
-    [Benchmark, Needs(Feature.Cleanup)] public int OursEfficiency() => throw new NotSupportedException("the library's cleanup is not wired into this row yet");
+    [Benchmark, Needs(Feature.Cleanup)] public int OursEfficiency() => OneDiff.Cleanup.DiffCleanup.Efficiency(oursDiff).Script.Count;
 }
 
 /// <summary>Patch make, toText, fromText and apply against diff-match-patch's.</summary>
