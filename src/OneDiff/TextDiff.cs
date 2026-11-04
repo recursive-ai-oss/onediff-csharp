@@ -11,8 +11,9 @@ public sealed class TextDiff
     private readonly TokenRange[] oldTokens;
     private readonly TokenRange[] newTokens;
 
-    internal TextDiff(string oldText, string newText, TokenKind kind, TokenRange[] oldTokens, TokenRange[] newTokens, EditScript script)
+    internal TextDiff(string oldText, string newText, TokenKind kind, TokenRange[] oldTokens, TokenRange[] newTokens, EditScript script, IEqualityComparer<string>? comparer = null)
     {
+        Comparer = comparer;
         OldText = oldText;
         NewText = newText;
         Kind = kind;
@@ -20,6 +21,13 @@ public sealed class TextDiff
         this.newTokens = newTokens;
         Script = script;
     }
+
+    /// <summary>The comparer that decided which tokens are equal; null for exact (ordinal) comparison. Cleanup compares tokens the same way.</summary>
+    internal IEqualityComparer<string>? Comparer { get; }
+
+    internal TokenRange[] OldTokenArray => oldTokens;
+
+    internal TokenRange[] NewTokenArray => newTokens;
 
     /// <summary>The old string, as given.</summary>
     public string OldText { get; }

@@ -1,18 +1,28 @@
 namespace OneDiff.Tokenization;
 
+/// <summary>Lines end at <c>\n</c>, <c>\r\n</c> or a lone <c>\r</c>; the terminator stays in the token.</summary>
 internal static class LineTokenizer
 {
     public static void Tokenize(ReadOnlySpan<char> text, List<TokenRange> destination)
     {
         int start = 0;
-        for (int i = 0; i < text.Length; i++)
+        while (start < text.Length)
         {
-            char c = text[i];
-            if (c == '\n' || (c == '\r' && !(i + 1 < text.Length && text[i + 1] == '\n')))
+            // Vectorized search for the next terminator character.
+            int found = text.Slice(start).IndexOfAny('\n', '\r');
+            if (found < 0)
             {
-                destination.Add(new TokenRange(start, i + 1 - start));
-                start = i + 1;
+                break;
             }
+
+            int end = start + found + 1;
+            if (text[end - 1] == '\r' && end < text.Length && text[end] == '\n')
+            {
+                end++;
+            }
+
+            destination.Add(new TokenRange(start, end - start));
+            start = end;
         }
 
         if (start < text.Length)
