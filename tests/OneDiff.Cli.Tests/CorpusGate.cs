@@ -77,8 +77,13 @@ public sealed class CorpusGate
         return (process.ExitCode, output.ToArray(), err.Result);
     }
 
+    // The built command line's own executable, which sits beside its assembly (the test host's process is not `dotnet`).
     private static (int Code, byte[] Out, string Err) Cli(params string[] args)
-        => Exec(Environment.ProcessPath!, [typeof(Program).Assembly.Location, .. args]);
+    {
+        string dll = typeof(Program).Assembly.Location;
+        string exe = Path.Combine(Path.GetDirectoryName(dll)!, Path.GetFileNameWithoutExtension(dll) + (OperatingSystem.IsWindows() ? ".exe" : string.Empty));
+        return Exec(exe, args);
+    }
 
     [Fact]
     public void UnifiedDiffsApplyWithGnuPatchAndGitApply()
