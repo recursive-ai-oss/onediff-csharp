@@ -265,7 +265,7 @@ internal static class Diff3Core
                     Kind = MergeRegionKind.BothSame,
                     Stable = true,
                     BaseStart = baseCursor,
-                    BaseEnd = baseCursor,
+                    BaseEnd = hunks.Count == 0 ? s.BaseEnd : baseCursor,   // nothing left to dispute: the stretch is one false conflict
                     OursStart = s.OursStart + oursAt,
                     OursEnd = s.OursStart + oursAt + length,
                     TheirsStart = s.TheirsStart + theirsAt,
@@ -452,8 +452,8 @@ internal static class Diff3Core
             }
         }
 
-        Compact(firstChanged, first);
-        Compact(secondChanged, second);
+        Compact(firstChanged, first, secondChanged);
+        Compact(secondChanged, second, firstChanged);
 
         var hunks = new List<Hunk>();
         int i = 0;
@@ -494,12 +494,17 @@ internal static class Diff3Core
         return hunks;
     }
 
-    // Observed in output of git merge-file 2.51.2: a run of changed items that could sit in several places (the neighbouring
-    // item equals the run's edge item) is reported at the last such place, and runs that meet on the way become one run.
-    // Sliding every run as far up as it goes (joining the runs it meets) and then as far down as it goes reproduces that.
-    private static void Compact(bool[] changed, int[] items)
+    // Observed in output of git merge-file 2.51.2: a run of changed items that could sit in several places (the neighbouring item
+    // equals the run's edge item) is reported at the last such place, and runs that meet on the way become one run. Except that a
+    // run prefers a place where the other sequence has a run too, so that the two read as one replacement. Sliding each run as far
+    // up as it goes (joining the runs it meets), then as far down as it goes while remembering the last place that lined up with
+    // a run of the other sequence, and settling there, reproduces that.
+    private static void Compact(bool[] changed, int[] items, bool[] other)
     {
         int n = changed.Length;
+        HashSet<int> otherGaps = GapsOf(other);
+        var done = new List<(int Start, int End, int Unchanged)>();
+        int changedBefore = 0;
         int i = 0;
         while (i < n)
         {
@@ -516,31 +521,89 @@ internal static class Diff3Core
                 end++;
             }
 
+            // The number of unchanged items before the run is what lines it up with a run in the other sequence.
+            int unchanged = start - changedBefore;
+
             while (start > 0 && items[start - 1] == items[end - 1])
             {
                 changed[end - 1] = false;
                 changed[start - 1] = true;
                 start--;
                 end--;
-                while (start > 0 && changed[start - 1])
+                unchanged--;
+                if (start > 0 && changed[start - 1])
                 {
-                    start--;
+                    (int Start, int End, int Unchanged) previous = done[^1];
+                    done.RemoveAt(done.Count - 1);
+                    changedBefore -= previous.End - previous.Start;
+                    start = previous.Start;
+                    unchanged = previous.Unchanged;
                 }
             }
 
-            while (end < n && items[end] == items[start])
+            int alignedEnd = -1;
+            while (true)
             {
-                changed[start] = false;
-                changed[end] = true;
-                start++;
-                end++;
-                while (end < n && changed[end])
+                if (otherGaps.Contains(unchanged))
                 {
+                    alignedEnd = end;
+                }
+
+                if (end < n && items[end] == items[start])
+                {
+                    changed[start] = false;
+                    changed[end] = true;
+                    start++;
                     end++;
+                    unchanged++;
+                    while (end < n && changed[end])
+                    {
+                        end++;
+                    }
+                }
+                else
+                {
+                    break;
                 }
             }
 
+            while (alignedEnd != -1 && end > alignedEnd && start > 0 && !changed[start - 1] && items[start - 1] == items[end - 1])
+            {
+                changed[end - 1] = false;
+                changed[start - 1] = true;
+                start--;
+                end--;
+                unchanged--;
+            }
+
+            done.Add((start, end, unchanged));
+            changedBefore += end - start;
             i = end;
         }
+    }
+
+    // For each run of changes: how many unchanged items come before it.
+    private static HashSet<int> GapsOf(bool[] changed)
+    {
+        var gaps = new HashSet<int>();
+        int changedBefore = 0;
+        int i = 0;
+        while (i < changed.Length)
+        {
+            if (!changed[i])
+            {
+                i++;
+                continue;
+            }
+
+            gaps.Add(i - changedBefore);
+            while (i < changed.Length && changed[i])
+            {
+                i++;
+                changedBefore++;
+            }
+        }
+
+        return gaps;
     }
 }

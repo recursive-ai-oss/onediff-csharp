@@ -86,6 +86,20 @@ public class ThreeWayMergeTests
         { "a\nB\n\u00e9\n\u00e9\n\u00e9\n\u00e9\nD\nz\n", "a\nBo\n\u00e9\n\u00e9\n\u00e9\n\u00e9\nDo\nz\n", "a\nBt\n\u00e9\n\u00e9\n\u00e9\n\u00e9\nDt\nz\n", M, ConflictResolution.None, "a\n<<<<<<< ours\nBo\n\u00e9\n\u00e9\n\u00e9\n\u00e9\nDo\n=======\nBt\n\u00e9\n\u00e9\n\u00e9\n\u00e9\nDt\n>>>>>>> theirs\nz\n", 1 },
         { "a\nB\nc1\nc2\nc3\nc4\nD\nz\n", "a\nBo\nc1\nc2x\nc3\nc4\nDo\nz\n", "a\nBt\nc1\nc2\nc3\nc4\nDt\nz\n", M, ConflictResolution.None, "a\n<<<<<<< ours\nBo\n=======\nBt\n>>>>>>> theirs\nc1\nc2x\nc3\nc4\n<<<<<<< ours\nDo\n=======\nDt\n>>>>>>> theirs\nz\n", 2 },
 
+        // matching the sides after a different split of the changes, and where runs of equal lines may sit
+        { "\n\nA = {\n\n\n\nB1\n\n\n\nB2\nC\n\n\n", "A = {\n\n\n\nN\n\nC\n\n\n", "A = {\n\n\n\nN\n\nC\n", M, ConflictResolution.None, "A = {\n\n\n\nN\n\nC\n", 0 },
+        { "\n\nA = {\n\n\n\nB1\n\n\n\nB2\nC\n\n\n", "A = {\n\n\n\nN\n\nC\n\n\n", "A = {\n\n\n\nN\n\nC\n", D3, ConflictResolution.None, "A = {\n\n\n\n<<<<<<< ours\nN\n\n||||||| base\nB1\n\n\n\nB2\n=======\nN\n\n>>>>>>> theirs\nC\n", 1 },
+        { "\n\nA = {\n\n\n\nB1\n\n\n\nB2\nC\n\n\n", "A = {\n\n\n\nN\n\nC\n\n\n", "A = {\n\n\n\nN\n\nC\n", Z3, ConflictResolution.None, "A = {\n\n\n\nN\n\n<<<<<<< ours\n||||||| base\nB1\n\n\n\nB2\n=======\n>>>>>>> theirs\nC\n", 1 },
+        { "V\nT\n", "V\n", "P\nV\nV\n", M, ConflictResolution.None, "P\nV\nV\n", 0 },
+        { "V\nT\n", "V\n", "P\nV\nV\n", D3, ConflictResolution.None, "P\nV\nV\n", 0 },
+        { "V\nT\n", "V\n", "P\nV\nV\n", Z3, ConflictResolution.None, "P\nV\nV\n", 0 },
+        { "", "M\nM\n", "T\nM\n", M, ConflictResolution.None, "<<<<<<< ours\nM\n=======\nT\n>>>>>>> theirs\nM\n", 1 },
+        { "", "M\nM\n", "T\nM\n", D3, ConflictResolution.None, "<<<<<<< ours\nM\nM\n||||||| base\n=======\nT\nM\n>>>>>>> theirs\n", 1 },
+        { "", "M\nM\n", "T\nM\n", Z3, ConflictResolution.None, "<<<<<<< ours\nM\n||||||| base\n=======\nT\n>>>>>>> theirs\nM\n", 1 },
+        { "b\n", "A\nQ\nA\n", "A\n", M, ConflictResolution.None, "A\n<<<<<<< ours\nQ\nA\n=======\n>>>>>>> theirs\n", 1 },
+        { "b\n", "A\nQ\nA\n", "A\n", D3, ConflictResolution.None, "<<<<<<< ours\nA\nQ\nA\n||||||| base\nb\n=======\nA\n>>>>>>> theirs\n", 1 },
+        { "b\n", "A\nQ\nA\n", "A\n", Z3, ConflictResolution.None, "A\n<<<<<<< ours\nQ\nA\n||||||| base\nb\n=======\n>>>>>>> theirs\n", 1 },
+
         // resolutions
         { "a\nb\nz\n", "a\nX\nY\nz\n", "a\nQ\nY\nz\n", M, ConflictResolution.Ours, "a\nX\nY\nz\n", 0 },
         { "a\nb\nz\n", "a\nX\nY\nz\n", "a\nQ\nY\nz\n", M, ConflictResolution.Theirs, "a\nQ\nY\nz\n", 0 },

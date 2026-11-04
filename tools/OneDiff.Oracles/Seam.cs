@@ -1,3 +1,5 @@
+using OneDiff.Merge;
+
 namespace OneDiff.Oracles;
 
 /// <summary>Which merge conflict style to produce, named as git names them.</summary>
@@ -50,7 +52,7 @@ internal interface ITextCoreSeam
 /// </summary>
 internal sealed class OneDiffSeam : ITextCoreSeam
 {
-    public bool Has(Feature feature) => false;
+    public bool Has(Feature feature) => feature == Feature.Merge;
 
     public string MakeUnified(string oldText, string newText) => throw Pending();
 
@@ -60,7 +62,20 @@ internal sealed class OneDiffSeam : ITextCoreSeam
 
     public bool TryApplyDmp(string patchText, string text, out string result) => throw Pending();
 
-    public MergeOutcome Merge(string baseText, string ours, string theirs, MergeStyle style) => throw Pending();
+    public MergeOutcome Merge(string baseText, string ours, string theirs, MergeStyle style)
+    {
+        var settings = new MergeSettings
+        {
+            Style = style switch
+            {
+                MergeStyle.Diff3 => ConflictStyle.Diff3,
+                MergeStyle.Zdiff3 => ConflictStyle.ZDiff3,
+                _ => ConflictStyle.Merge,
+            },
+        };
+        TextMerge merge = Diff.Merge(baseText, ours, theirs, settings);
+        return new MergeOutcome(merge.Text, merge.ConflictCount);
+    }
 
     private static NotSupportedException Pending() => new("the library does not expose this yet");
 }
