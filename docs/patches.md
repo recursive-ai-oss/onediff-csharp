@@ -24,7 +24,7 @@ The format is the GNU unified format (GNU diffutils manual, "Unified Format" and
 5. A hunk never matches before the lines earlier hunks used.
 6. A hunk that matches nowhere is rejected, with the reason `ContextMismatch`, or `AlreadyApplied` when its new lines are found where its old lines are not. Applying never throws for a conflict; the rejected hunks are returned as a patch.
 
-Rules 2–4 are not in the patch manual. They were settled by comparing results with GNU patch 2.8 (run as `patch -f`, which never asks and never assumes a reversed patch) on thousands of generated drifted files; see the agreement numbers in measurement.md.
+Rules 2–4 are not in the patch manual. They were settled by comparing results with GNU patch 2.8 (run as `patch -f`, which never asks and never assumes a reversed patch) on thousands of generated drifted files (`tests/OneDiff.Tests/Patches/GnuPatchAgreementTests.cs`).
 
 **Reverse.** `Reverse` swaps the sides of every hunk; applying a reversed patch to the new text gives the old.
 
@@ -44,4 +44,4 @@ The format and the matching are those of diff-match-patch's published wiki ("Uni
 
 ## Limits and errors
 
-Both parsers return a typed error (`PatchParseError`: kind, line, offset) through `TryParse`/`TryFromText`, or throw `PatchFormatException` from `Parse`/`FromText`. Nothing else is thrown for bad patch text. The parsers and appliers are fuzzed; see measurement.md.
+Both parsers return a typed error (`PatchParseError`: kind, line, offset) through `TryParse`/`TryFromText`, or throw `PatchFormatException` from `Parse`/`FromText`. Nothing else is thrown for bad patch text. The parsers and appliers are fuzzed (`fuzz/OneDiff.Fuzz`).
