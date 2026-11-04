@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>OneDiff.All</AssemblyName>
+    <!-- Not packed yet: this package arrives with its own content and references. -->
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+</Project>

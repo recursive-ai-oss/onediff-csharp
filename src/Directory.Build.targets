@@ -1,0 +1,9 @@
+<Project>
+
+  <!-- Evaluated after each project body, so the assembly name the project sets is known here. -->
+  <PropertyGroup>
+    <RootNamespace Condition="'$(RootNamespace)' == ''">$(AssemblyName)</RootNamespace>
+    <PackageId Condition="'$(PackageId)' == ''">$(PackagePrefix)$(AssemblyName)</PackageId>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,31 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/OneDiff/OneDiff.csproj" />
+    <Project Path="src/OneDiff.Documents/OneDiff.Documents.csproj" />
+    <Project Path="src/OneDiff.Pdf/OneDiff.Pdf.csproj" />
+    <Project Path="src/OneDiff.Ocr/OneDiff.Ocr.csproj" />
+    <Project Path="src/OneDiff.Word/OneDiff.Word.csproj" />
+    <Project Path="src/OneDiff.Spreadsheets/OneDiff.Spreadsheets.csproj" />
+    <Project Path="src/OneDiff.Presentations/OneDiff.Presentations.csproj" />
+    <Project Path="src/OneDiff.Rendering/OneDiff.Rendering.csproj" />
+    <Project Path="src/OneDiff.Model/OneDiff.Model.csproj" />
+    <Project Path="src/OneDiff.Nlp/OneDiff.Nlp.csproj" />
+    <Project Path="src/OneDiff.All/OneDiff.All.csproj" />
+    <Project Path="src/OneDiff.Cli/OneDiff.Cli.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/OneDiff.Tests/OneDiff.Tests.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/OneDiff.AotSmoke/OneDiff.AotSmoke.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/OneDiff.Oracles/OneDiff.Oracles.csproj" />
+  </Folder>
+  <Folder Name="/bench/">
+    <Project Path="bench/OneDiff.Bench/OneDiff.Bench.csproj" />
+  </Folder>
+  <Folder Name="/fuzz/">
+    <Project Path="fuzz/OneDiff.Fuzz/OneDiff.Fuzz.csproj" />
+  </Folder>
+</Solution>
