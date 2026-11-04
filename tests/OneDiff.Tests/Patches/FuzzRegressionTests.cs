@@ -36,4 +36,18 @@ public class FuzzRegressionTests
         UnifiedPatch q = UnifiedPatch.Parse("--- a\n+++ b\n@@ -1 +1 @@ s\r\r\n-x\n+y\n");
         Assert.Equal(q.ToString(), UnifiedPatch.Parse(q.ToString()).ToString());
     }
+
+    [Fact]
+    public void NamesWithControlCharactersAreWrittenQuotedAndReadBackEqual()
+    {
+        // Found by the parser fuzz run: an octal escape in a quoted name can decode to a newline, which broke the written header.
+        UnifiedPatch p = UnifiedPatch.Parse("--- \"a/y\\n03\\251\"\n+++ b/y\n@@ -1 +1 @@\n-1\n+2\n");
+        string text = p.ToString();
+        Assert.Equal(2, text.Split('\n').Count(l => l.StartsWith("--- ", StringComparison.Ordinal) || l.StartsWith("+++ ", StringComparison.Ordinal)));
+        UnifiedPatch again = UnifiedPatch.Parse(text);
+        Assert.Equal(p.Files[0].OldName, again.Files[0].OldName);
+        Assert.Equal(text, again.ToString());
+        var tabbed = new UnifiedFilePatch("a\tb\"c", "d", UnifiedPatch.Parse(text).Files[0].Hunks);
+        Assert.Equal("a\tb\"c", UnifiedPatch.Parse(tabbed.ToString()).Files[0].OldName);
+    }
 }

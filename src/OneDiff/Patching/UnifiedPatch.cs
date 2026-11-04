@@ -390,9 +390,56 @@ public sealed class UnifiedFilePatch
         }
     }
 
+    // A name with a control character, quote or backslash is written in git's quoted form (git's diff documentation, "Generating patch
+    // text"), so a newline or tab in a name cannot break the header line; everything else is written as it is.
+    private static void AppendName(StringBuilder sb, string name)
+    {
+        bool plain = true;
+        foreach (char c in name)
+        {
+            if (c < ' ' || c == '"' || c == '\\' || c == '\u007f')
+            {
+                plain = false;
+                break;
+            }
+        }
+
+        if (plain)
+        {
+            sb.Append(name);
+            return;
+        }
+
+        sb.Append('"');
+        foreach (byte b in Encoding.UTF8.GetBytes(name))
+        {
+            switch (b)
+            {
+                case (byte)'"': sb.Append("\\\""); break;
+                case (byte)'\\': sb.Append("\\\\"); break;
+                case (byte)'\n': sb.Append("\\n"); break;
+                case (byte)'\t': sb.Append("\\t"); break;
+                default:
+                    if (b < 0x20 || b >= 0x7f)
+                    {
+                        sb.Append('\\').Append((char)('0' + (b >> 6))).Append((char)('0' + ((b >> 3) & 7))).Append((char)('0' + (b & 7)));
+                    }
+                    else
+                    {
+                        sb.Append((char)b);
+                    }
+
+                    break;
+            }
+        }
+
+        sb.Append('"');
+    }
+
     private static void AppendName(StringBuilder sb, string marker, string name, string? timestamp)
     {
-        sb.Append(marker).Append(name);
+        sb.Append(marker);
+        AppendName(sb, name);
         if (timestamp is not null)
         {
             sb.Append('\t').Append(timestamp);
