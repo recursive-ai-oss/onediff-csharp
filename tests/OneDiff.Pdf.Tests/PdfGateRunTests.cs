@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using OneDiff.Documents;
+using OneDiff.Documents.Model;
 using OneDiff.Documents.Serialization;
 
 namespace OneDiff.Pdf.Tests;
@@ -73,6 +74,29 @@ public class PdfGateRunTests
         foreach (PdfMark m in run.Result.Marks)
         {
             sb.AppendLine(CultureInfo.InvariantCulture, $"mark {m.Name} {m.Kind} quads={m.QuadCount}");
+        }
+
+        if (int.TryParse(Environment.GetEnvironmentVariable("ONEDIFF_PDF_GATE_CHANGE"), out int cid))
+        {
+            Change ch = run.Comparison.Changes.First(c => c.Id == cid);
+            foreach (int n in ch.New.Nodes)
+            {
+                foreach (Quad q in run.Comparison.New[n].Anchor.Quads)
+                {
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"node {n} quad p{q.Page} x {q.X1:F1}..{q.X3:F1} y {q.Y1:F1}..{q.Y3:F1}");
+                    using OnePdf.PdfDocument pdf = OnePdf.PdfDocument.Open(File.ReadAllBytes(Path.Combine(dir, "pdf", id + ".new.pdf")));
+                    var texts = pdf.ExtractText(new OnePdf.Text.PdfTextOptions { RetainGlyphs = true, DetectHeadersAndFooters = false, MaxDegreeOfParallelism = 1 });
+                    foreach (OnePdf.Text.PdfTextGlyph g in texts[q.Page].Glyphs)
+                    {
+                        OnePdf.Text.PdfQuad gq = g.Quad;
+                        double cx = (gq.X0 + gq.X2) / 2, cy = (gq.Y0 + gq.Y2) / 2;
+                        if (cx >= q.X1 && cx <= q.X3 && cy >= q.Y1 && cy <= q.Y3)
+                        {
+                            sb.AppendLine(CultureInfo.InvariantCulture, $"  glyph '{g.Text}' c=({cx:F1},{cy:F1}) y {Math.Min(gq.Y0, gq.Y2):F1}..{Math.Max(gq.Y0, gq.Y2):F1}");
+                        }
+                    }
+                }
+            }
         }
 
         File.WriteAllText(Environment.GetEnvironmentVariable("ONEDIFF_PDF_GATE_OUT") ?? Path.Combine(Path.GetTempPath(), "explain.txt"), sb.ToString());

@@ -50,6 +50,16 @@ public class MarkupTests
     }
 
     [Fact]
+    public void ChangeInsideADottedNumberMarksTheWholeNumber()
+    {
+        // The text core compares the number as one word, so a change that only cuts into it still marks the number on the page.
+        string[] oldText = ["See exhibit 10.8 and exhibit 19852_1ex10 for the terms of the plan."];
+        string[] newText = ["See exhibit 10 and exhibit 19852_ex10 for the terms of the plan."];
+        Gate(Run.Of(Doc(oldText), Doc(newText)));
+        Gate(Run.Of(Doc(newText), Doc(oldText)));
+    }
+
+    [Fact]
     public void InsertedSentenceAndDeletedParagraphAndMovedParagraph()
     {
         string[] edited = [Clauses[0] + " Late payment bears interest at one percent per month.", Clauses[2], Clauses[1], Clauses[3], Clauses[5]];

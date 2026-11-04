@@ -390,7 +390,26 @@ internal sealed class PdfModelBuilder
             Quad q = prefix is not null && glyphForTokens is not null
                 ? (rtl ? GlyphBox(page, glyphForTokens, prefix, a, b) : GlyphQuad(page, glyphForTokens, prefix, a, b))
                 : Proportional(page.PageIndex, word.Bounds, line, a, b, text.Length);
-            p.Tokens.Add(new TokenRef(rawStart + a, rawStart + b, q));
+            IReadOnlyList<int> ownGlyphs = glyphIndices;
+            if (prefix is not null && glyphForTokens is not null)
+            {
+                // Only the glyphs of the token itself are its own; the rest of the word may overlap it.
+                int first = 0;
+                while (first + 1 < glyphForTokens.Count && prefix[first + 1] <= a)
+                {
+                    first++;
+                }
+
+                int last = first;
+                while (last + 1 < glyphForTokens.Count && prefix[last + 1] < b)
+                {
+                    last++;
+                }
+
+                ownGlyphs = [.. glyphForTokens.Skip(first).Take(last - first + 1)];
+            }
+
+            p.Tokens.Add(new TokenRef(rawStart + a, rawStart + b, ClipForeignGlyphs(page, ownGlyphs, q)));
         }
 
         if (options.ReadFormatting && glyphIndices.Count > 0)
@@ -401,6 +420,113 @@ internal sealed class PdfModelBuilder
                 p.Formats.Add(new WordFormat(rawStart, rawStart + text.Length, f));
             }
         }
+    }
+
+    private PdfPageText? centresPage;
+    private double[] centreX = [];
+    private double[] centreY = [];
+    private int[] centreGlyph = [];
+
+    /// <summary>
+    /// Glyph boxes of neighbouring words can overlap (a line of underscores running into the next word), so a highlight over a
+    /// token's box would also take the neighbour's glyphs. A box is cut back, midway between the token's own outermost glyph centre
+    /// and the foreign glyph's centre, until no glyph of another word has its centre inside it. Vertical lines are left alone.
+    /// </summary>
+    private Quad ClipForeignGlyphs(PdfPageText page, IReadOnlyList<int> own, Quad q)
+    {
+        if (own.Count == 0 || page.Glyphs.Count == 0 || Math.Abs(q.X1 - q.X4) > 0.01 || Math.Abs(q.Y1 - q.Y2) > 0.01)
+        {
+            return q;
+        }
+
+        if (!ReferenceEquals(centresPage, page))
+        {
+            int n = page.Glyphs.Count;
+            var order = new int[n];
+            var keys = new double[n];
+            for (int i = 0; i < n; i++)
+            {
+                PdfQuad g = page.Glyphs[i].Quad;
+                order[i] = i;
+                keys[i] = (g.X0 + g.X2) / 2;
+            }
+
+            Array.Sort(keys, order);
+            centreX = keys;
+            centreGlyph = order;
+            centreY = new double[n];
+            for (int i = 0; i < n; i++)
+            {
+                PdfQuad g = page.Glyphs[order[i]].Quad;
+                centreY[i] = (g.Y0 + g.Y2) / 2;
+            }
+
+            centresPage = page;
+        }
+
+        double x0 = Math.Min(Math.Min(q.X1, q.X2), Math.Min(q.X3, q.X4)), x1 = Math.Max(Math.Max(q.X1, q.X2), Math.Max(q.X3, q.X4));
+        double y0 = Math.Min(Math.Min(q.Y1, q.Y2), Math.Min(q.Y3, q.Y4)), y1 = Math.Max(Math.Max(q.Y1, q.Y2), Math.Max(q.Y3, q.Y4));
+        double lo = double.MaxValue, hi = double.MinValue, ownY = 0;
+        int ownCount = 0;
+        foreach (int gi in own)
+        {
+            if ((uint)gi >= (uint)page.Glyphs.Count)
+            {
+                continue;
+            }
+
+            PdfQuad g = page.Glyphs[gi].Quad;
+            double c = (g.X0 + g.X2) / 2, cy = (g.Y0 + g.Y2) / 2;
+            if (c >= x0 && c <= x1 && cy >= y0 && cy <= y1)
+            {
+                lo = Math.Min(lo, c);
+                hi = Math.Max(hi, c);
+                ownY += cy;
+                ownCount++;
+            }
+        }
+
+        if (lo > hi)
+        {
+            return q;
+        }
+
+        bool changed = false;
+        int at = Array.BinarySearch(centreX, x0);
+        for (int i = at < 0 ? ~at : at; i < centreX.Length && centreX[i] <= x1; i++)
+        {
+            double cx = centreX[i], cy = centreY[i];
+            if (cx < x0 || cy < y0 || cy > y1 || own.Contains(centreGlyph[i]))
+            {
+                continue;
+            }
+
+            // A glyph from the line above or below (the boxes of tall lines touch) is cut off vertically; one on the same line,
+            // horizontally.
+            double h = y1 - y0, mid = ownY / ownCount;
+            if (cy > mid + 0.25 * h)
+            {
+                y1 = Math.Min(y1, (mid + cy) / 2);
+                changed = true;
+            }
+            else if (cy < mid - 0.25 * h)
+            {
+                y0 = Math.Max(y0, (cy + mid) / 2);
+                changed = true;
+            }
+            else if (cx > hi)
+            {
+                x1 = Math.Min(x1, (hi + cx) / 2);
+                changed = true;
+            }
+            else if (cx < lo)
+            {
+                x0 = Math.Max(x0, (cx + lo) / 2);
+                changed = true;
+            }
+        }
+
+        return changed ? new Quad(q.Page, x0, y0, x1, y0, x1, y1, x0, y1) : q;
     }
 
     private static FormatSet? FormatOf(PdfPageText page, IReadOnlyList<int> glyphIndices)
@@ -688,6 +814,12 @@ internal sealed class PdfModelBuilder
             return null;
         }
 
+        // A wider gap is not a space: something else (another cell or column) lies between the two words.
+        if (x1 - x0 > 2 * height)
+        {
+            return null;
+        }
+
         return new Quad(left.Page, x0, bottom, x1, bottom, x1, top, x0, top);
     }
 
@@ -702,20 +834,36 @@ internal sealed class PdfModelBuilder
             return p.LineQuads.Count > 0 ? Anchor.ForPdfQuads(p.LineQuads) : null;
         }
 
+        // One box per run of neighbouring tokens: the run ends where the line changes, the reading direction reverses or a gap wider
+        // than two line heights opens, because whatever lies in such a gap (another table cell, another column) is not this block's.
         var lines = new List<Quad>();
         int page = -1;
-        double x0 = 0, x1 = 0, y0 = 0, y1 = 0;
+        double x0 = 0, x1 = 0, y0 = 0, y1 = 0, prevLeft = 0;
+        int dir = 0;
         foreach (TokenRef t in p.Tokens)
         {
             Quad q = t.Quad;
             double qx0 = Math.Min(Math.Min(q.X1, q.X2), Math.Min(q.X3, q.X4)), qx1 = Math.Max(Math.Max(q.X1, q.X2), Math.Max(q.X3, q.X4));
             double qy0 = Math.Min(Math.Min(q.Y1, q.Y2), Math.Min(q.Y3, q.Y4)), qy1 = Math.Max(Math.Max(q.Y1, q.Y2), Math.Max(q.Y3, q.Y4));
-            double centre = (qy0 + qy1) / 2;
-            if (page == q.Page && centre >= y0 && centre <= y1)
+            double centre = (qy0 + qy1) / 2, height = Math.Max(1, y1 - y0);
+            if (page == q.Page && Math.Abs(centre - (y0 + y1) / 2) <= 0.25 * height)
             {
-                x0 = Math.Min(x0, qx0);
-                x1 = Math.Max(x1, qx1);
-                continue;
+                int step = Math.Sign(qx0 - prevLeft);
+                double gap = step >= 0 ? qx0 - x1 : x0 - qx1;
+                if ((dir == 0 || step == 0 || step == dir) && gap <= 2 * height)
+                {
+                    if (step != 0)
+                    {
+                        dir = step;
+                    }
+
+                    prevLeft = qx0;
+                    x0 = Math.Min(x0, qx0);
+                    x1 = Math.Max(x1, qx1);
+                    y0 = Math.Min(y0, qy0);
+                    y1 = Math.Max(y1, qy1);
+                    continue;
+                }
             }
 
             if (page >= 0)
@@ -728,6 +876,8 @@ internal sealed class PdfModelBuilder
             x1 = qx1;
             y0 = qy0;
             y1 = qy1;
+            prevLeft = qx0;
+            dir = 0;
         }
 
         lines.Add(new Quad(page, x0, y0, x1, y0, x1, y1, x0, y1));

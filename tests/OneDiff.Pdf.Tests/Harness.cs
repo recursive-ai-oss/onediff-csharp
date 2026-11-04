@@ -9,7 +9,7 @@ using OnePdf.Text;
 namespace OneDiff.Pdf.Tests;
 
 /// <summary>An annotation read back from a marked-up PDF, with the text that lies under its quadrilaterals.</summary>
-internal sealed record ReadAnnotation(int Page, string Subtype, string? Name, string? Contents, string? Title, int QuadCount, string TextUnder, bool HasPopup);
+internal sealed record ReadAnnotation(int Page, string Subtype, string? Name, string? Contents, string? Title, int QuadCount, string TextUnder, bool HasPopup, Func<IReadOnlyList<string>>? WithoutOverlaps = null);
 
 /// <summary>Compares two generated PDFs, marks the result, reads the marks back, and checks them against the change list.</summary>
 internal sealed class Run
@@ -70,7 +70,7 @@ internal sealed class Run
                     rects.Add((pts.Min(t => t.X), pts.Min(t => t.Y), pts.Max(t => t.X), pts.Max(t => t.Y)));
                 }
 
-                list.Add(new ReadAnnotation(p, a.Subtype, a.Name, a.Contents, a.Title, rects.Count, TextUnder(texts[p], rects), a.Popup is not null));
+                list.Add(new ReadAnnotation(p, a.Subtype, a.Name, a.Contents, a.Title, rects.Count, TextUnder(texts[p], rects, out Func<IReadOnlyList<string>> variants), a.Popup is not null, variants));
             }
         }
 
@@ -78,20 +78,25 @@ internal sealed class Run
     }
 
     /// <summary>The words of a page, in reading order, cut to the glyphs whose centres lie inside any of the rectangles.</summary>
-    private static string TextUnder(PdfPageText page, List<(double L, double B, double R, double T)> rects)
+    private static string TextUnder(PdfPageText page, List<(double L, double B, double R, double T)> rects, out Func<IReadOnlyList<string>> withoutOverlaps)
     {
+        withoutOverlaps = () => [];
         if (rects.Count == 0)
         {
             return "";
         }
 
         var parts = new List<string>();
+        var partWord = new List<int>();
+        var pickedGlyphs = new List<(int Word, PdfQuad Quad)>();
+        int wordNo = 0;
         foreach (PdfTextBlock block in page.Blocks)
         {
             foreach (PdfTextLine line in block.Lines)
             {
                 foreach (PdfTextWord w in line.Words)
                 {
+                    wordNo++;
                     var picked = new List<string>();
                     foreach (int gi in w.GlyphIndices)
                     {
@@ -101,6 +106,7 @@ internal sealed class Run
                         if (rects.Any(r => cx >= r.L && cx <= r.R && cy >= r.B && cy <= r.T))
                         {
                             picked.Add(gl.Text);
+                            pickedGlyphs.Add((wordNo, q));
                         }
                     }
 
@@ -118,9 +124,41 @@ internal sealed class Run
                     {
                         parts.Add(line.Direction == PdfTextDirection.RightToLeft ? LogicalOrder(picked) : string.Concat(picked));
                     }
+
+                    partWord.Add(wordNo);
                 }
             }
         }
+
+        // Glyph boxes of different words can overlap on the page (underscores running under the next word). A highlight over
+        // one takes the other, so the text under it is also given with each overlapping word left out, for the gate to accept
+        // when that is the only difference.
+        withoutOverlaps = () =>
+        {
+            var involved = new SortedSet<int>();
+            var result = new List<string>();
+            foreach ((int wa, PdfQuad qa) in pickedGlyphs)
+            {
+                double cx = (qa.X0 + qa.X2) / 2, cy = (qa.Y0 + qa.Y2) / 2;
+                foreach ((int wb, PdfQuad qb) in pickedGlyphs)
+                {
+                    if (wa != wb && cx >= Math.Min(qb.X0, qb.X2) && cx <= Math.Max(qb.X0, qb.X2) && cy >= Math.Min(qb.Y0, qb.Y2) && cy <= Math.Max(qb.Y0, qb.Y2))
+                    {
+                        involved.Add(wa);
+                        involved.Add(wb);
+                    }
+                }
+            }
+
+            foreach (int k in involved)
+            {
+                result.Add(string.Join(' ', parts.Where((_, i) => partWord[i] != k)));
+                // ... or with only that one of the overlapping words kept, when the overlap involves several words.
+                result.Add(string.Join(' ', parts.Where((_, i) => partWord[i] == k || !involved.Contains(partWord[i]))));
+            }
+
+            return result;
+        };
 
         return string.Join(' ', parts);
     }
@@ -205,7 +243,13 @@ internal sealed class Run
                 string expected = Canon(c.Kind == ChangeKind.Attribute ? AttributeMarkText(c.New, Comparison.New) : ExpectedPageText(c.New, Comparison.New, Comparison.Alignment.Settings)), got = Canon(under);
                 // A change that is only a space across a line break rests on the word before it; there is no text to compare.
                 bool spaceOnly = expected.Length == 0 && c.New.Text.All(ch => char.IsWhiteSpace(ch) || ch == '\u001E');
-                Assert.True(spaceOnly || expected == got, $"change {c.Id} {c.Kind} mark {m.Kind} page {m.Page}: expected [{Clip(expected)}] got [{Clip(got)}]");
+                string under2 = got;
+                if (expected != got && Result.Marks.Count(x => x.ChangeId == c.Id && x.Kind != PdfMarkupKind.Caret) == 1)
+                {
+                    under2 = byName[m.Name].WithoutOverlaps?.Invoke().Select(Canon).FirstOrDefault(v => v == expected) ?? got;
+                }
+
+                Assert.True(spaceOnly || expected == under2, $"change {c.Id} {c.Kind} mark {m.Kind} page {m.Page}: expected [{Clip(expected)}] got [{Clip(got)}]");
             }
             else
             {
@@ -254,46 +298,56 @@ internal sealed class Run
             pieces.Add((plain, plain));
         }
 
-        // The page marks whole words: a change that cuts a word (a character-level refinement of a word diff) marks the word.
+        // The page marks whole words: a change that cuts a word (a character-level refinement of a word diff) marks the word, and a
+        // word is a token of the text as the page shows it (a folded page number is a digit run inside its word there).
         int from = side.Start, to = side.Start + side.Length;
-        string compared = string.Concat(pieces.Select(p => p.Compared));
-        var tokens = new List<TokenRange>();
-        Tokenizer.Tokenize(compared, TokenKind.Word, tokens);
-        foreach (TokenRange t in tokens)
-        {
-            if (t.Start < from && from < t.End)
-            {
-                from = t.Start;
-            }
-
-            if (t.Start < to && to < t.End)
-            {
-                to = t.End;
-            }
-        }
-
-        var shown = new System.Text.StringBuilder();
-        int projected = 0;
-        foreach ((string text, string page) in pieces)
+        var page = new System.Text.StringBuilder();
+        int pageFrom = -1, pageTo = -1, projected = 0;
+        foreach ((string text, string shownText) in pieces)
         {
             int a = projected, b = projected + text.Length;
             projected = b;
-            if (b <= from || a >= to)
+            bool same = text == shownText;
+            int at = page.Length;
+            if (pageFrom < 0 && from < b)
             {
-                continue;
+                pageFrom = same ? at + Math.Max(0, from - a) : at;
             }
 
-            if (text == page)
+            page.Append(shownText);
+            if (pageTo < 0 && to <= b)
             {
-                shown.Append(page, Math.Max(from, a) - a, Math.Min(to, b) - Math.Max(from, a));
-            }
-            else
-            {
-                shown.Append(page);
+                pageTo = same ? at + Math.Max(0, to - a) : page.Length;
             }
         }
 
-        return shown.ToString();
+        if (pageFrom < 0)
+        {
+            pageFrom = page.Length;
+        }
+
+        if (pageTo < 0)
+        {
+            pageTo = page.Length;
+        }
+
+        string onPage = page.ToString();
+        var tokens = new List<TokenRange>();
+        Tokenizer.Tokenize(onPage, TokenKind.Word, tokens);
+        foreach (TokenRange t in tokens)
+        {
+            if (t.Start < pageFrom && pageFrom < t.End)
+            {
+                pageFrom = t.Start;
+            }
+
+            if (t.Start < pageTo && pageTo < t.End)
+            {
+                pageTo = t.End;
+            }
+        }
+
+        return pageTo > pageFrom ? onPage.Substring(pageFrom, pageTo - pageFrom) : "";
     }
 
     public ImmutableArray<Change> Of(ChangeKind kind) => [.. Comparison.Changes.Where(c => c.Kind == kind)];
