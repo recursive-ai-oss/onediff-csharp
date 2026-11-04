@@ -10,6 +10,7 @@ internal static class Program
           diff    compare two texts (unified, terminal, Markdown or diff-match-patch output)
           patch   apply a unified or diff-match-patch patch
           merge   three-way merge with conflict markers
+          compare compare two documents and write a redline (HTML or JSON)
         "onediff <command> --help" lists a command's options.
         """;
 
@@ -47,6 +48,7 @@ internal static class Program
                 "diff" => DiffCommand.Run(rest, io),
                 "patch" => PatchCommand.Run(rest, io),
                 "merge" => MergeCommand.Run(rest, io),
+                "compare" => CompareCommand.Run(rest),
                 _ => throw new CliException($"unknown command '{command}'"),
             };
         }

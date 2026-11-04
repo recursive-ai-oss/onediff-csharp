@@ -81,6 +81,13 @@ jobs:
         with:
           global-json-file: global.json
 
+      # Sister-library previews that are not on nuget.org yet come from the feed in ONEDIFF_PREVIEW_FEED (docs/building.md).
+      - name: Preview feed
+        env:
+          ONEDIFF_PREVIEW_FEED: ${{ vars.ONEDIFF_PREVIEW_FEED }}
+        run: |
+          if [ -n "$ONEDIFF_PREVIEW_FEED" ]; then cp docs/nuget-local.config.example NuGet.Config; fi
+
       - name: Restore
         run: dotnet restore OneDiff.slnx
 
@@ -88,12 +95,21 @@ jobs:
         env:
           TAG: ${{ github.ref_name }}
         run: |
-          # The version is whatever the project builds; the tag has to say the same.
-          version=$(dotnet msbuild src/OneDiff -getProperty:PackageVersion | tr -d '[:space:]')
-          if [ "v$version" != "$TAG" ]; then
-            echo "::error::tag $TAG does not match the package version $version"
-            exit 1
-          fi
+          # Every project that ships must build the version the tag names. Which projects ship is decided by
+          # IsPackable in the projects themselves (Directory.Build.props), so a new package joins without a change here.
+          shipped=0
+          for project in src/*/*.csproj; do
+            packable=$(dotnet msbuild "$project" -getProperty:IsPackable | tr -d '[:space:]')
+            [ "$packable" = "true" ] || continue
+            shipped=$((shipped + 1))
+            version=$(dotnet msbuild "$project" -getProperty:PackageVersion | tr -d '[:space:]')
+            if [ "v$version" != "$TAG" ]; then
+              echo "::error::tag $TAG does not match the package version $version of $project"
+              exit 1
+            fi
+          done
+          if [ "$shipped" -eq 0 ]; then echo "::error::no packable project found"; exit 1; fi
+          echo "$shipped packages at $TAG"
 
       # A tag that does not build and pass its tests never publishes.
       - name: Build
@@ -102,10 +118,17 @@ jobs:
         run: dotnet test --solution OneDiff.slnx -c Release --no-build --results-directory "$ONEDIFF_ARTIFACTS/TestResults"
 
       - name: Pack
-        # The one shipped package, from the binaries the tests ran on. Symbols come out as a .snupkg file.
+        # Every packable project (the packages and the tool), from the binaries the tests ran on. Symbols come out as .snupkg files.
         run: |
-          dotnet pack src/OneDiff -c Release --no-build -o "$RUNNER_TEMP/packages"
+          dotnet pack OneDiff.slnx -c Release --no-build -o "$RUNNER_TEMP/packages"
           ls -l "$RUNNER_TEMP/packages"
+          # One package per shipped project, and nothing else.
+          expected=0
+          for project in src/*/*.csproj; do
+            if [ "$(dotnet msbuild "$project" -getProperty:IsPackable | tr -d '[:space:]')" = "true" ]; then expected=$((expected + 1)); fi
+          done
+          packed=$(find "$RUNNER_TEMP/packages" -name '*.nupkg' | wc -l)
+          if [ "$packed" -ne "$expected" ]; then echo "::error::packed $packed packages, expected $expected"; exit 1; fi
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2

@@ -13,7 +13,25 @@ env:
   DOTNET_NOLOGO: '1'
 
 jobs:
+  plan:
+    # Decides what the other jobs build: everything, or the projects that restore without the sister-library previews.
+    runs-on: ubuntu-latest
+    outputs:
+      solution: ${{ steps.select.outputs.solution }}
+      filter: ${{ steps.select.outputs.filter }}
+      smoke: ${{ steps.select.outputs.smoke }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Select the solution
+        id: select
+        env:
+          ONEDIFF_PREVIEW_FEED: ${{ vars.ONEDIFF_PREVIEW_FEED }}
+        run: python3 tools/ci/select-solution.py >> "$GITHUB_OUTPUT"
+
   build:
+    needs: plan
     strategy:
       fail-fast: false
       matrix:
@@ -34,21 +52,33 @@ jobs:
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
+      # Sister-library previews that are not on nuget.org yet: see docs/building.md.
+      - name: Preview feed and project filter
+        shell: bash
+        env:
+          ONEDIFF_PREVIEW_FEED: ${{ vars.ONEDIFF_PREVIEW_FEED }}
+          FILTER: ${{ needs.plan.outputs.filter }}
+        run: |
+          if [ -n "$ONEDIFF_PREVIEW_FEED" ]; then cp docs/nuget-local.config.example NuGet.Config; fi
+          if [ -n "$FILTER" ]; then printf '%s\n' "$FILTER" > OneDiff.Hosted.slnf; fi
       - name: Build
-        run: dotnet build OneDiff.slnx -c Release
+        run: dotnet build ${{ needs.plan.outputs.solution }} -c Release
       - name: Test
-        run: dotnet test --solution OneDiff.slnx -c Release --no-build
+        run: dotnet test --solution ${{ needs.plan.outputs.solution }} -c Release --no-build
       - name: Native AOT toolchain (Linux)
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && needs.plan.outputs.smoke == 'true'
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends clang zlib1g-dev
       - name: Publish AOT smoke app (warnings are errors)
+        if: needs.plan.outputs.smoke == 'true'
         run: dotnet publish samples/OneDiff.AotSmoke -c Release -r ${{ matrix.rid }} -o ${{ runner.temp }}/smoke -warnaserror
       - name: Run AOT smoke app
+        if: needs.plan.outputs.smoke == 'true'
         shell: bash
         run: '"$RUNNER_TEMP/smoke/OneDiff.AotSmoke"'
 
   pack:
-    # Builds the package as an artifact only; nothing is pushed anywhere.
+    needs: plan
+    # Builds every packable project (the packages and the tool) as artifacts only; nothing is pushed anywhere.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -60,8 +90,17 @@ jobs:
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
+      # Sister-library previews that are not on nuget.org yet: see docs/building.md.
+      - name: Preview feed and project filter
+        shell: bash
+        env:
+          ONEDIFF_PREVIEW_FEED: ${{ vars.ONEDIFF_PREVIEW_FEED }}
+          FILTER: ${{ needs.plan.outputs.filter }}
+        run: |
+          if [ -n "$ONEDIFF_PREVIEW_FEED" ]; then cp docs/nuget-local.config.example NuGet.Config; fi
+          if [ -n "$FILTER" ]; then printf '%s\n' "$FILTER" > OneDiff.Hosted.slnf; fi
       - name: Pack
-        run: dotnet pack src/OneDiff -c Release -o ${{ runner.temp }}/packages
+        run: dotnet pack ${{ needs.plan.outputs.solution }} -c Release -o ${{ runner.temp }}/packages
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: packages

@@ -10,9 +10,19 @@
   </PropertyGroup>
 
   <PropertyGroup Label="Output">
-    <!-- Build output stays out of the checkout. Set ONEDIFF_ARTIFACTS to choose where; the default is a per-user folder. -->
+    <!-- Build output stays out of the checkout. Set ONEDIFF_ARTIFACTS to choose where; the default is a per-user folder
+         (or the temp folder when the user has no profile folder, as in some containers). -->
+    <OneDiffDefaultArtifacts>$([System.Environment]::GetFolderPath(SpecialFolder.LocalApplicationData))</OneDiffDefaultArtifacts>
+    <OneDiffDefaultArtifacts Condition="'$(OneDiffDefaultArtifacts)' == ''">$([System.IO.Path]::GetTempPath())</OneDiffDefaultArtifacts>
     <ArtifactsPath Condition="'$(ONEDIFF_ARTIFACTS)' != ''">$(ONEDIFF_ARTIFACTS)</ArtifactsPath>
-    <ArtifactsPath Condition="'$(ONEDIFF_ARTIFACTS)' == ''">$([System.Environment]::GetFolderPath(LocalApplicationData))/onediff/build</ArtifactsPath>
+    <ArtifactsPath Condition="'$(ONEDIFF_ARTIFACTS)' == ''">$([System.IO.Path]::Combine($(OneDiffDefaultArtifacts), 'onediff', 'build'))</ArtifactsPath>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Packing">
+    <!-- Nothing packs unless a project under src/ says so (src/Directory.Build.props turns it on, and a project there sets
+         IsPackable to false until its package has content). Release packing runs `dotnet pack` over the solution, so this
+         property is the one list of what ships; tests, tools, samples and benchmarks never pack. -->
+    <IsPackable>false</IsPackable>
   </PropertyGroup>
 
   <PropertyGroup Label="Language and analysis">

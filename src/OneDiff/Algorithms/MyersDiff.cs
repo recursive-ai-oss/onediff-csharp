@@ -84,6 +84,18 @@ public static class MyersDiff
             return;
         }
 
+        // The set-aside step below counts items by id in an array, which needs small non-negative ids. Sparse or negative ids are first
+        // renumbered by order of first appearance, so the script depends only on which items are equal, never on how ids happen to be
+        // written (a character diff over code points and a diff over dense ids of the same text must agree).
+        if (NeedsRenumbering(a, b))
+        {
+            var map = new Dictionary<int, int>();
+            int[] denseA = Renumber(a, map);
+            int[] denseB = Renumber(b, map);
+            SolveMiddle(denseA, denseB, budget, script, cancellationToken);
+            return;
+        }
+
         if (!TryDiscardUnshared(a, b, out int[]? keptOld, out int[]? mapOld, out int keptOldCount, out int[]? keptNew, out int[]? mapNew, out int keptNewCount))
         {
             var core = new MyersCore(a, b, budget, cancellationToken);
@@ -156,6 +168,42 @@ public static class MyersDiff
             ArrayPool<int>.Shared.Return(keptNew!);
             ArrayPool<int>.Shared.Return(mapNew!);
         }
+    }
+
+    private static bool NeedsRenumbering(ReadOnlySpan<int> a, ReadOnlySpan<int> b)
+    {
+        int min = int.MaxValue;
+        int maxId = int.MinValue;
+        foreach (int id in a)
+        {
+            min = Math.Min(min, id);
+            maxId = Math.Max(maxId, id);
+        }
+
+        foreach (int id in b)
+        {
+            min = Math.Min(min, id);
+            maxId = Math.Max(maxId, id);
+        }
+
+        return min < 0 || maxId > (4L * (a.Length + b.Length)) + 1024;
+    }
+
+    private static int[] Renumber(ReadOnlySpan<int> ids, Dictionary<int, int> map)
+    {
+        int[] result = new int[ids.Length];
+        for (int i = 0; i < ids.Length; i++)
+        {
+            if (!map.TryGetValue(ids[i], out int dense))
+            {
+                dense = map.Count;
+                map.Add(ids[i], dense);
+            }
+
+            result[i] = dense;
+        }
+
+        return result;
     }
 
     /// <summary>
