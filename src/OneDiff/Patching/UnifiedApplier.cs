@@ -133,10 +133,6 @@ internal static class UnifiedApplier
                 }
             }
 
-            // Observed in GNU patch 2.8: a hunk with less leading than trailing context was cut at the top of the file, so it must
-            // match there; the mirror case must match at the end.
-            bool anchorStart = lead < trail;
-            bool anchorEnd = trail < lead;
             int nominal = hunk.OldIndex;
 
             int foundAt = -1;
@@ -147,8 +143,7 @@ internal static class UnifiedApplier
             int prevTrail = -1;
             for (int fuzz = 0; fuzz <= maxFuzz && foundAt < 0; fuzz++)
             {
-                usedLead = Math.Min(fuzz, lead);
-                usedTrail = Math.Min(fuzz, trail);
+                (usedLead, usedTrail) = Stripped(lead, trail, fuzz);
                 if (usedLead == prevLead && usedTrail == prevTrail)
                 {
                     continue; // nothing more to ignore than at the last level
@@ -156,6 +151,10 @@ internal static class UnifiedApplier
 
                 prevLead = usedLead;
                 prevTrail = usedTrail;
+                // Observed in the output of GNU patch 2.8 on drifted files: a hunk with less leading than trailing context was cut at the
+                // top of the file, so it has to match there (the mirror case at the end), judged on the context that is left after fuzz.
+                bool anchorStart = (lead - usedLead) < (trail - usedTrail);
+                bool anchorEnd = (trail - usedTrail) < (lead - usedLead);
                 foundAt = Locate(lines, oldSide, usedLead, oldSide.Count - usedLead - usedTrail, nominal + usedLead + hint, consumed, anchorStart, anchorEnd, usedLead, options.MaxOffset);
                 fuzzUsed = fuzz;
             }
@@ -163,7 +162,7 @@ internal static class UnifiedApplier
             if (foundAt < 0)
             {
                 // Tell a stale conflict from an already-applied change: look for the new lines at fuzz zero.
-                int again = newSide.Count == 0 ? -1 : Locate(lines, newSide, 0, newSide.Count, nominal + hint, consumed, anchorStart, anchorEnd, 0, options.MaxOffset);
+                int again = newSide.Count == 0 ? -1 : Locate(lines, newSide, 0, newSide.Count, nominal + hint, consumed, lead < trail, trail < lead, 0, options.MaxOffset);
                 results[h] = new HunkResult(h, HunkOutcome.Rejected, 0, 0, -1, again >= 0 ? HunkRejectReason.AlreadyApplied : HunkRejectReason.ContextMismatch);
                 rejected.Add(hunk);
                 continue;
@@ -198,11 +197,22 @@ internal static class UnifiedApplier
         return new UnifiedApplyResult(string.Concat(output), results, rej);
     }
 
+    // How many context lines are ignored at each end at a fuzz level. The patch manual only says fuzz ignores context at both ends;
+    // observed in GNU patch 2.8: fuzz n leaves at most (longest context - n) lines at each end, so a hunk with unequal contexts
+    // (one cut short by the edge of the file) loses lines from its longer side first.
+    private static (int Lead, int Trail) Stripped(int lead, int trail, int fuzz)
+    {
+        int keep = Math.Max(0, Math.Max(lead, trail) - fuzz);
+        return (lead - Math.Min(lead, keep), trail - Math.Min(trail, keep));
+    }
+
     // Finds the start index of old[skip .. skip+length) in lines, nearest to guess, forward before backward at equal distance.
     // The match may not begin before 'floor' (lines already consumed by earlier hunks).
     private static int Locate(List<string> lines, List<string> old, int skip, int length, int guess, int floor, bool anchorStart, bool anchorEnd, int unstrippedLead, int maxOffset)
     {
-        long lo = floor;
+        // Observed in GNU patch 2.8: a hunk whose ignored leading context would fall before the first line is rejected, while ignored
+        // trailing context may run past the last line.
+        long lo = Math.Max(floor, unstrippedLead);
         long hi = (long)lines.Count - length;
         if (lo > hi)
         {

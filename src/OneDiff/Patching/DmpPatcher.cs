@@ -220,13 +220,13 @@ public sealed partial class DmpPatcher
         }
 
         padding += patchMargin;
-        string prefix = text.Slice(patch.Start2 - padding, patch.Start2);
+        string prefix = text.Slice(patch.Start2 - padding, patch.Start2, -1);
         if (prefix.Length > 0)
         {
             patch.MutableDiffs.Insert(0, new DmpDiff(DmpOperation.Equal, prefix));
         }
 
-        string suffix = text.Slice(patch.Start2 + patch.Length1, patch.Start2 + patch.Length1 + padding);
+        string suffix = text.Slice(patch.Start2 + patch.Length1, patch.Start2 + patch.Length1 + padding, 1);
         if (suffix.Length > 0)
         {
             patch.MutableDiffs.Add(new DmpDiff(DmpOperation.Equal, suffix));
@@ -262,8 +262,11 @@ public sealed partial class DmpPatcher
 
         private char At(int i) => i < p2 ? Source2[i] : source1[p1 + i - p2];
 
-        /// <summary>Characters [from, to) clamped to the text, widened so a surrogate pair is not cut.</summary>
-        public string Slice(int from, int to)
+        /// <summary>
+        /// Characters [from, to) clamped to the text. With <paramref name="keepPairsOutside"/> set, the outer edge (the start for a
+        /// prefix, the end for a suffix) moves outward rather than cut a surrogate pair; the edge next to the patch never moves.
+        /// </summary>
+        public string Slice(int from, int to, int keepPairsOutside = 0)
         {
             from = Math.Max(0, from);
             to = Math.Min(Length, to);
@@ -272,12 +275,12 @@ public sealed partial class DmpPatcher
                 return string.Empty;
             }
 
-            if (from > 0 && char.IsLowSurrogate(At(from)) && char.IsHighSurrogate(At(from - 1)))
+            if (keepPairsOutside < 0 && from > 0 && char.IsLowSurrogate(At(from)) && char.IsHighSurrogate(At(from - 1)))
             {
                 from--;
             }
 
-            if (to < Length && char.IsHighSurrogate(At(to - 1)) && char.IsLowSurrogate(At(to)))
+            if (keepPairsOutside > 0 && to < Length && char.IsHighSurrogate(At(to - 1)) && char.IsLowSurrogate(At(to)))
             {
                 to++;
             }
