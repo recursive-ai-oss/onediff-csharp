@@ -80,7 +80,7 @@ Comparison.Of(old, new, settings?, scorer?, ct)   // the five in a row
 
 | Stage | Reference implementation | Contract the next stage relies on |
 |---|---|---|
-| `Align` | exact-key matching of nodes by the text core (Myers; histogram past the cap), then inside each unmatched stretch splits and merges, then the best order-preserving pairing of similar blocks (word overlap, `IPairScorer`), then moves across the document (equal text, then similar), then `Normalize` | links satisfy the rules above |
+| `Align` | the text core over subtree hashes of all nodes in document order (equal text, tables and sections in order; repeats pair in order), equal subtrees that moved, then text blocks: candidates from a shingle index, splits and merges from containment, ambiguous pairs judged by `IPairScorer` in batches, a global maximum-weight assignment weighing similarity, same changed stretch, matched neighbours and position; then containers (tables, rows, cells, sections, notes) by matched content and by position between matched siblings; then `Normalize` | links satisfy the rules above |
 | `DiffPairs` | per link, word-level text-core diff of the joined compared text; format-only edits for equal text with different runs; attribute edits; the ledger | for every non-hidden link, edits that replay old → new and back; `Link i` is indexed by link id |
 | `Group` | one `Change` per diff region, one per whole inserted/deleted node, one `Move` per moved link, one `Split`/`Merge` per such link, one `Attribute` per link with attribute edits; one display group per change | every inserted/deleted node and every link is explained; ids unique; groups partition the changes |
 | `Classify` | `Decision(Rule, "reference", 1.0)` on every change, no typing | none beyond `Group` |
@@ -121,7 +121,7 @@ Seams: `IPairScorer` (`Score`, `ScoreBatch`) for alignment candidates, `ITextNor
 
 ## 8. What a follow-on unit needs to know
 
-- **Alignment:** replace `ReferenceAligner` (or supply an `IPairScorer`); return a normalized `Alignment`. The gap pairing is positional for containers; the real matcher should pair table structure explicitly.
+- **Alignment:** described in `alignment.md`. A replacement stage returns a normalized `Alignment`; a scorer plugs in through `IPairScorer`.
 - **In-pair diff and grouping:** produce `LinkDiff`s with replayable `RegionEdit`s; group by emitting `Change`s whose edits are a partition of the link's edits, and `ChangeGroup`s over their ids. Never put data in a group.
 - **Ledger:** extend `LedgerBuilder` for new categories (page numbers, hyphenation); `Verify` recomputes it from edits.
 - **Writers:** read `Comparison`; resolve `Anchor`s; use `Change.Old/New` for text and `Groups` for display.

@@ -22,12 +22,16 @@ namespace OneDiff.Documents;
 public static class Stages
 {
     /// <summary>
-    /// Pairs the nodes of two documents: equal blocks first, then edited blocks, splits and merges inside the stretches between
-    /// them, then moves. The result is normalized (matches and moves are settled).
+    /// Pairs the nodes of two documents: equal subtrees in order first, then equal subtrees moved elsewhere, then edited text
+    /// blocks (found through a shingle index, judged by the scorer where the cheap measure is unsure, chosen by a global
+    /// assignment), splits and merges, and finally tables, rows, cells, sections and notes by how much of their content matched
+    /// and by position. The result is normalized (matches and moves are settled). The work is near-linear in the size of the
+    /// documents; past <see cref="CompareSettings.CostCap"/> the search for edited blocks is skipped and a diagnostic
+    /// (<c>align.cap</c>) says so, leaving a complete but coarser alignment.
     /// </summary>
     /// <param name="oldDocument">The old document.</param>
     /// <param name="newDocument">The new document.</param>
-    /// <param name="scorer">Scores candidate pairs of blocks; word overlap when null.</param>
+    /// <param name="scorer">Judges candidate pairs of text blocks the cheap measure cannot settle, in batches; <see cref="RulesPairScorer"/> when null.</param>
     /// <param name="settings">Thresholds, hidden categories and the cost cap; <see cref="CompareSettings.Legal"/> when null.</param>
     /// <param name="seed">An earlier alignment of the same two documents whose pinned links are kept; the rest is aligned afresh.</param>
     /// <param name="cancellationToken">Observed during the search; cancellation throws <see cref="OperationCanceledException"/>.</param>
@@ -47,7 +51,7 @@ public static class Stages
             throw new ArgumentException("documents of different kinds cannot be compared");
         }
 
-        return ReferenceAligner.Run(oldDocument, newDocument, scorer, settings ?? CompareSettings.Default, seed, cancellationToken);
+        return BlockAligner.Run(oldDocument, newDocument, scorer, settings ?? CompareSettings.Default, seed, cancellationToken);
     }
 
     /// <summary>
