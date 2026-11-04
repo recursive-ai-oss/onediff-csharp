@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -82,14 +83,40 @@ public interface IDocumentSource
     CompareDocument Read(DocumentInput input, CancellationToken cancellationToken = default);
 }
 
-/// <summary>The registry of built-in sources. It is an explicit list: nothing is discovered by reflection.</summary>
+/// <summary>
+/// The registry of document sources. The built-in list is explicit; adapter packages add their sources with <see cref="Register"/>
+/// (each package exposes one call that does so). Nothing is discovered by reflection.
+/// </summary>
 public static class DocumentSources
 {
+    private static readonly object Gate = new();
+    private static ImmutableArray<IDocumentSource> registered = [];
+
     /// <summary>The sources in this package, in the order they are tried: just plain text.</summary>
     public static IReadOnlyList<IDocumentSource> BuiltIn { get; } = [PlainTextSource.Instance];
 
-    /// <summary>Picks the first source that can read the input: <paramref name="additional"/> first, then the built-in ones.</summary>
-    /// <exception cref="NotSupportedException">No source recognizes the input.</exception>
+    /// <summary>The sources added with <see cref="Register"/>, newest first.</summary>
+    public static IReadOnlyList<IDocumentSource> Registered => registered;
+
+    /// <summary>
+    /// Adds a source to the process-wide list that <see cref="Sniff"/> consults before the built-in ones. A source with the same
+    /// <see cref="IDocumentSource.Name"/> is replaced, so calling a package's registration twice is harmless. Thread-safe.
+    /// </summary>
+    public static void Register(IDocumentSource source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        lock (Gate)
+        {
+            ImmutableArray<IDocumentSource> kept = [.. registered.Where(s => !string.Equals(s.Name, source.Name, StringComparison.Ordinal))];
+            registered = kept.Insert(0, source);
+        }
+    }
+
+    /// <summary>
+    /// Picks the first source that can read the input: <paramref name="additional"/> first, then the registered ones, then the
+    /// built-in ones.
+    /// </summary>
+    /// <exception cref="NotSupportedException">No source recognizes the input. When the bytes look like a format another package reads, the message names that package.</exception>
     public static IDocumentSource Sniff(DocumentInput input, IEnumerable<IDocumentSource>? additional = null)
     {
         ArgumentNullException.ThrowIfNull(input);
@@ -102,6 +129,22 @@ public static class DocumentSources
                     return s;
                 }
             }
+        }
+
+        foreach (IDocumentSource s in registered)
+        {
+            if (s.CanRead(input))
+            {
+                return s;
+            }
+        }
+
+        // Binary formats that a package we know of reads: say which, instead of reading them as text.
+        string? hint = FormatHints.PackageFor(input.Content.Span);
+        if (hint is not null)
+        {
+            throw new NotSupportedException(
+                $"no document source is registered for this input, which looks like {hint}. Reference that package and call its Register method once at startup.");
         }
 
         foreach (IDocumentSource s in BuiltIn)

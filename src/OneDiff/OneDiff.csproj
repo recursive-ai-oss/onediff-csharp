@@ -6,4 +6,8 @@
     <EnablePackageValidation>true</EnablePackageValidation>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="$(LibName).MergeGate" />
+  </ItemGroup>
+
 </Project>

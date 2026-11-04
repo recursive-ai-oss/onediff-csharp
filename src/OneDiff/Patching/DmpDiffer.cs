@@ -1,3 +1,6 @@
+using OneDiff.Cleanup;
+using OneDiff.Tokenization;
+
 namespace OneDiff.Patching;
 
 /// <summary>
@@ -14,6 +17,106 @@ internal static class DmpDiffer
         var result = new List<DmpDiff>();
         Compute(a, b, true, result, cancellationToken);
         return result;
+    }
+
+    /// <summary>
+    /// The diff <c>Make</c> builds patches from: <see cref="Compute(string, string, CancellationToken)"/> followed by semantic and then
+    /// efficiency cleanup when there is more than one change to tidy (the order and the "more than an equality and one change" test follow
+    /// the diff-match-patch wiki's description of making patches from two texts). The edit cost is 4, the wiki's default.
+    /// </summary>
+    public static List<DmpDiff> ComputeForPatch(string a, string b, CancellationToken cancellationToken = default)
+    {
+        List<DmpDiff> diffs = Compute(a, b, cancellationToken);
+        return diffs.Count > 2 ? CleanUp(a, b, diffs) : diffs;
+    }
+
+    private static List<DmpDiff> CleanUp(string a, string b, List<DmpDiff> diffs)
+    {
+        // The diff's script counted in code points (the cleanup's character tokens); its old side is `a` and its new side `b`.
+        bool oldHasPairs = HasSurrogate(a);
+        bool newHasPairs = HasSurrogate(b);
+        var builder = new EditScriptBuilder();
+        foreach (DmpDiff d in diffs)
+        {
+            int n = oldHasPairs || newHasPairs ? CodePointCount(d.Text) : d.Text.Length;
+            switch (d.Operation)
+            {
+                case DmpOperation.Equal: builder.Equal(n); break;
+                case DmpOperation.Delete: builder.Delete(n); break;
+                default: builder.Insert(n); break;
+            }
+        }
+
+        TokenRange[]? oldRanges = oldHasPairs ? Tokenizer.Tokenize(a, TokenKind.Character) : null;
+        TokenRange[]? newRanges = newHasPairs ? Tokenizer.Tokenize(b, TokenKind.Character) : null;
+        var textDiff = new TextDiff(a, b, TokenKind.Character, oldRanges, newRanges, builder.ToEditScript());
+        TextDiff cleaned = DiffCleanup.Efficiency(DiffCleanup.Semantic(textDiff), 4);
+        if (ReferenceEquals(cleaned.Script, textDiff.Script))
+        {
+            return diffs;
+        }
+
+        // Equal runs that survived untouched keep the strings they already have (they can be large); both lists run in old-text order.
+        var result = new List<DmpDiff>(cleaned.Script.Count);
+        int position = 0;
+        var starts = new Dictionary<int, string>();
+        foreach (DmpDiff d in diffs)
+        {
+            if (d.Operation == DmpOperation.Equal)
+            {
+                starts[position] = d.Text;
+            }
+
+            if (d.Operation != DmpOperation.Insert)
+            {
+                position += d.Text.Length;
+            }
+        }
+
+        int oldPosition = 0;
+        foreach (Edit e in cleaned.Script)
+        {
+            switch (e.Kind)
+            {
+                case EditKind.Equal:
+                    {
+                        ReadOnlySpan<char> text = cleaned.OldSpan(e);
+                        Add(result, DmpOperation.Equal, starts.TryGetValue(oldPosition, out string? kept) && kept.Length == text.Length ? kept : text.ToString());
+                        oldPosition += text.Length;
+                        break;
+                    }
+
+                case EditKind.Delete:
+                    {
+                        string text = cleaned.OldSpan(e).ToString();
+                        oldPosition += text.Length;
+                        Add(result, DmpOperation.Delete, text);
+                        break;
+                    }
+
+                default: Add(result, DmpOperation.Insert, cleaned.NewSpan(e).ToString()); break;
+            }
+        }
+
+        return result;
+    }
+
+    private static bool HasSurrogate(string s) => s.AsSpan().ContainsAnyInRange('\uD800', '\uDFFF');
+
+    private static int CodePointCount(string s)
+    {
+        int n = 0;
+        for (int i = 0; i < s.Length; i++)
+        {
+            if (char.IsHighSurrogate(s[i]) && i + 1 < s.Length && char.IsLowSurrogate(s[i + 1]))
+            {
+                i++;
+            }
+
+            n++;
+        }
+
+        return n;
     }
 
     private static void Compute(string a, string b, bool lineMode, List<DmpDiff> output, CancellationToken ct)

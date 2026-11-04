@@ -1,3 +1,4 @@
+using OneDiff.Merge;
 using OneDiff.Patching;
 
 namespace OneDiff.Oracles;
@@ -55,7 +56,7 @@ internal sealed class OneDiffSeam : ITextCoreSeam
     // The package counts patch offsets in code points, so the diff-match-patch gates use the same unit.
     private static readonly DmpPatcher Dmp = new() { OffsetUnit = DmpOffsetUnit.CodePoint };
 
-    public bool Has(Feature feature) => feature is Feature.UnifiedPatch or Feature.DmpPatch;
+    public bool Has(Feature feature) => feature is Feature.UnifiedPatch or Feature.DmpPatch or Feature.Merge;
 
     public string MakeUnified(string oldText, string newText) => Diff.Unified(oldText, newText, "a/f", "b/f", 3);
 
@@ -89,7 +90,20 @@ internal sealed class OneDiffSeam : ITextCoreSeam
         return r.Success;
     }
 
-    public MergeOutcome Merge(string baseText, string ours, string theirs, MergeStyle style) => throw Pending();
+    public MergeOutcome Merge(string baseText, string ours, string theirs, MergeStyle style)
+    {
+        var settings = new MergeSettings
+        {
+            Style = style switch
+            {
+                MergeStyle.Diff3 => ConflictStyle.Diff3,
+                MergeStyle.Zdiff3 => ConflictStyle.ZDiff3,
+                _ => ConflictStyle.Merge,
+            },
+        };
+        TextMerge merge = Diff.Merge(baseText, ours, theirs, settings);
+        return new MergeOutcome(merge.Text, merge.ConflictCount);
+    }
 
     private static NotSupportedException Pending() => new("the library does not expose this yet");
 }
