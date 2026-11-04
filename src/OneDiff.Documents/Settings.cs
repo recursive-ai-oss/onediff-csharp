@@ -146,7 +146,7 @@ public sealed record CompareSettings
     /// <summary>The least similarity in (0, 1] at which one block and a run of neighbours are a split or merge. Default 0.8.</summary>
     public double SplitMergeThreshold { get; init; } = 0.8;
 
-    /// <summary>The least similarity in (0, 1] at which blocks far apart count as a move. Default 0.8.</summary>
+    /// <summary>The least similarity in (0, 1] at which blocks far apart count as a move. Default 0.8. Below it, a far pair still counts as a move when it reaches <see cref="MatchThreshold"/> and is clearly the best candidate of both blocks.</summary>
     public double MoveThreshold { get; init; } = 0.8;
 
     /// <summary>Whether blocks outside the matched order are paired as moves. Default true; when false they are deleted and inserted.</summary>
