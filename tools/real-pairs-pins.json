@@ -5,37 +5,44 @@
    {
     "id": "gpl-2.0",
     "name": "GNU General Public License v2",
-    "url": "https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt"
+    "url": "https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt",
+    "sha256": "edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6"
    },
    {
     "id": "gpl-3.0",
     "name": "GNU General Public License v3",
-    "url": "https://www.gnu.org/licenses/gpl-3.0.txt"
+    "url": "https://www.gnu.org/licenses/gpl-3.0.txt",
+    "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
    },
    {
     "id": "lgpl-2.1",
     "name": "GNU Lesser General Public License v2.1",
-    "url": "https://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt"
+    "url": "https://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt",
+    "sha256": "20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95"
    },
    {
     "id": "lgpl-3.0",
     "name": "GNU Lesser General Public License v3",
-    "url": "https://www.gnu.org/licenses/lgpl-3.0.txt"
+    "url": "https://www.gnu.org/licenses/lgpl-3.0.txt",
+    "sha256": "e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118"
    },
    {
     "id": "agpl-3.0",
     "name": "GNU Affero General Public License v3",
-    "url": "https://www.gnu.org/licenses/agpl-3.0.txt"
+    "url": "https://www.gnu.org/licenses/agpl-3.0.txt",
+    "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0"
    },
    {
     "id": "mpl-1.1",
     "name": "Mozilla Public License 1.1",
-    "url": "https://www.mozilla.org/media/MPL/1.1/index.txt"
+    "url": "https://www.mozilla.org/media/MPL/1.1/index.txt",
+    "sha256": "f849fc26a7a99981611a3a370e83078deb617d12a45776d6c4cada4d338be469"
    },
    {
     "id": "mpl-2.0",
     "name": "Mozilla Public License 2.0",
-    "url": "https://www.mozilla.org/media/MPL/2.0/index.txt"
+    "url": "https://www.mozilla.org/media/MPL/2.0/index.txt",
+    "sha256": "3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04"
    }
   ],
   "pairs": [
@@ -71,52 +78,62 @@
    {
     "id": "safe-us-cap",
     "name": "SAFE post-money, valuation cap, no discount (US)",
-    "url": "https://bookface-static.ycombinator.com/assets/ycdc/Postmoney%20Safe%20-%20Valuation%20Cap%20Only%20-%20FINAL-f2a64add6d21039ab347ee2e7194141a4239e364ffed54bad0fe9cf623bf1691.docx"
+    "url": "https://bookface-static.ycombinator.com/assets/ycdc/Postmoney%20Safe%20-%20Valuation%20Cap%20Only%20-%20FINAL-f2a64add6d21039ab347ee2e7194141a4239e364ffed54bad0fe9cf623bf1691.docx",
+    "sha256": "185d24f5bcf13acdf1419bf1d420771088da5dea3b3f3e0cdc7fa5df643649c4"
    },
    {
     "id": "safe-us-discount",
     "name": "SAFE post-money, discount, no valuation cap (US)",
-    "url": "https://bookface-static.ycombinator.com/assets/ycdc/Postmoney%20Safe%20-%20Discount%20Only%20-%20FINAL-b9ecb516615d60c6c4653507442aa2561023004368232b7d6e75edc9629acc99.docx"
+    "url": "https://bookface-static.ycombinator.com/assets/ycdc/Postmoney%20Safe%20-%20Discount%20Only%20-%20FINAL-b9ecb516615d60c6c4653507442aa2561023004368232b7d6e75edc9629acc99.docx",
+    "sha256": "93d606fc568e39673ab96c581850ece30b4f478972b7b4d4d132df695264b5a5"
    },
    {
     "id": "safe-us-mfn",
     "name": "SAFE post-money, MFN, no cap, no discount (US)",
-    "url": "https://bookface-static.ycombinator.com/assets/ycdc/Postmoney%20Safe%20-%20MFN%20Only%20-%20FINAL-2bc87fa3d2ec5072a60d653aec9a885fb43879781e44341fa720a8e7d1cc42ff.docx"
+    "url": "https://bookface-static.ycombinator.com/assets/ycdc/Postmoney%20Safe%20-%20MFN%20Only%20-%20FINAL-2bc87fa3d2ec5072a60d653aec9a885fb43879781e44341fa720a8e7d1cc42ff.docx",
+    "sha256": "d3ad99466059b6f4d838e8e5daeeff5752e9866e6b557c6056df772f8509e727"
    },
    {
     "id": "side-us",
     "name": "Pro Rata Side Letter (US)",
-    "url": "https://bookface-static.ycombinator.com/assets/ycdc/Pro%20Rata%20Side%20Letter-d6dd8d827741862b18fba0f658da17fb4e787e5f2dda49584b9caea89bf42302.docx"
+    "url": "https://bookface-static.ycombinator.com/assets/ycdc/Pro%20Rata%20Side%20Letter-d6dd8d827741862b18fba0f658da17fb4e787e5f2dda49584b9caea89bf42302.docx",
+    "sha256": "9b769a6a724da0c40e6649df8c774f49cc20dafe7247cc366ce4b98b4c2a3510"
    },
    {
     "id": "safe-ca-cap",
     "name": "SAFE post-money, valuation cap (Canada)",
-    "url": "https://bookface-static.ycombinator.com/assets/ycdc/Postmoney%20Safe%20-%20Valuation%20Cap%20Only%20(Canada)%20FINAL-908361f232fb25ff961560a0b959cd4f656ca944f84d6009f7cab56e629f79f2.docx"
+    "url": "https://bookface-static.ycombinator.com/assets/ycdc/Postmoney%20Safe%20-%20Valuation%20Cap%20Only%20(Canada)%20FINAL-908361f232fb25ff961560a0b959cd4f656ca944f84d6009f7cab56e629f79f2.docx",
+    "sha256": "84d03f405f42e4d5bb50ffa3281c3845915a2ac7058c85f2953a8df0d4eeff70"
    },
    {
     "id": "side-ca",
     "name": "Pro Rata Side Letter (Canada)",
-    "url": "https://bookface-static.ycombinator.com/assets/ycdc/Pro%20Rata%20Side%20Letter%20(Canada)-199957825465a7b592b0a04464b22a76dc7ced40bc828cce858cb5f39527084f.docx"
+    "url": "https://bookface-static.ycombinator.com/assets/ycdc/Pro%20Rata%20Side%20Letter%20(Canada)-199957825465a7b592b0a04464b22a76dc7ced40bc828cce858cb5f39527084f.docx",
+    "sha256": "4a85d6b3347a3f710c1712c4fb2e9311241ab9c56961ea057fc695405a2035d0"
    },
    {
     "id": "safe-ky-cap",
     "name": "SAFE post-money, valuation cap (Cayman Islands)",
-    "url": "https://bookface-static.ycombinator.com/assets/ycdc/Postmoney%20Safe%20-%20Valuation%20Cap%20Only%20(Cayman)%20FINAL-7b3206e15466942b218b31118667593d735ee05a39d5390ad78dc7cc74310d33.docx"
+    "url": "https://bookface-static.ycombinator.com/assets/ycdc/Postmoney%20Safe%20-%20Valuation%20Cap%20Only%20(Cayman)%20FINAL-7b3206e15466942b218b31118667593d735ee05a39d5390ad78dc7cc74310d33.docx",
+    "sha256": "fb96495b334dee60aaedde4f053b18e994055fecfc545a03cd06e10df2cced72"
    },
    {
     "id": "side-ky",
     "name": "Pro Rata Side Letter (Cayman Islands)",
-    "url": "https://bookface-static.ycombinator.com/assets/ycdc/Pro%20Rata%20Side%20Letter%20(Cayman)-ec1289f5f228237488f011bce2279d8cb4fd90db676a89e7fa4e02abe441b93a.docx"
+    "url": "https://bookface-static.ycombinator.com/assets/ycdc/Pro%20Rata%20Side%20Letter%20(Cayman)-ec1289f5f228237488f011bce2279d8cb4fd90db676a89e7fa4e02abe441b93a.docx",
+    "sha256": "0584cc91f3b371c14d492a4457ec4af46d5e185f0d5a52a700dac4908eb226aa"
    },
    {
     "id": "safe-sg-cap",
     "name": "SAFE post-money, valuation cap (Singapore)",
-    "url": "https://bookface-static.ycombinator.com/assets/ycdc/Postmoney%20Safe%20-%20Valuation%20Cap%20Only%20(Singapore)%20FINAL-3ce53fbce48b42a5a2a4e657654d78ec40310d43b318802ef7039cb9260783ce.docx"
+    "url": "https://bookface-static.ycombinator.com/assets/ycdc/Postmoney%20Safe%20-%20Valuation%20Cap%20Only%20(Singapore)%20FINAL-3ce53fbce48b42a5a2a4e657654d78ec40310d43b318802ef7039cb9260783ce.docx",
+    "sha256": "822f68fc43c5fabff83d0a8c99e9991580574ac26fbcb3a7d5488f67e4490c04"
    },
    {
     "id": "side-sg",
     "name": "Pro Rata Side Letter (Singapore)",
-    "url": "https://bookface-static.ycombinator.com/assets/ycdc/Pro%20Rata%20Side%20Letter%20(Singapore)-22ef48dda1009ab83ab9162cbdaae846ec480b9796bb453532dd747edb5d9c25.docx"
+    "url": "https://bookface-static.ycombinator.com/assets/ycdc/Pro%20Rata%20Side%20Letter%20(Singapore)-22ef48dda1009ab83ab9162cbdaae846ec480b9796bb453532dd747edb5d9c25.docx",
+    "sha256": "d7f31f9eb329feaf25f1cbd0ffd3c2d91ada9aa6b58183cbaadf56128d4e3ed7"
    }
   ],
   "pairs": [
@@ -185,8 +202,27 @@
     "url": "https://github.com/CommonPaper/CSA.git",
     "terms": "README: \"Common Paper agreements are free to use and modify under CC BY 4.0.\"",
     "attribution": "Common Paper, commonpaper.com",
-    "commit": "",
-    "pairs": []
+    "commit": "3efceb01e3c8bfb7b302a5f34975aa2b084026a3",
+    "pairs": [
+     {
+      "id": "commonpaper-csa-csa-72bc9c7-84c7f60",
+      "path": "CSA.md",
+      "old": "72bc9c73020241c547ff62ac65e5c50a38ade578",
+      "new": "84c7f601504eaf33de29aa7adcb599073793b23c"
+     },
+     {
+      "id": "commonpaper-csa-csa-472ed11-72bc9c7",
+      "path": "CSA.md",
+      "old": "472ed111be4c99f33efdff1ede00093ebe2c0015",
+      "new": "72bc9c73020241c547ff62ac65e5c50a38ade578"
+     },
+     {
+      "id": "commonpaper-csa-csa-396425a-472ed11",
+      "path": "CSA.md",
+      "old": "396425ad9934c58204abefe0d3171b118b0ef695",
+      "new": "472ed111be4c99f33efdff1ede00093ebe2c0015"
+     }
+    ]
    },
    {
     "org": "commonpaper",
@@ -194,8 +230,15 @@
     "url": "https://github.com/CommonPaper/Mutual-NDA.git",
     "terms": "README: \"Common Paper agreements are free to use and modify under CC BY 4.0.\"",
     "attribution": "Common Paper, commonpaper.com",
-    "commit": "",
-    "pairs": []
+    "commit": "2a3068b6c0ab6015c440f541d5b215bc3ac2f4cb",
+    "pairs": [
+     {
+      "id": "commonpaper-mutual-nda-mutual-nda-335270c-f90b8ac",
+      "path": "Mutual-NDA.md",
+      "old": "335270c7d1f23ca62665278efb36c4595feeff50",
+      "new": "f90b8ac6a8ea937c2daebe90c059a4c2e51d775a"
+     }
+    ]
    },
    {
     "org": "commonpaper",
@@ -203,8 +246,15 @@
     "url": "https://github.com/CommonPaper/SLA.git",
     "terms": "README: \"Common Paper agreements are free to use and modify under CC BY 4.0.\"",
     "attribution": "Common Paper, commonpaper.com",
-    "commit": "",
-    "pairs": []
+    "commit": "5b0e6336f058a66c4976d70ecabf1f5fb9ef3af4",
+    "pairs": [
+     {
+      "id": "commonpaper-sla-sla-a208306-6cc8110",
+      "path": "sla.md",
+      "old": "a208306f2d04e2e0fb331a40dba660fd3a8c024a",
+      "new": "6cc811027b5bba4551a7091907a65e4c2c17349b"
+     }
+    ]
    },
    {
     "org": "commonpaper",
@@ -212,7 +262,7 @@
     "url": "https://github.com/CommonPaper/DPA.git",
     "terms": "README: \"Common Paper agreements are free to use and modify under CC BY 4.0.\"",
     "attribution": "Common Paper, commonpaper.com",
-    "commit": "",
+    "commit": "9f1c40d3fb0bb900397a919d058a9c0870f6b0f0",
     "pairs": []
    },
    {
@@ -221,8 +271,15 @@
     "url": "https://github.com/CommonPaper/Design-Partner-Agreement.git",
     "terms": "README: \"Common Paper agreements are free to use and modify under CC BY 4.0.\"",
     "attribution": "Common Paper, commonpaper.com",
-    "commit": "",
-    "pairs": []
+    "commit": "ab676a7a4b68ae84f1cfdba9f49a514d3aaa6694",
+    "pairs": [
+     {
+      "id": "commonpaper-design-partner-agreement-design-partner-agreement-4d0d47b-6bb3030",
+      "path": "design-partner-agreement.md",
+      "old": "4d0d47b151ca4582523d7e8932e487a7157cbd9f",
+      "new": "6bb3030f0b13f0ee50164d5dc5a4af442979c9b8"
+     }
+    ]
    },
    {
     "org": "commonpaper",
@@ -230,8 +287,15 @@
     "url": "https://github.com/CommonPaper/PSA.git",
     "terms": "README: \"Common Paper agreements are free to use and modify under CC BY 4.0.\"",
     "attribution": "Common Paper, commonpaper.com",
-    "commit": "",
-    "pairs": []
+    "commit": "3fb650a72d229f6d6e6d64abebae5e83c6699535",
+    "pairs": [
+     {
+      "id": "commonpaper-psa-psa-f857e98-25686fe",
+      "path": "psa.md",
+      "old": "f857e980ab19b359a58367f49fcb3b03fa7bd5c4",
+      "new": "25686feb10b818a8b45e6a92c2e3bfd3d8f10e64"
+     }
+    ]
    },
    {
     "org": "commonpaper",
@@ -239,8 +303,15 @@
     "url": "https://github.com/CommonPaper/Partnership-Agreement.git",
     "terms": "README: \"Common Paper agreements are free to use and modify under CC BY 4.0.\"",
     "attribution": "Common Paper, commonpaper.com",
-    "commit": "",
-    "pairs": []
+    "commit": "6edeb5a285206893cfd0ac482267db44d90f317c",
+    "pairs": [
+     {
+      "id": "commonpaper-partnership-agreement-partnership-agreement-fce430f-8e2c9bc",
+      "path": "Partnership-Agreement.md",
+      "old": "fce430fa30767a0834a706190078cbd4d47cf6c1",
+      "new": "8e2c9bc2d68993a4190e51854d9cc9f5763709b6"
+     }
+    ]
    },
    {
     "org": "commonpaper",
@@ -248,7 +319,7 @@
     "url": "https://github.com/CommonPaper/BAA.git",
     "terms": "README: \"Common Paper agreements are free to use and modify under CC BY 4.0.\"",
     "attribution": "Common Paper, commonpaper.com",
-    "commit": "",
+    "commit": "5f1fd992df1d0c78bf69997e1881e4107fa75695",
     "pairs": []
    },
    {
@@ -257,8 +328,27 @@
     "url": "https://github.com/CommonPaper/Software-License-Agreement.git",
     "terms": "README: \"Common Paper agreements are free to use and modify under CC BY 4.0.\"",
     "attribution": "Common Paper, commonpaper.com",
-    "commit": "",
-    "pairs": []
+    "commit": "8ea7de38148a8a0c235b7aaf31487028c2e519ca",
+    "pairs": [
+     {
+      "id": "commonpaper-software-license-agreement-software-license-agreement-bdafb52-4460194",
+      "path": "Software-License-Agreement.md",
+      "old": "bdafb520e2bb616cc28333c231643ceff57ac8ca",
+      "new": "4460194a04d4c3820ae2610947fac25db0803f1a"
+     },
+     {
+      "id": "commonpaper-software-license-agreement-software-license-agreement-9b20c7d-bdafb52",
+      "path": "Software-License-Agreement.md",
+      "old": "9b20c7dd3306fd0f885c8170ec7fa78c3760bd4c",
+      "new": "bdafb520e2bb616cc28333c231643ceff57ac8ca"
+     },
+     {
+      "id": "commonpaper-software-license-agreement-software-license-agreement-9aff3f6-9b20c7d",
+      "path": "Software-License-Agreement.md",
+      "old": "9aff3f6d1adda7e127561d83365934b56d535558",
+      "new": "9b20c7dd3306fd0f885c8170ec7fa78c3760bd4c"
+     }
+    ]
    },
    {
     "org": "commonpaper",
@@ -266,7 +356,7 @@
     "url": "https://github.com/CommonPaper/Pilot-Agreement.git",
     "terms": "README: \"Common Paper agreements are free to use and modify under CC BY 4.0.\"",
     "attribution": "Common Paper, commonpaper.com",
-    "commit": "",
+    "commit": "5e7cdd4678cd9d6b3178872cce4a01d632f41f14",
     "pairs": []
    },
    {
@@ -275,7 +365,7 @@
     "url": "https://github.com/CommonPaper/AI-Addendum.git",
     "terms": "README: \"Common Paper agreements are free to use and modify under CC BY 4.0.\"",
     "attribution": "Common Paper, commonpaper.com",
-    "commit": "",
+    "commit": "6d9b044df73a2477c177e5989fca7f8d27df9387",
     "pairs": []
    },
    {
@@ -284,7 +374,7 @@
     "url": "https://github.com/Bonterms/Cloud-Terms.git",
     "terms": "README: \"... Bonterms Standard Agreements are free to use under CC BY 4.0.\"",
     "attribution": "Bonterms, bonterms.com",
-    "commit": "",
+    "commit": "df13f512c3bd923cc09cc2dae918812f876ea6e9",
     "pairs": []
    },
    {
@@ -293,7 +383,7 @@
     "url": "https://github.com/Bonterms/Mutual-NDA.git",
     "terms": "README: \"... Bonterms Standard Agreements are free to use under CC BY 4.0.\"",
     "attribution": "Bonterms, bonterms.com",
-    "commit": "",
+    "commit": "1b6e3a67176d47bbb89633bd4ec2be2c32d6cacf",
     "pairs": []
    },
    {
@@ -302,7 +392,7 @@
     "url": "https://github.com/Bonterms/Service-Level-Agreement.git",
     "terms": "README: \"... Bonterms Standard Agreements are free to use under CC BY 4.0.\"",
     "attribution": "Bonterms, bonterms.com",
-    "commit": "",
+    "commit": "4e50803a6cab008b576736d2ecb1723e9d476077",
     "pairs": []
    },
    {
@@ -311,8 +401,15 @@
     "url": "https://github.com/Bonterms/Data-Protection-Addendum.git",
     "terms": "README: \"... Bonterms Standard Agreements are free to use under CC BY 4.0.\"",
     "attribution": "Bonterms, bonterms.com",
-    "commit": "",
-    "pairs": []
+    "commit": "68edf622cc850488492d74df62764ee943ef444a",
+    "pairs": [
+     {
+      "id": "bonterms-data-protection-addendum-data-protection-addendum-6de0907-62587fa",
+      "path": "Data-Protection-Addendum.md",
+      "old": "6de090733f7ea91001731c9ebafb05bb25daf97c",
+      "new": "62587fa19f6de8dd999a3ff4e00e0edacc705801"
+     }
+    ]
    },
    {
     "org": "bonterms",
@@ -320,8 +417,39 @@
     "url": "https://github.com/Bonterms/Professional-Services-Agreement.git",
     "terms": "README: \"... Bonterms Standard Agreements are free to use under CC BY 4.0.\"",
     "attribution": "Bonterms, bonterms.com",
-    "commit": "",
-    "pairs": []
+    "commit": "a31fc2a697900e32a0105a6eb469cb4def067e31",
+    "pairs": [
+     {
+      "id": "bonterms-professional-services-agreement-professional-services-agreement-v1.0-b9c9baa-119f703",
+      "path": "Professional-Services-Agreement V1.0.md",
+      "old": "b9c9baa17e75986c5310281393341dccc0c3d538",
+      "new": "119f703630a712bb24c3eea5548da2c1f7d59bef"
+     },
+     {
+      "id": "bonterms-professional-services-agreement-professional-services-agreement-v1.1-db390cf-dd201f7",
+      "path": "Professional-Services-Agreement V1.1.md",
+      "old": "db390cf471357f596a2efd639432ab9bdef718a8",
+      "new": "dd201f7fd8570028332fb003f1432b1d019d6f21"
+     },
+     {
+      "id": "bonterms-professional-services-agreement-professional-services-agreement-v1.1-b850ecc-db390cf",
+      "path": "Professional-Services-Agreement V1.1.md",
+      "old": "b850ecce1df84f38309fba786ee8e961d12af2e1",
+      "new": "db390cf471357f596a2efd639432ab9bdef718a8"
+     },
+     {
+      "id": "bonterms-professional-services-agreement-professional-services-agreement-v1.2-87f26e1-c69bfa0",
+      "path": "Professional-Services-Agreement V1.2.md",
+      "old": "87f26e142610b51706393365edc6763d04e377a2",
+      "new": "c69bfa02ffc3940368744fa690f751806506f101"
+     },
+     {
+      "id": "bonterms-professional-services-agreement-professional-services-agreement-v1.2-bd2877a-87f26e1",
+      "path": "Professional-Services-Agreement V1.2.md",
+      "old": "bd2877ad8f6eb88dbfb6f34af5f984faf24950a0",
+      "new": "87f26e142610b51706393365edc6763d04e377a2"
+     }
+    ]
    },
    {
     "org": "bonterms",
@@ -329,8 +457,15 @@
     "url": "https://github.com/Bonterms/Business-Associate-Agreement.git",
     "terms": "README: \"... Bonterms Standard Agreements are free to use under CC BY 4.0.\"",
     "attribution": "Bonterms, bonterms.com",
-    "commit": "",
-    "pairs": []
+    "commit": "f4a14e40216c2e5752a2061af9ab53ae5e48ae8f",
+    "pairs": [
+     {
+      "id": "bonterms-business-associate-agreement-baa-da24caa-8b9d68d",
+      "path": "BAA.md",
+      "old": "da24caaa7218e462729395a230203cfe1e79f406",
+      "new": "8b9d68d87ad742e2464d5072dcf50d1178a322c3"
+     }
+    ]
    },
    {
     "org": "bonterms",
@@ -344,6 +479,683 @@
   ]
  },
  "edgar": {
-  "pairs": []
+  "pairs": [
+   {
+    "id": "edgar-1138118-15315051-16517512",
+    "kind": "Credit Agreement",
+    "old": {
+     "cik": "1138118",
+     "acc": "000119312515315051",
+     "adsh": "0001193125-15-315051",
+     "name": "d74790dex101.htm",
+     "date": "2015-09-09",
+     "type": "EX-10.1",
+     "company": "CBRE GROUP, INC.  (CBRE)  (CIK 0001138118)",
+     "url": "https://www.sec.gov/Archives/edgar/data/1138118/000119312515315051/d74790dex101.htm",
+     "sha256": "b8345a305feda3c3ee0e25886de1b7020e701301521b4103640a48d2077a63cc"
+    },
+    "new": {
+     "cik": "1138118",
+     "acc": "000119312516517512",
+     "adsh": "0001193125-16-517512",
+     "name": "d168435dex101.htm",
+     "date": "2016-03-25",
+     "type": "EX-10.1",
+     "company": "CBRE GROUP, INC.  (CBRE)  (CIK 0001138118)",
+     "url": "https://www.sec.gov/Archives/edgar/data/1138118/000119312516517512/d168435dex101.htm",
+     "sha256": "4c2ba898a6336ad2644a3fd5e9025ac79dfe9295dc3213b27185635191664a72"
+    }
+   },
+   {
+    "id": "edgar-22444-17212015-18000035",
+    "kind": "Credit Agreement",
+    "old": {
+     "cik": "22444",
+     "acc": "000119312517212015",
+     "adsh": "0001193125-17-212015",
+     "name": "d407881dex104.htm",
+     "date": "2017-06-26",
+     "type": "EX-10.4",
+     "company": "COMMERCIAL METALS CO  (CMC)  (CIK 0000022444)",
+     "url": "https://www.sec.gov/Archives/edgar/data/22444/000119312517212015/d407881dex104.htm",
+     "sha256": "d69a4bbeabed16651b8b96408e91c63bbf81f2ea6d2e0650e934c6f196cf70f2"
+    },
+    "new": {
+     "cik": "22444",
+     "acc": "000002244418000035",
+     "adsh": "0000022444-18-000035",
+     "name": "cmc-8312018xex10in.htm",
+     "date": "2018-10-25",
+     "type": "EX-10.1",
+     "company": "COMMERCIAL METALS CO  (CMC)  (CIK 0000022444)",
+     "url": "https://www.sec.gov/Archives/edgar/data/22444/000002244418000035/cmc-8312018xex10in.htm",
+     "sha256": "63415b39fa1ea826f5ebfb0ecb1999a2b5cdbb129a639993bdaddd8ab8f468ee"
+    }
+   },
+   {
+    "id": "edgar-314808-16000408-20000138",
+    "kind": "Credit Agreement",
+    "old": {
+     "cik": "314808",
+     "acc": "000031480816000408",
+     "adsh": "0000314808-16-000408",
+     "name": "esv-9302016xexhibit102.htm",
+     "date": "2016-10-27",
+     "type": "EX-10.2",
+     "company": "Ensco plc  (VAL, VAL-WT)  (CIK 0000314808)",
+     "url": "https://www.sec.gov/Archives/edgar/data/314808/000031480816000408/esv-9302016xexhibit102.htm",
+     "sha256": "f413d0527c146443fc28ac05e72ff7a39a6a002a6793b38b6d668419d2f3b19a"
+    },
+    "new": {
+     "cik": "314808",
+     "acc": "000031480820000138",
+     "adsh": "0000314808-20-000138",
+     "name": "val-6302020xexhibit102.htm",
+     "date": "2020-07-30",
+     "type": "EX-10.2",
+     "company": "Valaris plc  (VAL, VAL-WT)  (CIK 0000314808)",
+     "url": "https://www.sec.gov/Archives/edgar/data/314808/000031480820000138/val-6302020xexhibit102.htm",
+     "sha256": "0513233e6dfe24c83ba93110e36f8d00f1a85c43294a5011071ff2d313e93eec"
+    }
+   },
+   {
+    "id": "edgar-880984-08063519-12000005",
+    "kind": "Employment Agreement",
+    "old": {
+     "cik": "880984",
+     "acc": "000114420408063519",
+     "adsh": "0001144204-08-063519",
+     "name": "v131773_ex10-6.htm",
+     "date": "2008-11-13",
+     "type": "EX-10.6",
+     "company": "ACORN ENERGY, INC.  (ACFN)  (CIK 0000880984)",
+     "url": "https://www.sec.gov/Archives/edgar/data/880984/000114420408063519/v131773_ex10-6.htm",
+     "sha256": "4b4c3e7d43f2a3eaefb8300ac6e9ce9b8598d1b0accd77127eef41e9ab1e148a"
+    },
+    "new": {
+     "cik": "880984",
+     "acc": "000088098412000005",
+     "adsh": "0000880984-12-000005",
+     "name": "secondmentagreementdatedau.htm",
+     "date": "2012-03-15",
+     "type": "EX-10.52",
+     "company": "ACORN ENERGY, INC.  (ACFN)  (CIK 0000880984)",
+     "url": "https://www.sec.gov/Archives/edgar/data/880984/000088098412000005/secondmentagreementdatedau.htm",
+     "sha256": "4d59865d7e318b723f31a2bb102ee4cb6afd8b8c49cada2c3e30ec6cc93f9726"
+    }
+   },
+   {
+    "id": "edgar-1437557-10002128-12005492",
+    "kind": "Employment Agreement",
+    "old": {
+     "cik": "1437557",
+     "acc": "000121390010002128",
+     "adsh": "0001213900-10-002128",
+     "name": "f8k051510ex10i_recovery2.htm",
+     "date": "2010-05-20",
+     "type": "EX-10.1",
+     "company": "RECOVERY ENERGY, INC.  (CIK 0001437557)",
+     "url": "https://www.sec.gov/Archives/edgar/data/1437557/000121390010002128/f8k051510ex10i_recovery2.htm",
+     "sha256": "f4b0df42bc4797425417183907900238a956ce5ad57e6eba5de0bac6a478808e"
+    },
+    "new": {
+     "cik": "1437557",
+     "acc": "000121390012005492",
+     "adsh": "0001213900-12-005492",
+     "name": "f8k092612ex10i_recovery.htm",
+     "date": "2012-10-02",
+     "type": "EX-10.1",
+     "company": "RECOVERY ENERGY, INC.  (CIK 0001437557)",
+     "url": "https://www.sec.gov/Archives/edgar/data/1437557/000121390012005492/f8k092612ex10i_recovery.htm",
+     "sha256": "99a873b9bf3f19d75306a61ebd8ee97c532a4c125edf70cd09b53d6a8293a82b"
+    }
+   },
+   {
+    "id": "edgar-1437557-10002128-12005090",
+    "kind": "Employment Agreement",
+    "old": {
+     "cik": "1437557",
+     "acc": "000121390010002128",
+     "adsh": "0001213900-10-002128",
+     "name": "f8k051510ex10i_recovery2.htm",
+     "date": "2010-05-20",
+     "type": "EX-10.1",
+     "company": "RECOVERY ENERGY, INC.  (CIK 0001437557)",
+     "url": "https://www.sec.gov/Archives/edgar/data/1437557/000121390010002128/f8k051510ex10i_recovery2.htm",
+     "sha256": "f4b0df42bc4797425417183907900238a956ce5ad57e6eba5de0bac6a478808e"
+    },
+    "new": {
+     "cik": "1437557",
+     "acc": "000121390012005090",
+     "adsh": "0001213900-12-005090",
+     "name": "f8k083112ex10i_recovery.htm",
+     "date": "2012-09-05",
+     "type": "EX-10.1",
+     "company": "RECOVERY ENERGY, INC.  (CIK 0001437557)",
+     "url": "https://www.sec.gov/Archives/edgar/data/1437557/000121390012005090/f8k083112ex10i_recovery.htm",
+     "sha256": "33d18ac8a4a81db99a09b9e001bf6e1b874ec8113453d9f55e90cb77faa02822"
+    }
+   },
+   {
+    "id": "edgar-763532-01506994-14016818",
+    "kind": "Loan Agreement",
+    "old": {
+     "cik": "763532",
+     "acc": "000102140801506994",
+     "adsh": "0001021408-01-506994",
+     "name": "dex4.txt",
+     "date": "2001-09-19",
+     "type": "EX-4",
+     "company": "LSI INDUSTRIES INC  (LYTS)  (CIK 0000763532)",
+     "url": "https://www.sec.gov/Archives/edgar/data/763532/000102140801506994/dex4.txt",
+     "sha256": "1403d6af0cf8de065b0ff387226173b8e978e3a091be2ac42f014a775fa1efca"
+    },
+    "new": {
+     "cik": "763532",
+     "acc": "000143774914016818",
+     "adsh": "0001437749-14-016818",
+     "name": "ex10-1.htm",
+     "date": "2014-09-10",
+     "type": "EX-10",
+     "company": "LSI INDUSTRIES INC  (LYTS)  (CIK 0000763532)",
+     "url": "https://www.sec.gov/Archives/edgar/data/763532/000143774914016818/ex10-1.htm",
+     "sha256": "dd63cd048abb9b6daf0dcec8b3e777519074c4607daab331b5552464d4f5c905"
+    }
+   },
+   {
+    "id": "edgar-1684682-19004663-20006486",
+    "kind": "Loan Agreement",
+    "old": {
+     "cik": "1684682",
+     "acc": "000138713119004663",
+     "adsh": "0001387131-19-004663",
+     "name": "ex10-1.htm",
+     "date": "2019-06-27",
+     "type": "EX-10.1",
+     "company": "CNL Strategic Capital, LLC  (CIK 0001684682)",
+     "url": "https://www.sec.gov/Archives/edgar/data/1684682/000138713119004663/ex10-1.htm",
+     "sha256": "0953b3f5bc5003427772402ecc6e7544ba2efca59ef1824d4f345f6281163d12"
+    },
+    "new": {
+     "cik": "1684682",
+     "acc": "000138713120006486",
+     "adsh": "0001387131-20-006486",
+     "name": "ex10-1.htm",
+     "date": "2020-07-17",
+     "type": "EX-10.1",
+     "company": "CNL Strategic Capital, LLC  (CIK 0001684682)",
+     "url": "https://www.sec.gov/Archives/edgar/data/1684682/000138713120006486/ex10-1.htm",
+     "sha256": "ef578f2a321247b562844c653ca73e7352ce1d0fc6d4d5c6c57c4346e4e93900"
+    }
+   },
+   {
+    "id": "edgar-898770-17014256-22000021",
+    "kind": "Loan Agreement",
+    "old": {
+     "cik": "898770",
+     "acc": "000114036117014256",
+     "adsh": "0001140361-17-014256",
+     "name": "ex10_1.htm",
+     "date": "2017-04-03",
+     "type": "EX-10.1",
+     "company": "SHARPS COMPLIANCE CORP  (CIK 0000898770)",
+     "url": "https://www.sec.gov/Archives/edgar/data/898770/000114036117014256/ex10_1.htm",
+     "sha256": "7f13aaea838cd9114f42c12da0e54e5090bfe5c7250bab6f39526a4b9239f209"
+    },
+    "new": {
+     "cik": "898770",
+     "acc": "000089877022000021",
+     "adsh": "0000898770-22-000021",
+     "name": "ex101loanagreement-sharp.htm",
+     "date": "2022-03-22",
+     "type": "EX-10.1",
+     "company": "SHARPS COMPLIANCE CORP  (CIK 0000898770)",
+     "url": "https://www.sec.gov/Archives/edgar/data/898770/000089877022000021/ex101loanagreement-sharp.htm",
+     "sha256": "9e5b66928971c4c75a1aa4a473f95fbcf66800abaf9d91ae2bf77ce0061020c1"
+    }
+   },
+   {
+    "id": "edgar-1367311-12000488-12000965",
+    "kind": "Lease",
+    "old": {
+     "cik": "1367311",
+     "acc": "000089710112000488",
+     "adsh": "0000897101-12-000488",
+     "name": "dakota121172_ex10-15.htm",
+     "date": "2012-03-23",
+     "type": "EX-10.15",
+     "company": "MCT HOLDING CORP  (CIK 0001367311)",
+     "url": "https://www.sec.gov/Archives/edgar/data/1367311/000089710112000488/dakota121172_ex10-15.htm",
+     "sha256": "9f2ba3f19438c5453a27dcaf01030f3515b1c90d42073d429eccd8403d80453e"
+    },
+    "new": {
+     "cik": "1367311",
+     "acc": "000089710112000965",
+     "adsh": "0000897101-12-000965",
+     "name": "dakota122440_ex10-3.htm",
+     "date": "2012-06-05",
+     "type": "EX-10.3",
+     "company": "DAKOTA PLAINS HOLDINGS, INC.  (CIK 0001367311)",
+     "url": "https://www.sec.gov/Archives/edgar/data/1367311/000089710112000965/dakota122440_ex10-3.htm",
+     "sha256": "08a53a91d172b4aaa3d06dcf919386b67aa8a59b18ed24fa3148d95d503945d4"
+    }
+   },
+   {
+    "id": "edgar-1540947-12051450-12071184",
+    "kind": "Lease",
+    "old": {
+     "cik": "1540947",
+     "acc": "000110465912051450",
+     "adsh": "0001104659-12-051450",
+     "name": "a12-12806_1ex10d3.htm",
+     "date": "2012-07-26",
+     "type": "EX-10.3",
+     "company": "EQT Midstream Partners, LP  (CIK 0001540947)",
+     "url": "https://www.sec.gov/Archives/edgar/data/1540947/000110465912051450/a12-12806_1ex10d3.htm",
+     "sha256": "745e22e3cc0c000142d07d665a92942d53a1bb7c24e1c63b56f0ee76a417e3b1"
+    },
+    "new": {
+     "cik": "1540947",
+     "acc": "000110465912071184",
+     "adsh": "0001104659-12-071184",
+     "name": "a12-19852_1ex10d19.htm",
+     "date": "2012-10-25",
+     "type": "EX-10.19",
+     "company": "EQT Midstream Partners, LP  (CIK 0001540947)",
+     "url": "https://www.sec.gov/Archives/edgar/data/1540947/000110465912071184/a12-19852_1ex10d19.htm",
+     "sha256": "54cf37c9635484001863d12f27ddf5491ee0edf48d91cc01595e259746f36e81"
+    }
+   },
+   {
+    "id": "edgar-276720-04001555-14001112",
+    "kind": "Lease",
+    "old": {
+     "cik": "276720",
+     "acc": "000101540204001555",
+     "adsh": "0001015402-04-001555",
+     "name": "doc4.txt",
+     "date": "2004-04-19",
+     "type": "EX-10.9",
+     "company": "PURE CYCLE CORP  (PCYO)  (CIK 0000276720)",
+     "url": "https://www.sec.gov/Archives/edgar/data/276720/000101540204001555/doc4.txt",
+     "sha256": "7fb7e591a68ca3b905ae7fce1c50960bdb5bd89c24d2adc9cf51c05f3a45d7c7"
+    },
+    "new": {
+     "cik": "276720",
+     "acc": "000110262414001112",
+     "adsh": "0001102624-14-001112",
+     "name": "exh10_5.htm",
+     "date": "2014-07-14",
+     "type": "EX-10.5",
+     "company": "PURE CYCLE CORP  (PCYO)  (CIK 0000276720)",
+     "url": "https://www.sec.gov/Archives/edgar/data/276720/000110262414001112/exh10_5.htm",
+     "sha256": "a3c31976f6ea8c66a5e1516f1475674dab6b998960d7d2d2718bb7037add55bd"
+    }
+   },
+   {
+    "id": "edgar-1579877-14128163-14270475",
+    "kind": "License Agreement",
+    "old": {
+     "cik": "1579877",
+     "acc": "000119312514128163",
+     "adsh": "0001193125-14-128163",
+     "name": "d704506dex103.htm",
+     "date": "2014-04-02",
+     "type": "EX-10.3",
+     "company": "CBS OUTDOOR AMERICAS INC.  (OUT)  (CIK 0001579877)",
+     "url": "https://www.sec.gov/Archives/edgar/data/1579877/000119312514128163/d704506dex103.htm",
+     "sha256": "81b01f15915c966c6311efb0f0ac97afdb2ac572a8ef51b8aceddda9bb4e82ec"
+    },
+    "new": {
+     "cik": "1579877",
+     "acc": "000119312514270475",
+     "adsh": "0001193125-14-270475",
+     "name": "d754744dex102.htm",
+     "date": "2014-07-16",
+     "type": "EX-10.2",
+     "company": "CBS OUTDOOR AMERICAS INC.  (OUT)  (CIK 0001579877)",
+     "url": "https://www.sec.gov/Archives/edgar/data/1579877/000119312514270475/d754744dex102.htm",
+     "sha256": "79ee8a79a12cfb697f6afb3e341d861c1c3c86f05a2e5dda3aaf258e0c6a8880"
+    }
+   },
+   {
+    "id": "edgar-1379606-07007076-16010431",
+    "kind": "License Agreement",
+    "old": {
+     "cik": "1379606",
+     "acc": "000095014407007076",
+     "adsh": "0000950144-07-007076",
+     "name": "g04054a2exv10w7.htm",
+     "date": "2007-08-01",
+     "type": "EX-10.7",
+     "company": "GreenHaven Continuous Commodity Index Fund  (CIK 0001379606)",
+     "url": "https://www.sec.gov/Archives/edgar/data/1379606/000095014407007076/g04054a2exv10w7.htm",
+     "sha256": "6f416b370c8cea1ff1c5299f08ff9b4d88b1e50b2e91ab6471628670712bc7b2"
+    },
+    "new": {
+     "cik": "1379606",
+     "acc": "000157104916010431",
+     "adsh": "0001571049-16-010431",
+     "name": "t1503055_ex10-7.htm",
+     "date": "2016-01-04",
+     "type": "EX-10.7",
+     "company": "WisdomTree Continuous Commodity Index Fund  (CIK 0001379606)",
+     "url": "https://www.sec.gov/Archives/edgar/data/1379606/000157104916010431/t1503055_ex10-7.htm",
+     "sha256": "636377f9cc794821f4bf3a808d21dd848a3784ce472395b7087fe2d445a4c96f"
+    }
+   },
+   {
+    "id": "edgar-1374310-17000041-20008849",
+    "kind": "License Agreement",
+    "old": {
+     "cik": "1374310",
+     "acc": "000137431017000041",
+     "adsh": "0001374310-17-000041",
+     "name": "amendmentno13no2.htm",
+     "date": "2017-12-22",
+     "type": "EX-10.1",
+     "company": "Cboe Global Markets, Inc.  (CBOE)  (CIK 0001374310)",
+     "url": "https://www.sec.gov/Archives/edgar/data/1374310/000137431017000041/amendmentno13no2.htm",
+     "sha256": "720e2ad9eb5cbccc1cac6bc8e6e34d1b9b235ce6bd8fb11554257e52af72f66e"
+    },
+    "new": {
+     "cik": "1374310",
+     "acc": "000155837020008849",
+     "adsh": "0001558370-20-008849",
+     "name": "cboe-20200630xex10d4.htm",
+     "date": "2020-07-31",
+     "type": "EX-10.4",
+     "company": "Cboe Global Markets, Inc.  (CBOE)  (CIK 0001374310)",
+     "url": "https://www.sec.gov/Archives/edgar/data/1374310/000155837020008849/cboe-20200630xex10d4.htm",
+     "sha256": "5445689dc239b652307a0348a737be69a63eafae6e3b1dc5fece7fc69904c857"
+    }
+   },
+   {
+    "id": "edgar-1701605-17220852-18013305",
+    "kind": "Supply Agreement",
+    "old": {
+     "cik": "1701605",
+     "acc": "000119312517220852",
+     "adsh": "0001193125-17-220852",
+     "name": "d343521dex1012.htm",
+     "date": "2017-07-03",
+     "type": "EX-10.12",
+     "company": "Baker Hughes a GE Co  (BKR)  (CIK 0001701605)",
+     "url": "https://www.sec.gov/Archives/edgar/data/1701605/000119312517220852/d343521dex1012.htm",
+     "sha256": "c4f4d1415b611e732bfa637862a6b3413c0b79b5e534835ce9ea94a81fb02dea"
+    },
+    "new": {
+     "cik": "1701605",
+     "acc": "000095010318013305",
+     "adsh": "0000950103-18-013305",
+     "name": "dp98267_ex1005.htm",
+     "date": "2018-11-13",
+     "type": "EX-10.5",
+     "company": "Baker Hughes a GE Co  (BKR)  (CIK 0001701605)",
+     "url": "https://www.sec.gov/Archives/edgar/data/1701605/000095010318013305/dp98267_ex1005.htm",
+     "sha256": "a5c6bdaf93709ddba5a4f016618fa9579fd8dde3e06d1c4d8a63592ca15e17f1"
+    }
+   },
+   {
+    "id": "edgar-1631650-15245362-18002466",
+    "kind": "Supply Agreement",
+    "old": {
+     "cik": "1631650",
+     "acc": "000119312515245362",
+     "adsh": "0001193125-15-245362",
+     "name": "d932346dex102.htm",
+     "date": "2015-07-06",
+     "type": "EX-10.2",
+     "company": "Aimmune Therapeutics, Inc.  (CIK 0001631650)",
+     "url": "https://www.sec.gov/Archives/edgar/data/1631650/000119312515245362/d932346dex102.htm",
+     "sha256": "679f76cd7c18e60440649e272f66b760bc751c2613856ecda388fa98ad035c94"
+    },
+    "new": {
+     "cik": "1631650",
+     "acc": "000156459018002466",
+     "adsh": "0001564590-18-002466",
+     "name": "aimt-ex101_312.htm",
+     "date": "2018-02-20",
+     "type": "EX-10.1",
+     "company": "Aimmune Therapeutics, Inc.  (CIK 0001631650)",
+     "url": "https://www.sec.gov/Archives/edgar/data/1631650/000156459018002466/aimt-ex101_312.htm",
+     "sha256": "f9aa8c68b363bfeb0d0926e233c6d336ffd23a4d3a303367ecaf7678fbcfd7c3"
+    }
+   },
+   {
+    "id": "edgar-866970-11223352-12257380",
+    "kind": "Registration Rights Agreement",
+    "old": {
+     "cik": "866970",
+     "acc": "000119312511223352",
+     "adsh": "0001193125-11-223352",
+     "name": "dex48.htm",
+     "date": "2011-08-15",
+     "type": "EX-4.8",
+     "company": "LIGHTING SCIENCE GROUP CORP  (CIK 0000866970)",
+     "url": "https://www.sec.gov/Archives/edgar/data/866970/000119312511223352/dex48.htm",
+     "sha256": "7c18d7ece82a49777124bb47a0f38ac6f1ebc118483b59b784b625c559318135"
+    },
+    "new": {
+     "cik": "866970",
+     "acc": "000119312512257380",
+     "adsh": "0001193125-12-257380",
+     "name": "d361468dex105.htm",
+     "date": "2012-06-01",
+     "type": "EX-10.5",
+     "company": "LIGHTING SCIENCE GROUP CORP  (CIK 0000866970)",
+     "url": "https://www.sec.gov/Archives/edgar/data/866970/000119312512257380/d361468dex105.htm",
+     "sha256": "20e6ffa1678528c2d6fcf89b761811d4ab00114427721c3ee451635d03beab83"
+    }
+   },
+   {
+    "id": "edgar-1084031-11005357-12001463",
+    "kind": "Registration Rights Agreement",
+    "old": {
+     "cik": "1084031",
+     "acc": "000121390011005357",
+     "adsh": "0001213900-11-005357",
+     "name": "f8k092311ex10i_intergrtenv.htm",
+     "date": "2011-09-29",
+     "type": "EX-10.1",
+     "company": "INTEGRATED ENVIRONMENTAL TECHNOLOGIES, LTD.  (CIK 0001084031)",
+     "url": "https://www.sec.gov/Archives/edgar/data/1084031/000121390011005357/f8k092311ex10i_intergrtenv.htm",
+     "sha256": "ce5c6cf2aee64753cdfa9f1562d291166b4f98644d7d9e33fdbb7aff294e1cca"
+    },
+    "new": {
+     "cik": "1084031",
+     "acc": "000121390012001463",
+     "adsh": "0001213900-12-001463",
+     "name": "f10k2011ex10iv_integrateden.htm",
+     "date": "2012-03-30",
+     "type": "EX-10.4",
+     "company": "INTEGRATED ENVIRONMENTAL TECHNOLOGIES, LTD.  (CIK 0001084031)",
+     "url": "https://www.sec.gov/Archives/edgar/data/1084031/000121390012001463/f10k2011ex10iv_integrateden.htm",
+     "sha256": "34d693a1f6571d5a284bd4e953dd8af5d82c9877e2d063b8056a0f0f2307689b"
+    }
+   },
+   {
+    "id": "edgar-352747-08206294-12009743",
+    "kind": "Registration Rights Agreement",
+    "old": {
+     "cik": "352747",
+     "acc": "000119312508206294",
+     "adsh": "0001193125-08-206294",
+     "name": "dex104.htm",
+     "date": "2008-10-06",
+     "type": "EX-10.4",
+     "company": "UNIGENE LABORATORIES INC  (CIK 0000352747)",
+     "url": "https://www.sec.gov/Archives/edgar/data/352747/000119312508206294/dex104.htm",
+     "sha256": "daad62236a2e327f0e961d0a9c976e57927c9519b714780320ce9bec12dabc6d"
+    },
+    "new": {
+     "cik": "352747",
+     "acc": "000143774912009743",
+     "adsh": "0001437749-12-009743",
+     "name": "ex10-7.htm",
+     "date": "2012-09-26",
+     "type": "EX-10.7",
+     "company": "UNIGENE LABORATORIES INC  (CIK 0000352747)",
+     "url": "https://www.sec.gov/Archives/edgar/data/352747/000143774912009743/ex10-7.htm",
+     "sha256": "851ea320f77c521abe46edb439dd459ad997d2c5731d4f911764a83db112cca1"
+    }
+   },
+   {
+    "id": "edgar-1483096-12275577-12277276",
+    "kind": "Services Agreement",
+    "old": {
+     "cik": "1483096",
+     "acc": "000119312512275577",
+     "adsh": "0001193125-12-275577",
+     "name": "d369407dex13.htm",
+     "date": "2012-06-19",
+     "type": "EX-1.3",
+     "company": "CHESAPEAKE MIDSTREAM PARTNERS LP  (CIK 0001483096)",
+     "url": "https://www.sec.gov/Archives/edgar/data/1483096/000119312512275577/d369407dex13.htm",
+     "sha256": "c84c9bc32eeb6b1ff685b7f51421c9b1e2769666413e0471d13f76011eb8c0df"
+    },
+    "new": {
+     "cik": "1483096",
+     "acc": "000119312512277276",
+     "adsh": "0001193125-12-277276",
+     "name": "d370028dex102.htm",
+     "date": "2012-06-20",
+     "type": "EX-10.2",
+     "company": "CHESAPEAKE MIDSTREAM PARTNERS LP  (CIK 0001483096)",
+     "url": "https://www.sec.gov/Archives/edgar/data/1483096/000119312512277276/d370028dex102.htm",
+     "sha256": "7bcc944d7999ecf3143a9119bea4f2237812e96dd993a503ebbf9b3641a6d770"
+    }
+   },
+   {
+    "id": "edgar-1568832-13000004-14000765",
+    "kind": "Services Agreement",
+    "old": {
+     "cik": "1568832",
+     "acc": "000156883213000004",
+     "adsh": "0001568832-13-000004",
+     "name": "rcapex109.htm",
+     "date": "2013-08-02",
+     "type": "EX-10.9",
+     "company": "RCS Capital Corp  (CIK 0001568832)",
+     "url": "https://www.sec.gov/Archives/edgar/data/1568832/000156883213000004/rcapex109.htm",
+     "sha256": "eaa4e2dc4def1719f32f25980dc2b644c1b67ae3b60d326b1b5ea2ccc7ef2fc6"
+    },
+    "new": {
+     "cik": "1568832",
+     "acc": "000144530514000765",
+     "adsh": "0001445305-14-000765",
+     "name": "exhibit1010arservicesagreeme.htm",
+     "date": "2014-02-28",
+     "type": "EX-10.10",
+     "company": "RCS Capital Corp  (CIK 0001568832)",
+     "url": "https://www.sec.gov/Archives/edgar/data/1568832/000144530514000765/exhibit1010arservicesagreeme.htm",
+     "sha256": "3556c4c23e7467d17237ac6fc06b2488c7938634586e782ebf746cd719d4b0ac"
+    }
+   },
+   {
+    "id": "edgar-1623925-17031135-20000723",
+    "kind": "Services Agreement",
+    "old": {
+     "cik": "1623925",
+     "acc": "000110465917031135",
+     "adsh": "0001104659-17-031135",
+     "name": "a17-12489_2ex10d1.htm",
+     "date": "2017-05-09",
+     "type": "EX-10.1",
+     "company": "Antero Midstream GP LP  (AM)  (CIK 0001623925)",
+     "url": "https://www.sec.gov/Archives/edgar/data/1623925/000110465917031135/a17-12489_2ex10d1.htm",
+     "sha256": "e72cbc123b44885ec1390a9becc04af8a41e60a7bb26f02355dedb591cdd1563"
+    },
+    "new": {
+     "cik": "1623925",
+     "acc": "000155837020000723",
+     "adsh": "0001558370-20-000723",
+     "name": "ex-10d3.htm",
+     "date": "2020-02-12",
+     "type": "EX-10.3",
+     "company": "Antero Midstream Corp  (AM)  (CIK 0001623925)",
+     "url": "https://www.sec.gov/Archives/edgar/data/1623925/000155837020000723/ex-10d3.htm",
+     "sha256": "043441ebe651158bf2fe2c4b2ac3b03aff0a9bd2c471ca785769939d6b16773e"
+    }
+   },
+   {
+    "id": "edgar-822370-12031124-12066364",
+    "kind": "Purchase Agreement",
+    "old": {
+     "cik": "822370",
+     "acc": "000114420412031124",
+     "adsh": "0001144204-12-031124",
+     "name": "v311607_ex10-67.htm",
+     "date": "2012-05-22",
+     "type": "EX-10.67",
+     "company": "CNS RESPONSE, INC.  (EMMA)  (CIK 0000822370)",
+     "url": "https://www.sec.gov/Archives/edgar/data/822370/000114420412031124/v311607_ex10-67.htm",
+     "sha256": "e12fc713936808706cffa0060176fd097beaae254f120fee584543fbb410d180"
+    },
+    "new": {
+     "cik": "822370",
+     "acc": "000114420412066364",
+     "adsh": "0001144204-12-066364",
+     "name": "v329755_ex10-1.htm",
+     "date": "2012-12-04",
+     "type": "EX-10.1",
+     "company": "CNS RESPONSE, INC.  (EMMA)  (CIK 0000822370)",
+     "url": "https://www.sec.gov/Archives/edgar/data/822370/000114420412066364/v329755_ex10-1.htm",
+     "sha256": "4d04d592939b9b075280fbb6474fa36c3df72b2d3c69dfebe8aab533382ebbb7"
+    }
+   },
+   {
+    "id": "edgar-1374993-08000807-12365598",
+    "kind": "Purchase Agreement",
+    "old": {
+     "cik": "1374993",
+     "acc": "000090951808000807",
+     "adsh": "0000909518-08-000807",
+     "name": "mm11-0608_10qe1003.htm",
+     "date": "2008-11-07",
+     "type": "EX-10",
+     "company": "NextWave Wireless Inc.  (CIK 0001374993)",
+     "url": "https://www.sec.gov/Archives/edgar/data/1374993/000090951808000807/mm11-0608_10qe1003.htm",
+     "sha256": "4fcc8496dc466a3c97672f6e87102407e797d2a8cf6de7b9d687bbf031ecd256"
+    },
+    "new": {
+     "cik": "1374993",
+     "acc": "000119312512365598",
+     "adsh": "0001193125-12-365598",
+     "name": "d400527dex106.htm",
+     "date": "2012-08-23",
+     "type": "EX-10.6",
+     "company": "NextWave Wireless Inc.  (CIK 0001374993)",
+     "url": "https://www.sec.gov/Archives/edgar/data/1374993/000119312512365598/d400527dex106.htm",
+     "sha256": "f48130b097181ccdabcc69e00249ccb55071a8256b4fd98913eb320bf10d404e"
+    }
+   },
+   {
+    "id": "edgar-1600422-16101793-16122191",
+    "kind": "Distribution Agreement",
+    "old": {
+     "cik": "1600422",
+     "acc": "000114420416101793",
+     "adsh": "0001144204-16-101793",
+     "name": "v439904_ex10-1.htm",
+     "date": "2016-05-13",
+     "type": "EX-10.1",
+     "company": "Superior Drilling Products, Inc.  (CIK 0001600422)",
+     "url": "https://www.sec.gov/Archives/edgar/data/1600422/000114420416101793/v439904_ex10-1.htm",
+     "sha256": "8860ed61b2fa3e6bcc403e54f715d90dcf069119f2ff6ff5284bade800d790f1"
+    },
+    "new": {
+     "cik": "1600422",
+     "acc": "000114420416122191",
+     "adsh": "0001144204-16-122191",
+     "name": "v448124_ex10-1.htm",
+     "date": "2016-08-31",
+     "type": "EX-10.1",
+     "company": "Superior Drilling Products, Inc.  (CIK 0001600422)",
+     "url": "https://www.sec.gov/Archives/edgar/data/1600422/000114420416122191/v448124_ex10-1.htm",
+     "sha256": "776119ac314a5adbbcd7147546f249fc6848817935f3012b5c7641a8d11ac3b2"
+    }
+   }
+  ]
  }
 }

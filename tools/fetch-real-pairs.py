@@ -381,7 +381,10 @@ def update_edgar(pins, target):
                 ratio = len(orig_text) / max(1, len(new_text))
                 if not 0.3 < ratio < 3.0:
                     continue
-                pairs.append({"id": f"edgar-{new['cik']}-{orig_doc['acc'][-8:]}-{new['acc'][-8:]}", "kind": q.replace("Amended and Restated ", ""),
+                pid = f"edgar-{new['cik']}-{orig_doc['acc'][-8:]}-{new['acc'][-8:]}"
+                if any(x["id"] == pid for x in pairs):
+                    continue
+                pairs.append({"id": pid, "kind": q.replace("Amended and Restated ", ""),
                               "old": {**orig_doc, "sha256": sha256(orig_bytes)}, "new": {**new, "sha256": sha256(new_bytes)}})
                 found += 1
                 print(f"  edgar pair {len(pairs)}: {new['company']} — {title} dated {date}", file=sys.stderr)

@@ -47,6 +47,7 @@ internal static class Program
                 "score" => Score(opt),
                 "check-split" => CheckSplit(opt),
                 "explain" => Explain(opt),
+                "real-gate" => RealGate(opt),
                 _ => Fail("unknown command " + args[0]),
             };
         }
@@ -417,6 +418,45 @@ internal static class Program
         }
 
         return 0;
+    }
+
+    /// <summary>The exact gates on real pairs: every pair must pass Verify at fallback level 0 under the default settings and under Strict.</summary>
+    private static int RealGate(Dictionary<string, string> opt)
+    {
+        string root = opt.GetValueOrDefault("real") ?? throw new ArgumentException("--real is required");
+        int pairs = 0, ok = 0, changes = 0;
+        var bySource = new SortedDictionary<string, (int Pairs, int Ok)>(StringComparer.Ordinal);
+        foreach (string old in Directory.EnumerateFiles(root, "old.txt", SearchOption.AllDirectories).OrderBy(x => x, StringComparer.Ordinal))
+        {
+            string dir = Path.GetDirectoryName(old)!;
+            string source = Path.GetFileName(Path.GetDirectoryName(dir)!);
+            CompareDocument o = CompareDocument.FromText(File.ReadAllText(old), "old");
+            CompareDocument n = CompareDocument.FromText(File.ReadAllText(Path.Combine(dir, "new.txt")), "new");
+            bool pass = true;
+            foreach (CompareSettings settings in new[] { CompareSettings.Legal, Pipeline.Settings })
+            {
+                Comparison cmp = Comparison.Of(o, n, settings);
+                pass &= cmp.Verification.Passed && cmp.Verification.FallbackLevel == 0 && cmp.Check().IsEmpty;
+                changes += cmp.Changes.Length;
+            }
+
+            pairs++;
+            ok += pass ? 1 : 0;
+            (int p, int k) = bySource.GetValueOrDefault(source);
+            bySource[source] = (p + 1, k + (pass ? 1 : 0));
+            if (!pass)
+            {
+                Console.WriteLine("FAILED " + dir);
+            }
+        }
+
+        foreach ((string s, (int p, int k)) in bySource)
+        {
+            Console.WriteLine($"  {s}: {k}/{p} pairs verified at fallback level 0");
+        }
+
+        Console.WriteLine($"real-gate: {ok}/{pairs} pairs pass, {changes} changes in total");
+        return ok == pairs ? 0 : 1;
     }
 
     // ---- check-split -----------------------------------------------------------------------------------------------
