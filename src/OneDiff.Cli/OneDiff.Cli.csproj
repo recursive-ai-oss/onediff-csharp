@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>onediff</AssemblyName>
+    <RootNamespace>OneDiff.Cli</RootNamespace>
+    <PackageId>$(PackagePrefix)OneDiff.Tool</PackageId>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>onediff</ToolCommandName>
+    <Description>Text diff and document comparison for .NET: the onediff command-line tool.</Description>
+    <!-- Not packed yet: the tool is published once its commands do real work. -->
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../OneDiff/OneDiff.csproj" />
+  </ItemGroup>
+
+</Project>
