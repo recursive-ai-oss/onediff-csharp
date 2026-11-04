@@ -1,4 +1,3 @@
-using System.Text;
 using OneDiff.Cleanup;
 using OneDiff.Tokenization;
 
@@ -33,38 +32,68 @@ internal static class DmpDiffer
 
     private static List<DmpDiff> CleanUp(string a, string b, List<DmpDiff> diffs)
     {
-        // The diff's new side, and its script counted in code points (the cleanup's character tokens).
-        var newText = new StringBuilder(b.Length);
+        // The diff's script counted in code points (the cleanup's character tokens); its old side is `a` and its new side `b`.
+        bool oldHasPairs = HasSurrogate(a);
+        bool newHasPairs = HasSurrogate(b);
         var builder = new EditScriptBuilder();
         foreach (DmpDiff d in diffs)
         {
-            int n = CodePointCount(d.Text);
+            int n = oldHasPairs || newHasPairs ? CodePointCount(d.Text) : d.Text.Length;
             switch (d.Operation)
             {
-                case DmpOperation.Equal: builder.Equal(n); newText.Append(d.Text); break;
+                case DmpOperation.Equal: builder.Equal(n); break;
                 case DmpOperation.Delete: builder.Delete(n); break;
-                default: builder.Insert(n); newText.Append(d.Text); break;
+                default: builder.Insert(n); break;
             }
         }
 
-        string oldString = a;
-        string newString = newText.ToString();
-        TokenRange[]? oldRanges = HasSurrogate(oldString) ? Tokenizer.Tokenize(oldString, TokenKind.Character) : null;
-        TokenRange[]? newRanges = HasSurrogate(newString) ? Tokenizer.Tokenize(newString, TokenKind.Character) : null;
-        var textDiff = new TextDiff(oldString, newString, TokenKind.Character, oldRanges, newRanges, builder.ToEditScript());
+        TokenRange[]? oldRanges = oldHasPairs ? Tokenizer.Tokenize(a, TokenKind.Character) : null;
+        TokenRange[]? newRanges = newHasPairs ? Tokenizer.Tokenize(b, TokenKind.Character) : null;
+        var textDiff = new TextDiff(a, b, TokenKind.Character, oldRanges, newRanges, builder.ToEditScript());
         TextDiff cleaned = DiffCleanup.Efficiency(DiffCleanup.Semantic(textDiff), 4);
         if (ReferenceEquals(cleaned.Script, textDiff.Script))
         {
             return diffs;
         }
 
+        // Equal runs that survived untouched keep the strings they already have (they can be large); both lists run in old-text order.
         var result = new List<DmpDiff>(cleaned.Script.Count);
+        int position = 0;
+        var starts = new Dictionary<int, string>();
+        foreach (DmpDiff d in diffs)
+        {
+            if (d.Operation == DmpOperation.Equal)
+            {
+                starts[position] = d.Text;
+            }
+
+            if (d.Operation != DmpOperation.Insert)
+            {
+                position += d.Text.Length;
+            }
+        }
+
+        int oldPosition = 0;
         foreach (Edit e in cleaned.Script)
         {
             switch (e.Kind)
             {
-                case EditKind.Equal: Add(result, DmpOperation.Equal, cleaned.OldSpan(e).ToString()); break;
-                case EditKind.Delete: Add(result, DmpOperation.Delete, cleaned.OldSpan(e).ToString()); break;
+                case EditKind.Equal:
+                    {
+                        ReadOnlySpan<char> text = cleaned.OldSpan(e);
+                        Add(result, DmpOperation.Equal, starts.TryGetValue(oldPosition, out string? kept) && kept.Length == text.Length ? kept : text.ToString());
+                        oldPosition += text.Length;
+                        break;
+                    }
+
+                case EditKind.Delete:
+                    {
+                        string text = cleaned.OldSpan(e).ToString();
+                        oldPosition += text.Length;
+                        Add(result, DmpOperation.Delete, text);
+                        break;
+                    }
+
                 default: Add(result, DmpOperation.Insert, cleaned.NewSpan(e).ToString()); break;
             }
         }
