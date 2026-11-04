@@ -10,8 +10,13 @@ internal static class Program
     {
         if (args.Length == 0 || args[0] is "-h" or "--help" or "help")
         {
-            Console.Out.WriteLine("usage: onediff <diff|patch|merge> [arguments]");
+            Console.Out.WriteLine("usage: onediff <diff|patch|merge|compare> [arguments]");
             return args.Length == 0 ? Usage : 0;
+        }
+
+        if (args[0] == "compare")
+        {
+            return CompareCommand.Run(args[1..]);
         }
 
         if (args[0] is "diff" or "patch" or "merge")

@@ -69,6 +69,18 @@ public sealed record RedlineStyle
     /// <summary>Whether each change carries a tag naming its type. Off by default.</summary>
     public bool TypeTags { get; init; }
 
+    /// <summary>The page heading and title of a written redline; empty for "Comparison of <i>old</i> and <i>new</i>" from the input names.</summary>
+    public string Title { get; init; } = "";
+
+    /// <summary>The BCP 47 language tag written on the page (<c>lang</c>); "en" by default. It describes the page furniture, which is in English.</summary>
+    public string Language { get; init; } = "en";
+
+    /// <summary>
+    /// The time to print in the footer, or null (the default) for none. Writers never read the clock, so output stays
+    /// reproducible: a timestamp appears only when the caller supplies one.
+    /// </summary>
+    public DateTimeOffset? Timestamp { get; init; }
+
     /// <summary>A legal blackline: insertions blue double underline, deletions red strike-through, moves green, change bars, cover page.</summary>
     public static RedlineStyle Blackline { get; } = new();
 

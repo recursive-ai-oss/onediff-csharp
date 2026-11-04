@@ -28,7 +28,7 @@ public sealed record VerificationResult(bool Passed, int FallbackLevel, int Fail
 /// changes is new and new without them is old (over the compare model as the settings project it), and every other
 /// difference is in the ledger. <see cref="Check"/> verifies that again at any time. Immutable.
 /// </summary>
-public sealed class Comparison
+public sealed partial class Comparison
 {
     /// <summary>The library version written into provenance.</summary>
     public const string LibraryVersion = "0.1.0-preview.1";
