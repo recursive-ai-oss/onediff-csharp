@@ -16,7 +16,7 @@ internal static class Program
 {
     private const string Usage = """
         OneDiff.GoldSets generate --out DIR [--role eval|dev|train] [--seed N] [--docs-per-lang N] [--langs en,de,...] [--verify]
-        OneDiff.GoldSets score --data DIR --out FILE [--oracle-alignment] [--cmp DIR] [--save-cmp DIR] [--pipeline NAME] [--jobs N] [--limit N]
+        OneDiff.GoldSets score --data DIR --out FILE [--oracle-alignment] [--cmp DIR] [--save-cmp DIR] [--pipeline NAME] [--jobs N] [--limit N] [--resamples N]
         OneDiff.GoldSets check-split --a DIR --b DIR
 
           generate    writes DIR/pairs/<id>.docs.json and <id>.labels.json for the documents of the chosen role, split.json (every
@@ -275,6 +275,7 @@ internal static class Program
         bool oracleAlignment = opt.ContainsKey("oracle-alignment");
         string pipeline = opt.GetValueOrDefault("pipeline") ?? (oracleAlignment ? "gold-alignment" : "reference");
         int jobs = int.Parse(opt.GetValueOrDefault("jobs") ?? "4", CultureInfo.InvariantCulture);
+        Bootstrap.Resamples = int.Parse(opt.GetValueOrDefault("resamples") ?? "10000", CultureInfo.InvariantCulture);
         int limit = int.Parse(opt.GetValueOrDefault("limit") ?? "0", CultureInfo.InvariantCulture);
         string setHash = File.ReadAllText(Path.Combine(data, "manifest.sha256")).Trim();
         var manifest = GoldJson.Read<Manifest>(File.ReadAllBytes(Path.Combine(data, "manifest.json")));
@@ -309,6 +310,7 @@ internal static class Program
         {
             string id = ids[i];
             var labels = GoldJson.Read<PairLabels>(File.ReadAllBytes(Path.Combine(data, "pairs", id + ".labels.json")));
+            var docs = GoldJson.Read<PairDocs>(File.ReadAllBytes(Path.Combine(data, "pairs", id + ".docs.json")));
             Comparison cmp;
             if (cmpDir is not null)
             {
@@ -316,7 +318,6 @@ internal static class Program
             }
             else
             {
-                var docs = GoldJson.Read<PairDocs>(File.ReadAllBytes(Path.Combine(data, "pairs", id + ".docs.json")));
                 CompareDocument o = GoldJson.Build(docs.Old);
                 CompareDocument n = GoldJson.Build(docs.New);
                 cmp = oracleAlignment ? Pipeline.OracleAlignment(o, n, labels) : Comparison.Of(o, n, Pipeline.Settings);
@@ -331,9 +332,10 @@ internal static class Program
                 failures.Add($"{id}: verification passed={cmp.Verification.Passed} fallback={cmp.Verification.FallbackLevel}");
             }
 
-            results[i] = (labels, PairScorer.Score(cmp, labels));
+            results[i] = (labels, PairScorer.Score(cmp, labels, GoldJson.SameNodes(docs)));
         });
 
+        File.WriteAllLines(outFile + ".missed.txt", results.Where(r => r.Counts.Missed.Count > 0).OrderBy(r => r.Labels.Id, StringComparer.Ordinal).Select(r => r.Labels.Id + " " + string.Join(" | ", r.Counts.Missed)));
         var rows = new List<MetricRow>();
         void Scope(string name, Func<PairLabels, bool> pick)
         {
@@ -379,8 +381,9 @@ internal static class Program
         var docVals = results.GroupBy(r => (r.Labels.Lang, r.Labels.BaseDoc)).Select(g => { var s = new Counts(); g.ToList().ForEach(x => s.Add(x.Counts)); return s; }).ToList();
         Console.WriteLine("per-document distribution (min / median / p90 / max):");
         Dist("boundary.F1", docVals, c => Bootstrap.F1(c.BTp, c.BFp, c.BFn));
-        Dist("frag.sentence", docVals, c => c.SentCounted == 0 ? double.NaN : (double)c.SentRegions / c.SentCounted);
-        Dist("frag.unit", docVals, c => c.UnitCounted == 0 ? double.NaN : (double)c.UnitRegions / c.UnitCounted);
+        Dist("frag.sentence", docVals, c => c.SentCounted == 0 ? double.NaN : (double)c.SentChanges / c.SentCounted);
+        Dist("frag.unit", docVals, c => c.UnitCounted == 0 ? double.NaN : (double)c.UnitChanges / c.UnitCounted);
+        Dist("regions.sentence", docVals, c => c.SentCounted == 0 ? double.NaN : (double)c.SentRegions / c.SentCounted);
         return failures.IsEmpty ? 0 : 1;
     }
 

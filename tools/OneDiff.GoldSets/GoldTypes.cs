@@ -71,6 +71,10 @@ internal static class GoldJson
     public static string Sha256(string text) => Sha256(Encoding.UTF8.GetBytes(text));
 
     /// <summary>Builds a compare-model document from a stored one. Text is stored in its compared (normalized) form.</summary>
+    /// <summary>Whether the old and the new document have the same nodes, text, attributes and formatting runs.</summary>
+    public static bool SameNodes(PairDocs docs) =>
+        JsonSerializer.SerializeToUtf8Bytes(docs.Old.Nodes, Options).AsSpan().SequenceEqual(JsonSerializer.SerializeToUtf8Bytes(docs.New.Nodes, Options));
+
     public static CompareDocument Build(DocFile file)
     {
         var b = new CompareDocumentBuilder(DocumentKind.Flowing).WithMetadata(file.Name);

@@ -7,6 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="OneDiff.GoldSets.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../../src/OneDiff.Documents/OneDiff.Documents.csproj" />
   </ItemGroup>
 
