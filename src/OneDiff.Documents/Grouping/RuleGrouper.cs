@@ -24,7 +24,7 @@ internal static class RuleGrouper
     private const int LocalGapHalfWords = 4;
 
     /// <summary>A clause with at least two changed spots is one unit when this share of its words changed.</summary>
-    private const double WholeClauseShare = 0.5;
+    private const double WholeClauseShare = 0.25;
 
     /// <summary>A clause with at least three changed spots is one unit when this share of its words changed.</summary>
     private const double ScatteredShare = 0.12;
@@ -393,7 +393,7 @@ internal static class RuleGrouper
         {
             int c1 = 0, c2 = 0;
             string? label = FormatIntervals.Label(FormatRuns.FormatAt(e.OldRuns, ref c1, 0), FormatRuns.FormatAt(e.NewRuns, ref c2, 0));
-            if (cur is not null && string.Equals(label, curLabel, StringComparison.Ordinal) && OnlySpaceBetween(newText, cur.NewTo, e.NewStart) && !TextUnitBetween(textUnits, cur.NewTo, e.NewStart))
+            if (cur is not null && string.Equals(label, curLabel, StringComparison.Ordinal) && OnlySpaceBetween(newText, cur.NewTo, e.NewStart) && !TextUnitBetween(textUnits, cur.OldTo, e.OldStart, cur.NewTo, e.NewStart))
             {
                 cur.Absorb(e);
                 continue;
@@ -434,11 +434,15 @@ internal static class RuleGrouper
         return true;
     }
 
-    private static bool TextUnitBetween(List<Unit> textUnits, int from, int to)
+    /// <summary>
+    /// Whether a text unit lies in, or touches, the stretch between two format edits on either side. Joining across it would
+    /// interleave the two units, and the edits of a link must stay in their true order.
+    /// </summary>
+    private static bool TextUnitBetween(List<Unit> textUnits, int oldFrom, int oldTo, int newFrom, int newTo)
     {
         foreach (Unit u in textUnits)
         {
-            if (u.NewFrom < to && u.NewTo > from)
+            if ((u.NewFrom <= newTo && u.NewTo >= newFrom) || (u.OldFrom <= oldTo && u.OldTo >= oldFrom))
             {
                 return true;
             }

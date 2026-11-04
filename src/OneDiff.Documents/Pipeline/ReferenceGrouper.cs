@@ -127,21 +127,26 @@ internal static class ReferenceGrouper
         // One display region per change; with groupMoves, a moved node and everything inside it (its attribute changes and its text
         // edits) are shown together as one region, because the reader meets them as one moved paragraph.
         var groupIds = new List<List<int>>();
-        var groupOfMoveLink = new Dictionary<int, int>();
+        var groupOfKey = new Dictionary<long, int>();
         foreach (int idx in order)
         {
             int id = changes.Count;
             Change change = items[idx].Change with { Id = id };
             changes.Add(change);
-            if (groupMoves && change.LinkId >= 0 && al.Links[change.LinkId].Kind == LinkKind.Move)
+            if (groupMoves)
             {
-                if (groupOfMoveLink.TryGetValue(change.LinkId, out int g))
+                // A moved node and everything inside it share a region; so do the cells of one row inserted or deleted whole.
+                long key = change.LinkId >= 0 ? (al.Links[change.LinkId].Kind == LinkKind.Move ? change.LinkId : -1) : RowKey(al, change);
+                if (key != -1)
                 {
-                    groupIds[g].Add(id);
-                    continue;
-                }
+                    if (groupOfKey.TryGetValue(key, out int g))
+                    {
+                        groupIds[g].Add(id);
+                        continue;
+                    }
 
-                groupOfMoveLink[change.LinkId] = groupIds.Count;
+                    groupOfKey[key] = groupIds.Count;
+                }
             }
 
             groupIds.Add([id]);
@@ -154,6 +159,26 @@ internal static class ReferenceGrouper
         }
 
         return new ChangeSet(al, changes.MoveToImmutable(), groups.MoveToImmutable(), diffs.Ledger, diffs.Diagnostics, false);
+    }
+
+    /// <summary>
+    /// For a node inserted or deleted whole: a key naming the table row it sits in (the row itself, or a cell or paragraph below it),
+    /// separate for insertions and deletions; -1 when it is not in a row.
+    /// </summary>
+    private static long RowKey(Alignment al, Change c)
+    {
+        bool deleted = c.Kind == ChangeKind.Delete;
+        CompareDocument doc = deleted ? al.Old : al.New;
+        int node = (deleted ? c.Old : c.New).Nodes[0];
+        for (int n = node; n >= 0; n = doc[n].Parent)
+        {
+            if (doc[n].Kind == NodeKind.TableRow)
+            {
+                return -2 - (((long)n * 2) + (deleted ? 1 : 0));
+            }
+        }
+
+        return -1;
     }
 
     public static ChangeSet Classify(ChangeSet set, CancellationToken ct)

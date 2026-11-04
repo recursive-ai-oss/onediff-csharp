@@ -16,7 +16,7 @@ The result is a `LinkDiff` per link: ordered, non-overlapping `RegionEdit`s in t
 
 ## 2. Change units (`Stages.Group`)
 
-The edits are **atomic data** and stay atomic. Grouping chooses **change units**: each unit is one `Change` holding one or more of the link's edits. The units of a link partition its edits, and a unit's sides are ranges of the joined text that **contain** all its edits (a side may show more than its edits, never less). Whole-node insertions and deletions, moves, splits, merges and attribute changes are made as before. `ChangeGroup`s are still one display region per change; nothing in a group is data.
+The edits are **atomic data** and stay atomic. Grouping chooses **change units**: each unit is one `Change` holding one or more of the link's edits. The units of a link partition its edits, and a unit's sides are ranges of the joined text that **contain** all its edits (a side may show more than its edits, never less). Whole-node insertions and deletions, moves, splits, merges and attribute changes are made as before. `ChangeGroup`s are display regions over change ids and hold no data: one per change, except that a moved node and everything inside it (its attribute changes and text edits) form one region, and so do the cells of one table row that were inserted or deleted whole.
 
 Rules, in order, per ordinary link:
 
@@ -24,7 +24,7 @@ Rules, in order, per ordinary link:
 2. **Overlap.** Units that meet or overlap are joined. A formatting edit that overlaps a unit becomes part of that unit; this can make a unit reach its neighbour, so joining and taking in repeat until nothing changes.
 3. **Breaks.** Units never join across a **sentence end** (UAX #29 section 5, on either side's text) or a **clause break**: `;` or `:` followed by white space, or a line break. A unit may still contain an edit that itself crosses a boundary.
 4. **Density, per clause** (the run of units between two breaks). With changed words counted on both sides (a word is two half-words; each ideograph, kana or Thai character is one):
-   - at least two units, and at least **half** of the clause's words changed: all the clause's edits become one unit widened to the whole clause on both sides;
+   - at least two units, and at least **a quarter** of the clause's words changed: all the clause's edits become one unit widened to the whole clause on both sides;
    - at least three units, and at least **12%** changed: likewise;
    - otherwise units join only when the unchanged text between them is **two words or less**.
 5. **Formatting units.** Format-only edits that no text unit took in become format changes (`ChangeKind.Format`): one per edit, and neighbours with the **same label** join across white space alone, if no text unit lies between.

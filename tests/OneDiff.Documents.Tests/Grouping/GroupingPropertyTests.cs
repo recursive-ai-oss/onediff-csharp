@@ -32,37 +32,19 @@ public class GroupingPropertyTests
         "يجب على المشتري أن يدفع الثمن كاملا خلال 30 يوما.", "הקונה ישלם את המחיר המלא בתוך 30 ימים.", "購入者は30日以内に代金を支払う。",
     ];
 
+    // Seeds that once produced a format unit joined across a deletion, which put the link's edits out of order.
+    [Theory]
+    [InlineData(29281)]
+    [InlineData(1033107)]
+    public void FormatUnitsNeverInterleaveWithTextUnits(int seed) => Assert.True(Check(seed).Changes.Length >= 0);
+
     [Fact]
     public void RealisticPairsVerifyWithoutFallbackUnderEveryPreset()
     {
         int first = FirstSeed, withChanges = 0, units = 0, atoms = 0;
         for (int seed = first; seed < first + Cases; seed++)
         {
-            var r = new Random(seed);
-            CompareSettings settings = (seed % 3) switch
-            {
-                0 => CompareSettings.Legal,
-                1 => CompareSettings.Strict with { ThrowOnFailure = false },
-                _ => CompareSettings.TextOnly,
-            };
-            int count = r.Next(1, 7);
-            var oldParas = new List<Para>();
-            for (int i = 0; i < count; i++)
-            {
-                oldParas.Add(RandomPara(r));
-            }
-
-            var newParas = oldParas.Select(p => Mutate(p, r)).ToList();
-            if (count > 2 && r.Next(5) == 0)
-            {
-                (newParas[0], newParas[^1]) = (newParas[^1], newParas[0]);
-            }
-
-            Comparison c = Comparison.Of(Build(oldParas), Build(newParas), settings);
-            string context = $"seed {seed} settings {settings.Name}";
-            Assert.True(c.Verification.FallbackLevel == 0, context + " fell back: " + string.Join(" | ", c.Diagnostics.Select(d => d.Code + ": " + d.Message)));
-            Assert.True(c.Check().IsEmpty, context + " failed re-check");
-            Assert.True(c.Groups.Length <= c.Changes.Length);
+            Comparison c = Check(seed);
             withChanges += c.Changes.IsEmpty ? 0 : 1;
             units += c.Changes.Length;
             atoms += c.Changes.Sum(x => Math.Max(1, x.Edits.Length));
@@ -73,6 +55,36 @@ public class GroupingPropertyTests
             Assert.True(withChanges > Cases / 2, $"only {withChanges} of {Cases} cases had changes");
             Assert.True(units < atoms, "grouping never joined anything");
         }
+    }
+
+    private static Comparison Check(int seed)
+    {
+        var r = new Random(seed);
+        CompareSettings settings = (seed % 3) switch
+        {
+            0 => CompareSettings.Legal,
+            1 => CompareSettings.Strict with { ThrowOnFailure = false },
+            _ => CompareSettings.TextOnly,
+        };
+        int count = r.Next(1, 7);
+        var oldParas = new List<Para>();
+        for (int i = 0; i < count; i++)
+        {
+            oldParas.Add(RandomPara(r));
+        }
+
+        var newParas = oldParas.Select(p => Mutate(p, r)).ToList();
+        if (count > 2 && r.Next(5) == 0)
+        {
+            (newParas[0], newParas[^1]) = (newParas[^1], newParas[0]);
+        }
+
+        Comparison c = Comparison.Of(Build(oldParas), Build(newParas), settings);
+        string context = $"seed {seed} settings {settings.Name}";
+        Assert.True(c.Verification.FallbackLevel == 0, context + " fell back: " + string.Join(" | ", c.Diagnostics.Select(d => d.Code + ": " + d.Message)));
+        Assert.True(c.Check().IsEmpty, context + " failed re-check");
+        Assert.True(c.Groups.Length <= c.Changes.Length);
+        return c;
     }
 
     private sealed record Para(string Text, List<FormatRun> Runs);
