@@ -42,6 +42,31 @@ internal static class TextSimilarity
         return 2.0 * common / (a.Length + b.Length);
     }
 
+    /// <summary>The number of items two sorted multisets share (each counted as often as it occurs in both).</summary>
+    public static int Common(ReadOnlySpan<int> a, ReadOnlySpan<int> b)
+    {
+        int i = 0, j = 0, common = 0;
+        while (i < a.Length && j < b.Length)
+        {
+            if (a[i] == b[j])
+            {
+                common++;
+                i++;
+                j++;
+            }
+            else if (a[i] < b[j])
+            {
+                i++;
+            }
+            else
+            {
+                j++;
+            }
+        }
+
+        return common;
+    }
+
     /// <summary>The same as <see cref="Dice(ReadOnlySpan{int}, ReadOnlySpan{int})"/> with the second multiset in a list.</summary>
     public static double Dice(ReadOnlySpan<int> a, List<int> b)
     {

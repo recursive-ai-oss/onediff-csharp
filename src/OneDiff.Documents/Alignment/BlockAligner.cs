@@ -339,7 +339,21 @@ internal static class BlockAligner
                 Harvest(b, n, o, votes, touched, false, found, splitParts);
             }
 
-            AddStretchPairs(oldText, newText, found);
+            AddStretchPairs(oldText, newText, found, splitParts, mergeParts);
+            foreach (List<int> list in splitParts.Values.Concat(mergeParts.Values))
+            {
+                list.Sort();
+                int kept = 0;
+                for (int i = 0; i < list.Count; i++)
+                {
+                    if (i == 0 || list[i] != list[i - 1])
+                    {
+                        list[kept++] = list[i];
+                    }
+                }
+
+                list.RemoveRange(kept, list.Count - kept);
+            }
             if (work > settings.CostCap)
             {
                 CapReached("too much work finding similar blocks; edited blocks that were not exactly equal are shown as deletions and insertions");
@@ -468,7 +482,7 @@ internal static class BlockAligner
         }
 
         // Short stretches are compared in full: two short blocks that differ in one word share no word pair to find them by.
-        private void AddStretchPairs(List<int> oldText, List<int> newText, List<long> found)
+        private void AddStretchPairs(List<int> oldText, List<int> newText, List<long> found, Dictionary<int, List<int>> splitParts, Dictionary<int, List<int>> mergeParts)
         {
             var oldBy = new SortedDictionary<int, List<int>>();
             var newBy = new SortedDictionary<int, List<int>>();
@@ -499,9 +513,23 @@ internal static class BlockAligner
                 {
                     foreach (int b in partners)
                     {
-                        if (oldDoc[a].Kind == newDoc[b].Kind)
+                        if (oldDoc[a].Kind != newDoc[b].Kind)
                         {
-                            found.Add(Key(a, b));
+                            continue;
+                        }
+
+                        found.Add(Key(a, b));
+
+                        // Shingles of very common phrases are ignored by the index; inside a short stretch the words say it directly.
+                        int common = TextSimilarity.Common(o.Words[a], n.Words[b]);
+                        if (common >= Containment * n.Words[b].Length && n.Words[b].Length >= MinPartWords && o.Words[a].Length >= MinWholeWords)
+                        {
+                            GetList(splitParts, a).Add(b);
+                        }
+
+                        if (common >= Containment * o.Words[a].Length && o.Words[a].Length >= MinPartWords && n.Words[b].Length >= MinWholeWords)
+                        {
+                            GetList(mergeParts, b).Add(a);
                         }
                     }
                 }
@@ -859,6 +887,16 @@ internal static class BlockAligner
         private void CapReached(string message) => Note(DiagnosticSeverity.Warning, "align.cap", message);
 
         private static long Key(int a, int b) => ((long)a << 32) | (uint)b;
+
+        private static List<int> GetList(Dictionary<int, List<int>> map, int key)
+        {
+            if (!map.TryGetValue(key, out List<int>? list))
+            {
+                map[key] = list = [];
+            }
+
+            return list;
+        }
 
         private static List<int> GetList(SortedDictionary<int, List<int>> map, int key)
         {
