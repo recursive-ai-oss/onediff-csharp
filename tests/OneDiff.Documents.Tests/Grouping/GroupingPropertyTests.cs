@@ -62,7 +62,7 @@ public class GroupingPropertyTests
             string context = $"seed {seed} settings {settings.Name}";
             Assert.True(c.Verification.FallbackLevel == 0, context + " fell back: " + string.Join(" | ", c.Diagnostics.Select(d => d.Code + ": " + d.Message)));
             Assert.True(c.Check().IsEmpty, context + " failed re-check");
-            Assert.Equal(c.Changes.Length, c.Groups.Length);
+            Assert.True(c.Groups.Length <= c.Changes.Length);
             withChanges += c.Changes.IsEmpty ? 0 : 1;
             units += c.Changes.Length;
             atoms += c.Changes.Sum(x => Math.Max(1, x.Edits.Length));

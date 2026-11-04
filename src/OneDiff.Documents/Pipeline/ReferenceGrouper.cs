@@ -9,7 +9,7 @@ internal static class ReferenceGrouper
     /// <summary>Makes the changes for the text and format edits of one ordinary link (not a split or merge), each with the new-text position it sorts by.</summary>
     internal delegate List<(int Position, Change Change)> LinkUnitizer(AlignmentLink link, ProjectedGroup oldText, ProjectedGroup newText, LinkDiff diff, Alignment alignment);
 
-    public static ChangeSet Group(PairDiffs diffs, CancellationToken ct, LinkUnitizer? unitizer = null)
+    public static ChangeSet Group(PairDiffs diffs, CancellationToken ct, LinkUnitizer? unitizer = null, bool groupMoves = false)
     {
         Alignment al = diffs.Alignment;
         CompareSettings settings = al.Settings;
@@ -124,12 +124,33 @@ internal static class ReferenceGrouper
         });
 
         ImmutableArray<Change>.Builder changes = ImmutableArray.CreateBuilder<Change>(items.Count);
-        ImmutableArray<ChangeGroup>.Builder groups = ImmutableArray.CreateBuilder<ChangeGroup>(items.Count);
+        // One display region per change; with groupMoves, a moved node and everything inside it (its attribute changes and its text
+        // edits) are shown together as one region, because the reader meets them as one moved paragraph.
+        var groupIds = new List<List<int>>();
+        var groupOfMoveLink = new Dictionary<int, int>();
         foreach (int idx in order)
         {
             int id = changes.Count;
-            changes.Add(items[idx].Change with { Id = id });
-            groups.Add(new ChangeGroup(id, GroupKind.Region, "", [id]));
+            Change change = items[idx].Change with { Id = id };
+            changes.Add(change);
+            if (groupMoves && change.LinkId >= 0 && al.Links[change.LinkId].Kind == LinkKind.Move)
+            {
+                if (groupOfMoveLink.TryGetValue(change.LinkId, out int g))
+                {
+                    groupIds[g].Add(id);
+                    continue;
+                }
+
+                groupOfMoveLink[change.LinkId] = groupIds.Count;
+            }
+
+            groupIds.Add([id]);
+        }
+
+        ImmutableArray<ChangeGroup>.Builder groups = ImmutableArray.CreateBuilder<ChangeGroup>(groupIds.Count);
+        for (int g = 0; g < groupIds.Count; g++)
+        {
+            groups.Add(new ChangeGroup(g, GroupKind.Region, "", [.. groupIds[g]]));
         }
 
         return new ChangeSet(al, changes.MoveToImmutable(), groups.MoveToImmutable(), diffs.Ledger, diffs.Diagnostics, false);

@@ -13,20 +13,30 @@ internal static partial class ValueSpans
     /// <summary>How far around an edit the search looks; longer than any value the patterns accept.</summary>
     private const int Margin = 96;
 
-    // Alternatives are tried in order at each position, longest forms first: month-name dates, numeric dates, East Asian dates,
-    // amounts, percentages, durations, then bare numbers.
+    // A number: digits with a decimal or thousands separator of the usual kinds, including the space French and others group by.
+    private const string Num = @"(?:\d{1,3}(?:[\u00A0\u202F ]\d{3})+(?:[,.]\d+)?|\d+(?:[,.]\d+)*)";
+
+    private const string Month = @"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)";
+
+    // Units of a duration in the languages the library is measured on.
+    private const string Unit = @"(?:seconds?|minutes?|hours?|days?|weeks?|months?|years?|Tag(?:e|en)?|Woche(?:n)?|Monat(?:e|en)?|Jahr(?:e|en)?|jours?|semaines?|mois|ans?|années?|días?|semanas?|mes(?:es)?|años?|يوم(?:ًا)?|أيام|أسبوع|أسابيع|شهر(?:ا)?|أشهر|سنة|سنوات|عام|أعوام)";
+
+    // Alternatives are tried in order at each position, longest forms first: dates, amounts, percentages, durations, then bare numbers.
     [GeneratedRegex(
-        @"(?:\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s\d{1,2}(?:st|nd|rd|th)?(?:,?\s\d{4})?\b)"
-        + @"|(?:\b\d{1,2}(?:st|nd|rd|th)?\s(?:of\s)?(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?(?:,?\s\d{4})?\b)"
+        @"(?:\b" + Month + @"\.?\s\d{1,2}(?:st|nd|rd|th)?(?:,?\s\d{4})?\b)"
+        + @"|(?:\b\d{1,2}(?:st|nd|rd|th)?\s(?:of\s)?" + Month + @"\.?(?:,?\s\d{4})?\b)"
+        + @"|(?:\b\d{1,2}(?:\.|º|er)?\s(?:de\s)?\p{L}+\s(?:de\s)?\d{4}\b)"
         + @"|(?:\b\d{4}-\d{2}-\d{2}\b)|(?:\b\d{1,2}[/.]\d{1,2}[/.]\d{2,4}\b)"
         + @"|(?:\d{1,4}年(?:\d{1,2}月(?:\d{1,2}日)?)?)"
-        + @"|(?:(?:US\$|[$€£¥]|\b(?:USD|EUR|GBP|CAD|AUD|JPY|CHF)\s?)\d+(?:[,.]\d+)*(?:\s?(?:trillion|billion|million|thousand|[kKmMbB]\b))?)"
-        + @"|(?:\d+(?:[,.]\d+)*\s?(?:dollars|euros|pounds|USD|EUR|GBP)\b)"
-        + @"|(?:\d+(?:[,.]\d+)*\s?(?:%|％|percent\b|per\scent\b))"
-        + @"|(?:\d+(?:[,.]\d+)*[\s-]?(?:(?:business|calendar|working)\s)?(?:seconds?|minutes?|hours?|days?|weeks?|months?|years?)\b)"
+        + @"|(?:人民币" + Num + @"元)"
+        + @"|(?:(?:US\$|[$€£¥]|\b(?:USD|EUR|GBP|CAD|AUD|JPY|CHF)\s?)" + Num + @"(?:\s?(?:trillion|billion|million|thousand|[kKmMbB]\b))?)"
+        + @"|(?:" + Num + @"\s?(?:dollars|euros|pounds|USD|EUR|GBP|CNY|JPY)\b)"
+        + @"|(?:" + Num + @"\s?(?:元|円|دولار\b|يورو\b))"
+        + @"|(?:" + Num + @"\s?(?:%|％|٪|percent\b|per\scent\b))"
+        + @"|(?:" + Num + @"[\s-]?(?:(?:business|calendar|working)\s)?" + Unit + @"\b)"
         + @"|(?:[〇零一二三四五六七八九十百千万两]+(?:日間|个月|個月|日|天|週|周|月|年))"
         + @"|(?:\d+\s?(?:日間|ヶ月|か月|ヵ月|个月|個月|개월|日|天|週|周|月|年|일|년))"
-        + @"|(?:\d+(?:[,.]\d+)*)",
+        + @"|(?:" + Num + @")",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex Value();
 

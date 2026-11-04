@@ -235,4 +235,35 @@ public class GroupingTests
         Comparison c = Helpers.Compare(Make("The Buyer shall pay the price within 30 days of invoice.", false), Make("The Buyer shall pay the price within 60 days of invoice.", true));
         Assert.True(c.Changes.Length <= 2, Show(c));
     }
+    [Theory]
+    [InlineData("The date is 24 ديسمبر 2027 exactly.", "The date is 24 فبراير 2026 exactly.", "24 ديسمبر 2027", "24 فبراير 2026")]
+    [InlineData("Vertrag vom 24. Dezember 2027 gilt weiter.", "Vertrag vom 3. März 2026 gilt weiter.", "24. Dezember 2027", "3. März 2026")]
+    [InlineData("Fecha: 24 de diciembre de 2027 firme.", "Fecha: 2 de febrero de 2026 firme.", "24 de diciembre de 2027", "2 de febrero de 2026")]
+    [InlineData("Le fournisseur livre les produits au plus tard le 24 décembre 2027 sans retard.", "Le fournisseur livre les produits au plus tard le 3 mars 2026 sans retard.", "24 décembre 2027", "3 mars 2026")]
+    [InlineData("Frais de 1 250 EUR par mois dus.", "Frais de 1 520 EUR par mois dus.", "1 250 EUR", "1 520 EUR")]
+    [InlineData("付款人民币1,200元即可。", "付款人民币2,100元即可。", "人民币1,200元", "人民币2,100元")]
+    public void ADateOrAmountInAnyMeasuredLanguageIsOneChange(string oldText, string newText, string oldValue, string newValue)
+    {
+        Change ch = Single(Cmp(oldText, newText));
+        Assert.Equal(oldValue, ch.Old.Text);
+        Assert.Equal(newValue, ch.New.Text);
+    }
+
+    [Fact]
+    public void AMovedParagraphWithAnInnerEditIsOneDisplayRegion()
+    {
+        string moved = "The Supplier shall deliver the Goods to the Buyer within 30 days of receiving a written purchase order.";
+        string movedNew = "The Supplier shall deliver the Goods to the Buyer within 60 days of receiving a written purchase order.";
+        string x = "Unrelated first paragraph about confidentiality of all information exchanged between the parties here.";
+        string y = "Second unrelated paragraph concerning governing law and the courts of the State of New York only.";
+        string z = "Third separate paragraph on assignment, which requires the written consent of the other party always.";
+        Comparison c = Helpers.Compare(Helpers.Text(moved, x, y, z), Helpers.Text(x, y, z, movedNew));
+        Change[] ofLink = [.. c.Changes.Where(ch => ch.Kind == ChangeKind.Move)];
+        Assert.Single(ofLink);
+        int linkId = ofLink[0].LinkId;
+        int[] ids = [.. c.Changes.Where(ch => ch.LinkId == linkId).Select(ch => ch.Id)];
+        Assert.True(ids.Length >= 2, Show(c));
+        Assert.Single(c.Groups.Where(g => g.ChangeIds.Contains(ids[0])));
+        Assert.Equal(ids.Length, c.Groups.Single(g => g.ChangeIds.Contains(ids[0])).ChangeIds.Length);
+    }
 }

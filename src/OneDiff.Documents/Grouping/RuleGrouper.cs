@@ -32,7 +32,7 @@ internal static class RuleGrouper
     /// <summary>The largest gap, in characters, the local join looks at; a longer gap is never "a few words".</summary>
     private const int MaxLocalGap = 200;
 
-    public static ChangeSet Group(PairDiffs diffs, CancellationToken ct) => ReferenceGrouper.Group(diffs, ct, Units);
+    public static ChangeSet Group(PairDiffs diffs, CancellationToken ct) => ReferenceGrouper.Group(diffs, ct, Units, groupMoves: true);
 
     private sealed class Unit
     {
