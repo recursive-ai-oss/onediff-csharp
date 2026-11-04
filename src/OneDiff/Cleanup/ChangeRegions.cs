@@ -1,3 +1,5 @@
+using System.Buffers;
+
 namespace OneDiff.Cleanup;
 
 /// <summary>
@@ -5,40 +7,58 @@ namespace OneDiff.Cleanup;
 /// ranges, so neighbouring regions can be merged by dropping the equality between them. Merging only turns equal tokens into
 /// a deletion plus an insertion of the same tokens, so the result is always a valid script for the same sequences.
 /// </summary>
-internal sealed class ChangeRegions
+internal sealed class ChangeRegions : IDisposable
 {
-    private readonly int[] oldStart;
-    private readonly int[] oldEnd;
-    private readonly int[] newStart;
-    private readonly int[] newEnd;
-    private readonly int[] next;
-    private readonly int[] previous;
-    private readonly bool[] alive;
+    // Rented from the pool: cleanup runs on every diff a caller shows, and most have only a few regions.
+    private int[] oldStart;
+    private int[] oldEnd;
+    private int[] newStart;
+    private int[] newEnd;
+    private int[] next;
+    private int[] previous;
     private readonly int count;
+    private bool merged;
 
     private ChangeRegions(int count)
     {
         this.count = count;
-        oldStart = new int[count];
-        oldEnd = new int[count];
-        newStart = new int[count];
-        newEnd = new int[count];
-        next = new int[count];
-        previous = new int[count];
-        alive = new bool[count];
+        oldStart = ArrayPool<int>.Shared.Rent(count);
+        oldEnd = ArrayPool<int>.Shared.Rent(count);
+        newStart = ArrayPool<int>.Shared.Rent(count);
+        newEnd = ArrayPool<int>.Shared.Rent(count);
+        next = ArrayPool<int>.Shared.Rent(count);
+        previous = ArrayPool<int>.Shared.Rent(count);
         for (int i = 0; i < count; i++)
         {
             next[i] = i + 1 < count ? i + 1 : -1;
             previous[i] = i - 1;
-            alive[i] = true;
         }
+    }
+
+    /// <summary>True when <see cref="Eliminate"/> merged at least one pair of regions.</summary>
+    public bool Merged => merged;
+
+    public void Dispose()
+    {
+        if (oldStart is null)
+        {
+            return;
+        }
+
+        ArrayPool<int>.Shared.Return(oldStart);
+        ArrayPool<int>.Shared.Return(oldEnd);
+        ArrayPool<int>.Shared.Return(newStart);
+        ArrayPool<int>.Shared.Return(newEnd);
+        ArrayPool<int>.Shared.Return(next);
+        ArrayPool<int>.Shared.Return(previous);
+        oldStart = oldEnd = newStart = newEnd = next = previous = null!;
     }
 
     public int Count => count;
 
-    public static ChangeRegions From(EditScript script)
+    /// <summary>Number of maximal runs of non-equal edits.</summary>
+    public static int CountRegions(EditScript script)
     {
-        // A region is a maximal run of non-equal edits; count them, then fill.
         ReadOnlySpan<Edit> edits = script.Edits;
         int regions = 0;
         for (int i = 0; i < edits.Length; i++)
@@ -48,6 +68,15 @@ internal sealed class ChangeRegions
                 regions++;
             }
         }
+
+        return regions;
+    }
+
+    public static ChangeRegions From(EditScript script)
+    {
+        // A region is a maximal run of non-equal edits; count them, then fill.
+        ReadOnlySpan<Edit> edits = script.Edits;
+        int regions = CountRegions(script);
 
         var result = new ChangeRegions(regions);
         int r = -1;
@@ -108,7 +137,7 @@ internal sealed class ChangeRegions
                 previous[next[right]] = left;
             }
 
-            alive[right] = false;
+            merged = true;
             if (previous[left] >= 0)
             {
                 left = previous[left];
@@ -143,33 +172,40 @@ internal sealed class ChangeRegions
     /// insertion then starts with (or the reverse) keeps that shared text as an equality, e.g. <c>-abcxxx +xxxdef</c> becomes
     /// <c>-abc =xxx +def</c>, when the shared text is at least half of the shorter side.
     /// </summary>
-    public EditScript ToScript(TokenText oldText, TokenText newText, TokenEquality equality, bool extractOverlap, int oldLength, int newLength)
+    public EditScript ToScript(TokenText oldText, TokenText newText, TokenEquality equality, bool extractOverlap, EditScript original)
     {
+        // Nothing merged and no overlap to keep: the script is the one we were given.
+        if (!merged)
+        {
+            bool any = false;
+            if (extractOverlap)
+            {
+                for (int r = count > 0 ? 0 : -1; r >= 0 && !any; r = next[r])
+                {
+                    ChooseOverlap(r, oldText, newText, equality, out int afterDelete, out int afterInsert);
+                    any = afterDelete > 0 || afterInsert > 0;
+                }
+            }
+
+            if (!any)
+            {
+                return original;
+            }
+        }
+
         var builder = new EditScriptBuilder();
         int oldPos = 0;
-        for (int r = FirstAlive(); r >= 0; r = next[r])
+        // Region 0 is never merged into another (merging absorbs the right-hand region), so the list always starts there.
+        for (int r = count > 0 ? 0 : -1; r >= 0; r = next[r])
         {
             builder.Equal(oldStart[r] - oldPos);
             int dels = oldEnd[r] - oldStart[r];
             int ins = newEnd[r] - newStart[r];
             int overlapAfterDelete = 0;
             int overlapAfterInsert = 0;
-            if (extractOverlap && dels > 0 && ins > 0)
+            if (extractOverlap)
             {
-                // Longest suffix of the deletion that starts the insertion, and the mirror image.
-                int k1 = Overlap(oldText, oldStart[r], oldEnd[r], newText, newStart[r], newEnd[r], equality);
-                int k2 = Overlap(newText, newStart[r], newEnd[r], oldText, oldStart[r], oldEnd[r], equality);
-                int shorter = Math.Min(oldText.Chars(oldStart[r], oldEnd[r]), newText.Chars(newStart[r], newEnd[r]));
-                int chars1 = k1 > 0 ? oldText.Chars(oldEnd[r] - k1, oldEnd[r]) : 0;
-                int chars2 = k2 > 0 ? newText.Chars(newEnd[r] - k2, newEnd[r]) : 0;
-                if (chars1 >= chars2 && k1 > 0 && 2 * chars1 >= shorter)
-                {
-                    overlapAfterDelete = k1;
-                }
-                else if (k2 > 0 && 2 * chars2 >= shorter)
-                {
-                    overlapAfterInsert = k2;
-                }
+                ChooseOverlap(r, oldText, newText, equality, out overlapAfterDelete, out overlapAfterInsert);
             }
 
             if (overlapAfterDelete > 0)
@@ -193,24 +229,37 @@ internal sealed class ChangeRegions
             oldPos = oldEnd[r];
         }
 
-        builder.Equal(oldLength - oldPos);
+        builder.Equal(original.OldLength - oldPos);
         EditScript script = builder.ToEditScript();
-        return script.OldLength == oldLength && script.NewLength == newLength
+        return script.OldLength == original.OldLength && script.NewLength == original.NewLength
             ? script
             : throw new InvalidOperationException("cleanup produced a script of the wrong size");
     }
 
-    private int FirstAlive()
+    // For a region that both deletes and inserts: the longest suffix of the deletion that the insertion starts with (tokens kept as an
+    // equality after the deletion), or the mirror image, when the shared text is at least half of the shorter side.
+    private void ChooseOverlap(int r, TokenText oldText, TokenText newText, TokenEquality equality, out int afterDelete, out int afterInsert)
     {
-        for (int i = 0; i < count; i++)
+        afterDelete = 0;
+        afterInsert = 0;
+        if (oldEnd[r] == oldStart[r] || newEnd[r] == newStart[r])
         {
-            if (alive[i])
-            {
-                return i;
-            }
+            return;
         }
 
-        return -1;
+        int k1 = Overlap(oldText, oldStart[r], oldEnd[r], newText, newStart[r], newEnd[r], equality);
+        int k2 = Overlap(newText, newStart[r], newEnd[r], oldText, oldStart[r], oldEnd[r], equality);
+        int shorter = Math.Min(oldText.Chars(oldStart[r], oldEnd[r]), newText.Chars(newStart[r], newEnd[r]));
+        int chars1 = k1 > 0 ? oldText.Chars(oldEnd[r] - k1, oldEnd[r]) : 0;
+        int chars2 = k2 > 0 ? newText.Chars(newEnd[r] - k2, newEnd[r]) : 0;
+        if (chars1 >= chars2 && k1 > 0 && 2 * chars1 >= shorter)
+        {
+            afterDelete = k1;
+        }
+        else if (k2 > 0 && 2 * chars2 >= shorter)
+        {
+            afterInsert = k2;
+        }
     }
 
     // Longest suffix of text[from..to) that is a prefix of pattern[pFrom..pTo), in tokens. Knuth-Morris-Pratt: failure links over
@@ -218,7 +267,8 @@ internal sealed class ChangeRegions
     private static int Overlap(TokenText text, int from, int to, TokenText pattern, int pFrom, int pTo, TokenEquality equality)
     {
         int m = pTo - pFrom;
-        int[] failure = new int[m];
+        // Bounded: at most 128 ints (512 bytes) on the stack; longer patterns use the heap.
+        Span<int> failure = m <= 128 ? stackalloc int[m] : new int[m];
         int k = 0;
         for (int q = 1; q < m; q++)
         {

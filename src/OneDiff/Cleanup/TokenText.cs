@@ -3,7 +3,7 @@ using OneDiff.Tokenization;
 namespace OneDiff.Cleanup;
 
 /// <summary>One side of a <see cref="TextDiff"/> as cleanup needs it: the text and its tokens.</summary>
-internal sealed class TokenText
+internal readonly struct TokenText
 {
     private readonly string text;
     private readonly TokenRange[]? tokens; // null: one char per token

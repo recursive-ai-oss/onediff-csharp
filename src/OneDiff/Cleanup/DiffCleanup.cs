@@ -34,13 +34,19 @@ public static class DiffCleanup
         }
 
         var (oldText, newText, equality) = Prepare(diff);
-        // Joining edits that can slide together first leaves fewer, larger regions for the elimination rule to judge.
-        TextDiff joined = With(diff, LosslessShift.Apply(diff, oldText, newText, equality, scoreMoves: false));
-        ChangeRegions regions = ChangeRegions.From(joined.Script);
-        regions.Eliminate(oldText, newText, ChangeRegions.Rule.Semantic, 0);
-        EditScript script = regions.ToScript(oldText, newText, equality, extractOverlap: true, diff.Script.OldLength, diff.Script.NewLength);
-        TextDiff merged = With(diff, script);
-        return With(diff, LosslessShift.Apply(merged, oldText, newText, equality, scoreMoves: true));
+        // Joining edits that can slide together first leaves fewer, larger regions for the elimination rule to judge. With a single
+        // changed region there is nothing to join or merge, and only the overlap and boundary steps below can apply.
+        bool several = ChangeRegions.CountRegions(diff.Script) > 1;
+        TextDiff joined = several ? With(diff, LosslessShift.Apply(diff, oldText, newText, equality, scoreMoves: false)) : diff;
+        using ChangeRegions regions = ChangeRegions.From(joined.Script);
+        if (regions.Count > 1)
+        {
+            regions.Eliminate(oldText, newText, ChangeRegions.Rule.Semantic, 0);
+        }
+
+        EditScript script = regions.ToScript(oldText, newText, equality, extractOverlap: true, joined.Script);
+        TextDiff merged = With(joined, script);
+        return With(merged, LosslessShift.Apply(merged, oldText, newText, equality, scoreMoves: true));
     }
 
     /// <summary>
@@ -68,10 +74,18 @@ public static class DiffCleanup
         }
 
         var (oldText, newText, equality) = Prepare(diff);
-        ChangeRegions regions = ChangeRegions.From(diff.Script);
-        regions.Eliminate(oldText, newText, ChangeRegions.Rule.Efficiency, editCost);
-        TextDiff merged = With(diff, regions.ToScript(oldText, newText, equality, extractOverlap: false, diff.Script.OldLength, diff.Script.NewLength));
-        return With(diff, LosslessShift.Apply(merged, oldText, newText, equality, scoreMoves: false));
+        using ChangeRegions regions = ChangeRegions.From(diff.Script);
+        TextDiff merged = diff;
+        if (regions.Count > 1)
+        {
+            regions.Eliminate(oldText, newText, ChangeRegions.Rule.Efficiency, editCost);
+            if (regions.Merged)
+            {
+                merged = With(diff, regions.ToScript(oldText, newText, equality, extractOverlap: false, diff.Script));
+            }
+        }
+
+        return With(merged, LosslessShift.Apply(merged, oldText, newText, equality, scoreMoves: false));
     }
 
     /// <summary>
@@ -99,4 +113,6 @@ public static class DiffCleanup
         ReferenceEquals(script, diff.Script)
             ? diff
             : new TextDiff(diff.OldText, diff.NewText, diff.Kind, diff.OldTokenRanges, diff.NewTokenRanges, script, diff.Comparer);
+
+    // Anything that alters the script goes through With, so a pass that changes nothing returns the diff it was given.
 }
