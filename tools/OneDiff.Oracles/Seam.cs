@@ -102,6 +102,12 @@ internal sealed class OneDiffSeam : ITextCoreSeam
             },
         };
         TextMerge merge = Diff.Merge(baseText, ours, theirs, settings);
+        if (merge.Diagnostic.CostCapReached)
+        {
+            // The corpus is expected to stay under the cap; say so loudly if a case does not.
+            Console.Error.WriteLine($"merge cost cap reached ({style})");
+        }
+
         return new MergeOutcome(merge.Text, merge.ConflictCount);
     }
 

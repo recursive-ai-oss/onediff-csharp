@@ -1,12 +1,14 @@
 using System.Text;
+using OneDiff.Algorithms;
 
 namespace OneDiff.Merge;
 
 /// <summary>The structured outcome of a three-way merge over any sequence of items.</summary>
 public sealed class ItemMerge
 {
-    internal ItemMerge(MergeRegion[] regions, int conflictCount)
+    internal ItemMerge(MergeRegion[] regions, int conflictCount, DiffDiagnostic diagnostic)
     {
+        Diagnostic = diagnostic;
         Regions = regions;
         ConflictCount = conflictCount;
     }
@@ -19,6 +21,9 @@ public sealed class ItemMerge
 
     /// <summary>True when <see cref="ConflictCount"/> is above zero.</summary>
     public bool HasConflicts => ConflictCount > 0;
+
+    /// <summary>Whether <see cref="MergeSettings.MaxWork"/> ran out (the merge is then coarser but complete) and how much work was spent.</summary>
+    public DiffDiagnostic Diagnostic { get; }
 }
 
 /// <summary>The outcome of a three-way merge of text, line by line.</summary>
@@ -31,8 +36,9 @@ public sealed class TextMerge
     private readonly int[] oursStarts;
     private readonly int[] theirsStarts;
 
-    internal TextMerge(string text, MergeRegion[] regions, int conflictCount, string baseText, string oursText, string theirsText, int[] baseStarts, int[] oursStarts, int[] theirsStarts)
+    internal TextMerge(string text, MergeRegion[] regions, int conflictCount, string baseText, string oursText, string theirsText, int[] baseStarts, int[] oursStarts, int[] theirsStarts, DiffDiagnostic diagnostic)
     {
+        Diagnostic = diagnostic;
         Text = text;
         Regions = regions;
         ConflictCount = conflictCount;
@@ -58,6 +64,12 @@ public sealed class TextMerge
 
     /// <summary>True when <see cref="ConflictCount"/> is above zero.</summary>
     public bool HasConflicts => ConflictCount > 0;
+
+    /// <summary>
+    /// Whether <see cref="MergeSettings.MaxWork"/> ran out and how much work was spent. When it ran out the merge is still complete
+    /// and correct, only coarser: unsolved stretches count as changed, so conflicts can be larger.
+    /// </summary>
+    public DiffDiagnostic Diagnostic { get; }
 
     /// <summary>Number of lines in one of the inputs. Lines end at <c>\n</c> (a <c>\r</c> before it stays part of the line); the last one may have no ending.</summary>
     /// <param name="side">Which input.</param>
@@ -129,8 +141,9 @@ public static class ThreeWayMerge
         int[] baseIds = interner.Intern(baseItems);
         int[] oursIds = interner.Intern(ours);
         int[] theirsIds = interner.Intern(theirs);
-        List<Segment> segments = Diff3Core.Merge(baseIds, oursIds, theirsIds, settings, null, cancellationToken);
-        return new ItemMerge(ToRegions(segments), CountOpen(segments, settings));
+        var budget = new Budget(settings.MaxWork);
+        List<Segment> segments = Diff3Core.Merge(baseIds, oursIds, theirsIds, settings, null, cancellationToken, null, budget);
+        return new ItemMerge(ToRegions(segments), CountOpen(segments, settings), budget.ToDiagnostic());
     }
 
     /// <summary>
@@ -169,9 +182,10 @@ public static class ThreeWayMerge
         int[] theirsIds = InternLines(theirs, theirsStarts, ids, lookup, alnum);
 
         Aligner? aligner = alignerFor?.Invoke(ids.OrderBy(kv => kv.Value).Select(kv => kv.Key).ToArray());
-        List<Segment> segments = Diff3Core.Merge(baseIds, oursIds, theirsIds, settings, alnum.ToArray(), cancellationToken, aligner);
+        var budget = new Budget(settings.MaxWork);
+        List<Segment> segments = Diff3Core.Merge(baseIds, oursIds, theirsIds, settings, alnum.ToArray(), cancellationToken, aligner, budget);
         string text = new TextRenderer(baseText, ours, theirs, baseStarts, oursStarts, theirsStarts, settings).Render(segments);
-        return new TextMerge(text, ToRegions(segments), CountOpen(segments, settings), baseText, ours, theirs, baseStarts, oursStarts, theirsStarts);
+        return new TextMerge(text, ToRegions(segments), CountOpen(segments, settings), baseText, ours, theirs, baseStarts, oursStarts, theirsStarts, budget.ToDiagnostic());
     }
 
     private static void Validate(MergeSettings settings)
@@ -185,6 +199,8 @@ public static class ThreeWayMerge
         {
             throw new ArgumentOutOfRangeException(nameof(settings), "undefined conflict resolution");
         }
+
+        ArgumentOutOfRangeException.ThrowIfNegative(settings.MaxWork, nameof(settings));
 
         if (settings.MarkerSize < 1)
         {

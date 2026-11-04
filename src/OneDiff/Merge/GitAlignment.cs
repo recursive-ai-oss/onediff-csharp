@@ -1,3 +1,5 @@
+using OneDiff.Algorithms;
+
 namespace OneDiff.Merge;
 
 /// <summary>
@@ -7,18 +9,22 @@ namespace OneDiff.Merge;
 /// </summary>
 internal static class GitAlignment
 {
-    public static List<Hunk> Hunks(int[] first, int[] second, CancellationToken cancellationToken)
+    /// <summary>
+    /// Aligns <paramref name="first"/> with <paramref name="second"/>. With a budget, the search stops once the budget is spent and the
+    /// stretches it had not solved are reported as wholly changed on both sides, which is a valid, coarser alignment.
+    /// </summary>
+    public static List<Hunk> Hunks(int[] first, int[] second, CancellationToken cancellationToken, Budget? budget = null)
     {
         bool[] firstChanged = new bool[first.Length];
         bool[] secondChanged = new bool[second.Length];
-        Mark(first, second, firstChanged, secondChanged, cancellationToken);
-        Diff3Core.Compact(firstChanged, first, secondChanged);
-        Diff3Core.Compact(secondChanged, second, firstChanged);
+        Mark(first, second, firstChanged, secondChanged, budget, cancellationToken);
+        Diff3Core.Compact(firstChanged, first, secondChanged, budget);
+        Diff3Core.Compact(secondChanged, second, firstChanged, budget);
 
         return Diff3Core.ToHunks(firstChanged, secondChanged);
     }
 
-    private static void Mark(int[] a, int[] b, bool[] aChanged, bool[] bChanged, CancellationToken cancellationToken)
+    private static void Mark(int[] a, int[] b, bool[] aChanged, bool[] bChanged, Budget? budget, CancellationToken cancellationToken)
     {
         int prefix = 0;
         int most = Math.Min(a.Length, b.Length);
@@ -87,7 +93,7 @@ internal static class GitAlignment
 
         bool[] xChanged = new bool[x.Length];
         bool[] yChanged = new bool[y.Length];
-        var search = new Search(x, y, xChanged, yChanged, cancellationToken);
+        var search = new Search(x, y, xChanged, yChanged, budget, cancellationToken);
         search.Compare(0, x.Length, 0, y.Length);
         for (int i = 0; i < x.Length; i++)
         {
@@ -138,51 +144,60 @@ internal static class GitAlignment
         }
 
         var kept = new List<int>();
-        for (int i = 0; i < kind.Length; i++)
+        int index = 0;
+        while (index < kind.Length)
         {
-            bool keep = kind[i] == Plain;
-            if (kind[i] == ManyCopies)
+            if (kind[index] == Plain)
             {
-                int noCopyLeft = 0;
-                int many = 2;
-                for (int j = i - 1; j >= 0 && kind[j] != Plain; j--)
-                {
-                    if (kind[j] == NoCopy)
-                    {
-                        noCopyLeft++;
-                    }
-                    else
-                    {
-                        many++;
-                    }
-                }
-
-                int noCopyRight = 0;
-                for (int j = i + 1; j < kind.Length && kind[j] != Plain; j++)
-                {
-                    if (kind[j] == NoCopy)
-                    {
-                        noCopyRight++;
-                    }
-                    else
-                    {
-                        many++;
-                    }
-                }
-
-                keep = noCopyLeft == 0 || noCopyRight == 0 || noCopyLeft + noCopyRight <= 3 * many;
+                kept.Add(from + index);
+                index++;
+                continue;
             }
 
-            if (keep)
+            // One run of items that are not plain. The looks to the left and right of a many-copies item stay inside this run, so
+            // the counts come from running totals and the run is read once (the same answer as looking from every item, without
+            // reading the run again for each many-copies item in it).
+            int end = index;
+            int noCopyTotal = 0;
+            int manyTotal = 0;
+            while (end < kind.Length && kind[end] != Plain)
             {
-                kept.Add(from + i);
+                if (kind[end] == NoCopy)
+                {
+                    noCopyTotal++;
+                }
+                else
+                {
+                    manyTotal++;
+                }
+
+                end++;
             }
+
+            int many = 2 + (manyTotal - 1);
+            int noCopyLeft = 0;
+            for (int i = index; i < end; i++)
+            {
+                if (kind[i] == NoCopy)
+                {
+                    noCopyLeft++;
+                    continue;
+                }
+
+                int noCopyRight = noCopyTotal - noCopyLeft;
+                if (noCopyLeft == 0 || noCopyRight == 0 || noCopyLeft + noCopyRight <= 3 * many)
+                {
+                    kept.Add(from + i);
+                }
+            }
+
+            index = end;
         }
 
         return kept;
     }
 
-    private sealed class Search(int[] a, int[] b, bool[] aChanged, bool[] bChanged, CancellationToken cancellationToken)
+    private sealed class Search(int[] a, int[] b, bool[] aChanged, bool[] bChanged, Budget? budget, CancellationToken cancellationToken)
     {
         private int[] forward = new int[16];
         private int[] reverse = new int[16];
@@ -215,7 +230,17 @@ internal static class GitAlignment
                 return;
             }
 
-            (int x, int y) = MiddleSnake(aLow, aHigh, bLow, bHigh);
+            // Out of budget: this stretch, and every one not yet searched, is reported as changed on both sides.
+            (int X, int Y)? split = budget is { IsSpent: true } ? null : MiddleSnake(aLow, aHigh, bLow, bHigh);
+            if (split is null)
+            {
+                budget!.Exceeded = true;
+                Array.Fill(aChanged, true, aLow, aHigh - aLow);
+                Array.Fill(bChanged, true, bLow, bHigh - bLow);
+                return;
+            }
+
+            (int x, int y) = split.Value;
             if ((x == aLow && y == bLow) || (x == aHigh && y == bHigh))
             {
                 // The split would not make the problem smaller.
@@ -230,7 +255,7 @@ internal static class GitAlignment
 
         // Myers 1986 §4b: grow forward paths from the start and reverse paths from the end, one edit at a time, until they overlap;
         // the overlap is where the problem splits.
-        private (int X, int Y) MiddleSnake(int aLow, int aHigh, int bLow, int bHigh)
+        private (int X, int Y)? MiddleSnake(int aLow, int aHigh, int bLow, int bHigh)
         {
             int n = aHigh - aLow;
             int m = bHigh - bLow;
@@ -248,6 +273,16 @@ internal static class GitAlignment
             reverse[offset + 1] = 0;
             for (int d = 0; d <= max; d++)
             {
+                // Work is the diagonals visited plus the items the snakes cross; the check per round overshoots by at most one round.
+                if (budget is not null)
+                {
+                    budget.Work += (2 * (long)d) + 2;
+                    if (budget.IsSpent)
+                    {
+                        return null;
+                    }
+                }
+
                 for (int pass = 0; pass < 2; pass++)
                 {
                     if (pass == 0)
@@ -259,10 +294,16 @@ internal static class GitAlignment
                             bool up = forward[offset + k - 1] < forward[offset + k + 1];
                             int x = k == -d || (k != d && up) ? forward[offset + k + 1] : forward[offset + k - 1] + 1;
                             int y = x - k;
+                            int from = x;
                             while (x < n && y < m && a[aLow + x] == b[bLow + y])
                             {
                                 x++;
                                 y++;
+                            }
+
+                            if (budget is not null)
+                            {
+                                budget.Work += x - from;
                             }
 
                             forward[offset + k] = x;
@@ -280,10 +321,16 @@ internal static class GitAlignment
                             bool up = reverse[offset + k - 1] < reverse[offset + k + 1];
                             int x = k == -d || (k != d && up) ? reverse[offset + k + 1] : reverse[offset + k - 1] + 1;
                             int y = x - k;
+                            int from = x;
                             while (x < n && y < m && a[aHigh - 1 - x] == b[bHigh - 1 - y])
                             {
                                 x++;
                                 y++;
+                            }
+
+                            if (budget is not null)
+                            {
+                                budget.Work += x - from;
                             }
 
                             reverse[offset + k] = x;

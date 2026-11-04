@@ -50,4 +50,17 @@ Observed: marker lines (and the ending added to an unterminated last line) use C
 
 ## Agreement with git
 
-On the 2,599 real merge triples of the corpus, the text produced equals the output of `git merge-file` 2.51.2 byte for byte in the merge, diff3 and zdiff3 styles, with git choosing its own alignment. The base-to-side alignments themselves still differ from `git diff` on a few corpus pairs (26 of 5,198); none of them changes a merge. Very large inputs may differ from git where git gives up searching for the shortest script, which is not modelled here; this alignment has no cost cap and is limited only by cancellation.
+On the 2,599 real merge triples of the corpus, the text produced equals the output of `git merge-file` 2.51.2 byte for byte in the merge, diff3 and zdiff3 styles, with git choosing its own alignment. The base-to-side alignments themselves still differ from `git diff` on a few corpus pairs (26 of 5,198); none of them changes a merge. Very large inputs may differ from git where git gives up searching for the shortest script, which is not modelled here; the cost cap below is OneDiff's own.
+
+## Cost cap
+
+The alignments of one merge share a budget, `MergeSettings.MaxWork` (2^31 by default, the default of the diff algorithms; zero or more). Work is counted as in the Myers search: one unit per diagonal visited, per item compared along a diagonal, and per item slid. Items that cannot match and the frequent-item rule (steps 2 to 4 above) are linear and not counted.
+
+When the budget runs out:
+
+- the search stops, and every stretch it had not solved is reported as changed on both sides (the same coarsening Myers uses: unsearched parts become delete and insert);
+- sliding (step 6) stops where it is; each slide step keeps the alignment valid;
+- the merge carries on with the hunks it has. Hunks that are longer than needed only make conflicts larger, or turn a clean merge into a conflict. A change of either side is never dropped: it is applied or inside a conflict, and the regions still tile all three inputs;
+- `TextMerge.Diagnostic` and `ItemMerge.Diagnostic` have `CostCapReached` set and `Work` holds the work spent, a little over the cap at most (the cap is checked once per search round, so the overshoot is bounded by the size of the inputs).
+
+A merge that stays within the budget is byte-for-byte what it would be without a cap. With the default cap this never happens on the merge corpus. The patience and histogram alignments receive what is left of the budget and report the same way.

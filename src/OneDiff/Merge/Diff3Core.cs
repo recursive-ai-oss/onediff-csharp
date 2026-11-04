@@ -41,9 +41,9 @@ internal static class Diff3Core
 {
     // Khanna et al. 2007 §2: diff3 aligns the base with each side, then walks both change lists together. A stretch where only one
     // side changed is taken from that side; a stretch where both changed is a conflict unless the two sides made the same change.
-    public static List<Segment> Merge(int[] baseIds, int[] oursIds, int[] theirsIds, MergeSettings settings, bool[]? hasAlnum, CancellationToken cancellationToken, Aligner? aligner = null)
+    public static List<Segment> Merge(int[] baseIds, int[] oursIds, int[] theirsIds, MergeSettings settings, bool[]? hasAlnum, CancellationToken cancellationToken, Aligner? aligner = null, Budget? budget = null)
     {
-        aligner ??= (a, b) => Hunks(a, b, settings.Algorithm, cancellationToken);
+        aligner ??= (a, b) => Hunks(a, b, settings.Algorithm, cancellationToken, budget);
         List<Hunk> oursHunks = aligner(baseIds, oursIds);
         List<Hunk> theirsHunks = aligner(baseIds, theirsIds);
 
@@ -425,24 +425,44 @@ internal static class Diff3Core
             && a.AsSpan(aStart, aEnd - aStart).SequenceEqual(b.AsSpan(bStart, bEnd - bStart));
     }
 
-    public static EditScript Align(ReadOnlySpan<int> first, ReadOnlySpan<int> second, DiffAlgorithm algorithm, CancellationToken cancellationToken) => algorithm switch
+    // With a budget, the cap left is handed to the algorithm; an algorithm that reaches it returns a coarser, complete script.
+    public static EditScript Align(ReadOnlySpan<int> first, ReadOnlySpan<int> second, DiffAlgorithm algorithm, CancellationToken cancellationToken, Budget? budget = null)
     {
-        DiffAlgorithm.Myers => MyersDiff.Compute(first, second, cancellationToken),
-        DiffAlgorithm.Patience => PatienceDiff.Compute(first, second, cancellationToken),
-        DiffAlgorithm.Histogram => HistogramDiff.Compute(first, second, cancellationToken),
-        _ => throw new ArgumentOutOfRangeException(nameof(algorithm)),
-    };
+        if (budget is null)
+        {
+            return algorithm switch
+            {
+                DiffAlgorithm.Myers => MyersDiff.Compute(first, second, cancellationToken),
+                DiffAlgorithm.Patience => PatienceDiff.Compute(first, second, cancellationToken),
+                DiffAlgorithm.Histogram => HistogramDiff.Compute(first, second, cancellationToken),
+                _ => throw new ArgumentOutOfRangeException(nameof(algorithm)),
+            };
+        }
+
+        long left = Math.Max(0, budget.Cap - budget.Work);
+        DiffDiagnostic diagnostic;
+        EditScript script = algorithm switch
+        {
+            DiffAlgorithm.Myers => MyersDiff.Compute(first, second, left, out diagnostic, cancellationToken),
+            DiffAlgorithm.Patience => PatienceDiff.Compute(first, second, left, out diagnostic, cancellationToken),
+            DiffAlgorithm.Histogram => HistogramDiff.Compute(first, second, left, out diagnostic, cancellationToken),
+            _ => throw new ArgumentOutOfRangeException(nameof(algorithm)),
+        };
+        budget.Work += diagnostic.Work;
+        budget.Exceeded |= diagnostic.CostCapReached;
+        return script;
+    }
 
     /// <summary>The runs of change between two sequences, with every run slid as far toward the end as it will go.</summary>
-    public static List<Hunk> Hunks(int[] first, int[] second, DiffAlgorithm algorithm, CancellationToken cancellationToken)
+    public static List<Hunk> Hunks(int[] first, int[] second, DiffAlgorithm algorithm, CancellationToken cancellationToken, Budget? budget = null)
     {
         // The merge's own Myers mode follows git's alignment; the other algorithms are the library's.
         if (algorithm == DiffAlgorithm.Myers)
         {
-            return GitAlignment.Hunks(first, second, cancellationToken);
+            return GitAlignment.Hunks(first, second, cancellationToken, budget);
         }
 
-        EditScript script = Align(first, second, algorithm, cancellationToken);
+        EditScript script = Align(first, second, algorithm, cancellationToken, budget);
         bool[] firstChanged = new bool[first.Length];
         bool[] secondChanged = new bool[second.Length];
         foreach (Edit e in script.Edits)
@@ -458,8 +478,8 @@ internal static class Diff3Core
             }
         }
 
-        Compact(firstChanged, first, secondChanged);
-        Compact(secondChanged, second, firstChanged);
+        Compact(firstChanged, first, secondChanged, budget);
+        Compact(secondChanged, second, firstChanged, budget);
         return ToHunks(firstChanged, secondChanged);
     }
 
@@ -511,7 +531,7 @@ internal static class Diff3Core
     // Then slide it down as far as it goes, noting each place where it lines up with a run of the other sequence (the same
     // number of unchanged items come before both). If sliding down joins it to the next run, start over with the joined run. At
     // the end, settle at the last place that lined up, or at the bottom when none did.
-    internal static void Compact(bool[] changed, int[] items, bool[] other)
+    internal static void Compact(bool[] changed, int[] items, bool[] other, Budget? budget = null)
     {
         int n = changed.Length;
         HashSet<int> otherGaps = GapsOf(other);
@@ -524,6 +544,13 @@ internal static class Diff3Core
             {
                 i++;
                 continue;
+            }
+
+            // Sliding is a refinement: every single step leaves a valid alignment, so running out of budget just stops here.
+            if (budget is { IsSpent: true })
+            {
+                budget.Exceeded = true;
+                return;
             }
 
             int start = i;
@@ -546,6 +573,12 @@ internal static class Diff3Core
                     start--;
                     end--;
                     unchanged--;
+                    if (budget is not null && ++budget.Work > budget.Cap)
+                    {
+                        budget.Exceeded = true;
+                        return;
+                    }
+
                     if (start > 0 && changed[start - 1])
                     {
                         (int Start, int End, int Unchanged) previous = done[^1];
@@ -571,6 +604,12 @@ internal static class Diff3Core
                         start++;
                         end++;
                         unchanged++;
+                        if (budget is not null && ++budget.Work > budget.Cap)
+                        {
+                            budget.Exceeded = true;
+                            return;
+                        }
+
                         if (end < n && changed[end])
                         {
                             while (end < n && changed[end])
