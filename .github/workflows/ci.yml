@@ -68,20 +68,22 @@ jobs:
           path: ${{ runner.temp }}/packages/*
 
   wasm:
-    # NOT YET ACTIVE. Running the core tests in a headless browser needs, beyond what is here:
-    #   - a browser-wasm test host project (tests/Wasm) that references the core and runs the same checks as tests/OneDiff.Tests
-    #     (xunit.v3 has no browser runner, so the checks are shared as source or moved to a plain assertion runner);
-    #   - the wasm-tools workload (`dotnet workload install wasm-tools`) and a Chromium driver (Playwright browsers or the runner's Chrome);
-    #   - a small page/launcher that loads the app, waits for its exit code and fails the job on non-zero.
-    # Turn the job on by changing the condition to run on every push once those exist.
-    if: github.event_name == 'workflow_dispatch'
+    # The core's tests, compiled into a browser WebAssembly app and run in headless Chrome (xunit.v3 has no browser runner, so
+    # tests/OneDiff.Tests.Wasm compiles the same test sources and runs them with a small runner). Fails on any test failure.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Artifacts directory
+        shell: bash
+        run: echo "ONEDIFF_ARTIFACTS=$RUNNER_TEMP/artifacts" >> "$GITHUB_ENV"
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
-      - name: Browser WebAssembly tests (placeholder)
-        run: echo "not implemented yet"; exit 1
+      - name: Install the wasm-tools workload
+        run: dotnet workload install wasm-tools
+      - name: Install the browser driver (the runner's Google Chrome is used as the browser)
+        run: python3 -m pip install playwright==1.57.0
+      - name: Publish and run the browser tests
+        run: tests/OneDiff.Tests.Wasm/run.sh "$RUNNER_TEMP/wasm"

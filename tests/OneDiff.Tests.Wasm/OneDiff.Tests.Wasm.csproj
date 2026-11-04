@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk.WebAssembly">
+
+  <!--
+    Runs the core's test sources inside a browser. xunit.v3 has no browser runner, so the same test files are compiled into this
+    host (against the real xunit attributes and Assert) and run by the small runner in Program.cs. The assembly is named like the
+    test project so the tests see the library's internals the same way. Build output is the AppBundle folder that run.py serves.
+  -->
+  <PropertyGroup>
+    <AssemblyName>$(LibName).Tests</AssemblyName>
+    <RootNamespace>$(LibName).Tests</RootNamespace>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>false</IsTestProject>
+    <NoWarn>$(NoWarn);xUnit1051</NoWarn>
+    <!-- The runner finds tests by reflection, so nothing may be trimmed away. -->
+    <PublishTrimmed>false</PublishTrimmed>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../OneDiff.Tests/**/*.cs" Exclude="../OneDiff.Tests/obj/**;../OneDiff.Tests/bin/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3.assert" />
+    <PackageReference Include="xunit.v3.extensibility.core" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/OneDiff/OneDiff.csproj" />
+  </ItemGroup>
+
+</Project>

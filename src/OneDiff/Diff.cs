@@ -7,7 +7,7 @@ namespace OneDiff;
 /// The one-line entry points to the text core. Each is a thin wrapper: tokenize (for text), intern items to ids, run the chosen
 /// algorithm. Anything finer-grained lives on the types they use.
 /// </summary>
-public static class Diff
+public static partial class Diff
 {
     /// <summary>
     /// Compares two arbitrary sequences. Items are interned through <paramref name="comparer"/> (the default comparer when null)
