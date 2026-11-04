@@ -21,6 +21,8 @@
     <Project Path="samples/OneDiff.AotSmoke/OneDiff.AotSmoke.csproj" />
   </Folder>
   <Folder Name="/tools/">
+    <Project Path="tools/OneDiff.GoldSets/OneDiff.GoldSets.csproj" />
+    <Project Path="tools/OneDiff.GoldSets.Pdf/OneDiff.GoldSets.Pdf.csproj" />
     <Project Path="tools/OneDiff.Oracles/OneDiff.Oracles.csproj" />
   </Folder>
   <Folder Name="/bench/">
