@@ -2,8 +2,17 @@
 
   <PropertyGroup>
     <AssemblyName>OneDiff.Pdf</AssemblyName>
-    <!-- Not packed yet: this package arrives with its own content and references. -->
-    <IsPackable>false</IsPackable>
+    <Description>Text diff and document comparison for .NET. PDF comparison: a document source that reads digital PDFs into the compare model with glyph-quad anchors, and a writer that marks the changes on the original pages with real PDF annotations.</Description>
+    <EnablePackageValidation>true</EnablePackageValidation>
   </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="OneDiff.Pdf.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../OneDiff.Documents/OneDiff.Documents.csproj" />
+    <PackageReference Include="RecursiveAI.OnePdf" />
+  </ItemGroup>
 
 </Project>
