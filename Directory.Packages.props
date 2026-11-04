@@ -8,5 +8,8 @@
     <PackageVersion Include="xunit.v3.assert" Version="4.0.2" />
     <PackageVersion Include="xunit.v3.extensibility.core" Version="4.0.2" />
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
+    <!-- Comparators, restored for the benchmark project only and used as released binaries through their public API. -->
+    <PackageVersion Include="DiffPlex" Version="1.9.0" />
+    <PackageVersion Include="DiffMatchPatch" Version="5.0.0" />
   </ItemGroup>
 </Project>

@@ -7,6 +7,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- The helper that drives the diff-match-patch package; it travels next to the executable. -->
+    <None Include="dmp_oracle.py" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../../src/OneDiff/OneDiff.csproj" />
   </ItemGroup>
 
