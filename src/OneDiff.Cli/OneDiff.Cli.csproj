@@ -9,9 +9,13 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>onediff</ToolCommandName>
     <Description>Text diff and document comparison for .NET: the onediff command-line tool.</Description>
-    <!-- Not packed yet: the tool is published once its commands do real work. -->
-    <IsPackable>false</IsPackable>
+    <IsPackable>true</IsPackable>
+    <PackageTags>$(PackageTags);cli;dotnet-tool</PackageTags>
   </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="OneDiff.Cli.Tests" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="../OneDiff/OneDiff.csproj" />

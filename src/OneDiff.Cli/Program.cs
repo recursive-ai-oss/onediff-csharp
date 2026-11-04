@@ -1,31 +1,66 @@
+using OneDiff.Patching;
+
 namespace OneDiff.Cli;
 
-/// <summary>The <c>onediff</c> command line. The commands exist so scripts can be written against them; they do nothing yet.</summary>
+/// <summary>The <c>onediff</c> command line: dispatch, error reporting and the process streams.</summary>
 internal static class Program
 {
-    private const int NotImplemented = 3;
-    private const int Usage = 2;
+    private const string Usage = """
+        usage: onediff <command> [arguments]
+          diff    compare two texts (unified, terminal, Markdown or diff-match-patch output)
+          patch   apply a unified or diff-match-patch patch
+          merge   three-way merge with conflict markers
+          compare compare two documents and write a redline (HTML or JSON)
+        "onediff <command> --help" lists a command's options.
+        """;
 
     private static int Main(string[] args)
     {
-        if (args.Length == 0 || args[0] is "-h" or "--help" or "help")
+        using Stream stdin = Console.OpenStandardInput();
+        using Stream stdout = Console.OpenStandardOutput();
+        using Stream stderr = Console.OpenStandardError();
+        return Run(args, new CliIo(stdin, stdout, stderr));
+    }
+
+    /// <summary>Runs one command line against the given streams and returns the process exit status.</summary>
+    internal static int Run(string[] args, CliIo io)
+    {
+        if (args.Length == 0)
         {
-            Console.Out.WriteLine("usage: onediff <diff|patch|merge|compare> [arguments]");
-            return args.Length == 0 ? Usage : 0;
+            io.Info(Usage);
+            return 2;
         }
 
-        if (args[0] == "compare")
+        string command = args[0];
+        if (command is "-h" or "--help" or "help")
         {
-            return CompareCommand.Run(args[1..]);
+            io.Write(null, TextEncoding.Utf8Bytes(Usage + "\n"));
+            return 0;
         }
 
-        if (args[0] is "diff" or "patch" or "merge")
+        // Each command has its own "trouble" status: 2 for diff and patch, 255 for merge (git merge-file's negative value).
+        int trouble = command == "merge" ? MergeCommand.ErrorStatus : 2;
+        try
         {
-            Console.Error.WriteLine($"onediff {args[0]}: not implemented yet");
-            return NotImplemented;
+            string[] rest = args[1..];
+            return command switch
+            {
+                "diff" => DiffCommand.Run(rest, io),
+                "patch" => PatchCommand.Run(rest, io),
+                "merge" => MergeCommand.Run(rest, io),
+                "compare" => CompareCommand.Run(rest),
+                _ => throw new CliException($"unknown command '{command}'"),
+            };
         }
-
-        Console.Error.WriteLine($"onediff: unknown command '{args[0]}'");
-        return Usage;
+        catch (CliException e)
+        {
+            io.Info($"onediff {command}: {e.Message}");
+            return trouble;
+        }
+        catch (PatchFormatException e)
+        {
+            io.Info($"onediff {command}: malformed patch: {e.Message}");
+            return trouble;
+        }
     }
 }
