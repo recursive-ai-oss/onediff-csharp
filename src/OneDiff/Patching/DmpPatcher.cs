@@ -107,14 +107,14 @@ public sealed partial class DmpPatcher
 
     /// <summary>
     /// Makes patches that turn <paramref name="text1"/> into <paramref name="text2"/>. The character diff trims common ends, compares
-    /// long texts line by line first, and is exact within what changed; no readability cleanup is applied to it.
+    /// long texts line by line first, and is exact within what changed; when it has more than one change it is then tidied by semantic and efficiency cleanup, as the diff-match-patch wiki describes for making patches from two texts.
     /// </summary>
     /// <exception cref="ArgumentNullException">A text is null.</exception>
     public IReadOnlyList<DmpPatch> Make(string text1, string text2, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(text1);
         ArgumentNullException.ThrowIfNull(text2);
-        return Make(text1, DmpDiffer.Compute(text1, text2, cancellationToken));
+        return Make(text1, DmpDiffer.ComputeForPatch(text1, text2, cancellationToken));
     }
 
     /// <summary>

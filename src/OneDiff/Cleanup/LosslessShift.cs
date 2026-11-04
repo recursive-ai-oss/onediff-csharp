@@ -1,4 +1,3 @@
-using System.Buffers;
 using System.Globalization;
 
 namespace OneDiff.Cleanup;
@@ -19,27 +18,29 @@ internal static class LosslessShift
             return script;
         }
 
-        // Mutable copy of the run lengths (kind, old length, new length), in pooled buffers: most scripts need no change at all.
-        EditKind[] kinds = ArrayPool<EditKind>.Shared.Rent(n);
-        int[] oldLengths = ArrayPool<int>.Shared.Rent(n);
-        int[] newLengths = ArrayPool<int>.Shared.Rent(n);
-        try
+        // Only an edit with equal text on both sides can slide; a script without one (a single replacement, say) is left alone.
+        ReadOnlySpan<Edit> edits = script.Edits;
+        bool candidate = false;
+        for (int i = 1; i + 1 < edits.Length && !candidate; i++)
         {
-            return Slide(script, n, kinds, oldLengths, newLengths, oldText, newText, equality, scoreMoves);
+            candidate = edits[i].Kind != EditKind.Equal && edits[i - 1].Kind == EditKind.Equal && edits[i + 1].Kind == EditKind.Equal;
         }
-        finally
+
+        if (!candidate)
         {
-            ArrayPool<EditKind>.Shared.Return(kinds);
-            ArrayPool<int>.Shared.Return(oldLengths);
-            ArrayPool<int>.Shared.Return(newLengths);
+            return script;
         }
+
+        // Mutable copy of the run kinds and lengths. Small scripts (nearly all) use the stack: 3 ints per run, at most 3 KB.
+        Span<int> buffer = n <= 256 ? stackalloc int[3 * n] : new int[3 * n];
+        return Slide(script, n, buffer.Slice(0, n), buffer.Slice(n, n), buffer.Slice(2 * n, n), oldText, newText, equality, scoreMoves);
     }
 
-    private static EditScript Slide(EditScript script, int n, EditKind[] kinds, int[] oldLengths, int[] newLengths, TokenText oldText, TokenText newText, TokenEquality equality, bool scoreMoves)
+    private static EditScript Slide(EditScript script, int n, Span<int> kinds, Span<int> oldLengths, Span<int> newLengths, TokenText oldText, TokenText newText, TokenEquality equality, bool scoreMoves)
     {
         for (int i = 0; i < n; i++)
         {
-            kinds[i] = script[i].Kind;
+            kinds[i] = (int)script[i].Kind;
             oldLengths[i] = script[i].OldLength;
             newLengths[i] = script[i].NewLength;
         }
@@ -48,10 +49,10 @@ internal static class LosslessShift
         int oldPos = 0, newPos = 0;
         for (int i = 0; i < n; i++)
         {
-            if (kinds[i] != EditKind.Equal && i > 0 && i + 1 < n && kinds[i - 1] == EditKind.Equal && kinds[i + 1] == EditKind.Equal
+            if (kinds[i] != (int)EditKind.Equal && i > 0 && i + 1 < n && kinds[i - 1] == (int)EditKind.Equal && kinds[i + 1] == (int)EditKind.Equal
                 && oldLengths[i - 1] > 0 && oldLengths[i + 1] > 0)
             {
-                bool isDelete = kinds[i] == EditKind.Delete;
+                bool isDelete = kinds[i] == (int)EditKind.Delete;
                 TokenText side = isDelete ? oldText : newText;
                 int start = isDelete ? oldPos : newPos;
                 int length = isDelete ? oldLengths[i] : newLengths[i];
@@ -81,10 +82,10 @@ internal static class LosslessShift
             return script;
         }
 
-        var builder = new EditScriptBuilder();
+        var builder = new EditScriptBuilder(n);
         for (int i = 0; i < n; i++)
         {
-            switch (kinds[i])
+            switch ((EditKind)kinds[i])
             {
                 case EditKind.Equal: builder.Equal(oldLengths[i]); break;
                 case EditKind.Delete: builder.Delete(oldLengths[i]); break;

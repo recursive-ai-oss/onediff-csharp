@@ -36,17 +36,21 @@ public static class DiffCleanup
         var (oldText, newText, equality) = Prepare(diff);
         // Joining edits that can slide together first leaves fewer, larger regions for the elimination rule to judge. With a single
         // changed region there is nothing to join or merge, and only the overlap and boundary steps below can apply.
-        bool several = ChangeRegions.CountRegions(diff.Script) > 1;
-        TextDiff joined = several ? With(diff, LosslessShift.Apply(diff, oldText, newText, equality, scoreMoves: false)) : diff;
-        using ChangeRegions regions = ChangeRegions.From(joined.Script);
-        if (regions.Count > 1)
-        {
-            regions.Eliminate(oldText, newText, ChangeRegions.Rule.Semantic, 0);
-        }
-
-        EditScript script = regions.ToScript(oldText, newText, equality, extractOverlap: true, joined.Script);
+        int regionCount = ChangeRegions.CountRegions(diff.Script);
+        TextDiff joined = regionCount > 1 ? With(diff, LosslessShift.Apply(diff, oldText, newText, equality, scoreMoves: false)) : diff;
+        EditScript script = Regroup(joined.Script, oldText, newText, equality, ChangeRegions.Rule.Semantic, 0, extractOverlap: true);
         TextDiff merged = With(joined, script);
         return With(merged, LosslessShift.Apply(merged, oldText, newText, equality, scoreMoves: true));
+    }
+
+    // Merge trivial equalities (and keep overlaps) over the regions of `script`. The region buffer lives on the stack for scripts of up
+    // to 64 regions (1 KB) and is a plain array above that.
+    private static EditScript Regroup(EditScript script, TokenText oldText, TokenText newText, TokenEquality equality, ChangeRegions.Rule rule, int editCost, bool extractOverlap)
+    {
+        int regionCount = ChangeRegions.CountRegions(script);
+        Span<int> buffer = regionCount <= 64 ? stackalloc int[ChangeRegions.Size(regionCount)] : new int[ChangeRegions.Size(regionCount)];
+        int count = ChangeRegions.Collect(script, oldText, newText, rule, editCost, buffer, out bool merged);
+        return ChangeRegions.ToScript(buffer, count, merged, oldText, newText, equality, extractOverlap, script);
     }
 
     /// <summary>
@@ -73,18 +77,15 @@ public static class DiffCleanup
             return diff;
         }
 
-        var (oldText, newText, equality) = Prepare(diff);
-        using ChangeRegions regions = ChangeRegions.From(diff.Script);
-        TextDiff merged = diff;
-        if (regions.Count > 1)
+        // Merging needs two regions, and joining across an equality needs another change beyond it: a single region is already done.
+        if (ChangeRegions.CountRegions(diff.Script) < 2)
         {
-            regions.Eliminate(oldText, newText, ChangeRegions.Rule.Efficiency, editCost);
-            if (regions.Merged)
-            {
-                merged = With(diff, regions.ToScript(oldText, newText, equality, extractOverlap: false, diff.Script));
-            }
+            return diff;
         }
 
+        var (oldText, newText, equality) = Prepare(diff);
+        EditScript script = Regroup(diff.Script, oldText, newText, equality, ChangeRegions.Rule.Efficiency, editCost, extractOverlap: false);
+        TextDiff merged = With(diff, script);
         return With(merged, LosslessShift.Apply(merged, oldText, newText, equality, scoreMoves: false));
     }
 
