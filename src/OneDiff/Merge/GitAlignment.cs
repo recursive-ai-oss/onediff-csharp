@@ -12,11 +12,8 @@ internal static class GitAlignment
         bool[] firstChanged = new bool[first.Length];
         bool[] secondChanged = new bool[second.Length];
         Mark(first, second, firstChanged, secondChanged, cancellationToken);
-        if (Environment.GetEnvironmentVariable("GITALIGN_NOCOMPACT") == null)
-        {
-            Diff3Core.Compact(firstChanged, first, secondChanged);
-            Diff3Core.Compact(secondChanged, second, firstChanged);
-        }
+        Diff3Core.Compact(firstChanged, first, secondChanged);
+        Diff3Core.Compact(secondChanged, second, firstChanged);
 
         return Diff3Core.ToHunks(firstChanged, secondChanged);
     }
@@ -52,9 +49,8 @@ internal static class GitAlignment
             countInB[b[j]] = countInB.GetValueOrDefault(b[j]) + 1;
         }
 
-        int variant = int.Parse(Environment.GetEnvironmentVariable("GITALIGN_VARIANT") ?? "0");
-        int limitA = MatchLimit(variant == 0 ? a.Length : aEnd - prefix);
-        int limitB = MatchLimit(variant == 0 ? b.Length : bEnd - prefix);
+        int limitA = MatchLimit(a.Length);
+        int limitB = MatchLimit(b.Length);
         List<int> aKept = Survivors(a, prefix, aEnd, countInB, limitA);
         List<int> bKept = Survivors(b, prefix, bEnd, countInA, limitB);
         for (int i = prefix; i < aEnd; i++)
@@ -232,8 +228,6 @@ internal static class GitAlignment
             Compare(x, aHigh, y, bHigh);
         }
 
-        internal static int Variant = int.Parse(Environment.GetEnvironmentVariable("GITALIGN_MYERS") ?? "32");
-
         // Myers 1986 §4b: grow forward paths from the start and reverse paths from the end, one edit at a time, until they overlap;
         // the overlap is where the problem splits.
         private (int X, int Y) MiddleSnake(int aLow, int aHigh, int bLow, int bHigh)
@@ -250,29 +244,21 @@ internal static class GitAlignment
                 reverse = new int[2 * offset + 2];
             }
 
-            bool fwdTieUp = (Variant & 1) != 0;
-            bool revTieUp = (Variant & 2) != 0;
-            bool fwdStart = (Variant & 4) != 0;
-            bool revStart = (Variant & 8) != 0;
-            bool revFirst = (Variant & 16) != 0;
             forward[offset + 1] = 0;
             reverse[offset + 1] = 0;
             for (int d = 0; d <= max; d++)
             {
                 for (int pass = 0; pass < 2; pass++)
                 {
-                    bool isForward = (pass == 0) != revFirst;
-                    if (isForward)
+                    if (pass == 0)
                     {
-                        bool down = (Variant & 32) != 0;
                         for (int step = 0; step <= d; step++)
                         {
-                            int k = down ? d - 2 * step : -d + 2 * step;
-                            bool up = fwdTieUp ? forward[offset + k - 1] <= forward[offset + k + 1] : forward[offset + k - 1] < forward[offset + k + 1];
+                            // Observed in output of git 2.51.2: forward diagonals are visited from k = d down to k = -d.
+                            int k = d - 2 * step;
+                            bool up = forward[offset + k - 1] < forward[offset + k + 1];
                             int x = k == -d || (k != d && up) ? forward[offset + k + 1] : forward[offset + k - 1] + 1;
                             int y = x - k;
-                            int sx = x;
-                            int sy = y;
                             while (x < n && y < m && a[aLow + x] == b[bLow + y])
                             {
                                 x++;
@@ -282,21 +268,18 @@ internal static class GitAlignment
                             forward[offset + k] = x;
                             if (odd && k >= delta - (d - 1) && k <= delta + (d - 1) && x + reverse[offset + delta - k] >= n)
                             {
-                                return fwdStart ? (aLow + sx, bLow + sy) : (aLow + x, bLow + y);
+                                return (aLow + x, bLow + y);
                             }
                         }
                     }
                     else
                     {
-                        bool down = (Variant & 64) != 0;
                         for (int step = 0; step <= d; step++)
                         {
-                            int k = down ? d - 2 * step : -d + 2 * step;
-                            bool up = revTieUp ? reverse[offset + k - 1] <= reverse[offset + k + 1] : reverse[offset + k - 1] < reverse[offset + k + 1];
+                            int k = -d + 2 * step;
+                            bool up = reverse[offset + k - 1] < reverse[offset + k + 1];
                             int x = k == -d || (k != d && up) ? reverse[offset + k + 1] : reverse[offset + k - 1] + 1;
                             int y = x - k;
-                            int sx = x;
-                            int sy = y;
                             while (x < n && y < m && a[aHigh - 1 - x] == b[bHigh - 1 - y])
                             {
                                 x++;
@@ -307,7 +290,7 @@ internal static class GitAlignment
                             int fk = delta - k;
                             if (!odd && fk >= -d && fk <= d && forward[offset + fk] + x >= n)
                             {
-                                return revStart ? (aHigh - sx, bHigh - sy) : (aHigh - x, bHigh - y);
+                                return (aHigh - x, bHigh - y);
                             }
                         }
                     }
