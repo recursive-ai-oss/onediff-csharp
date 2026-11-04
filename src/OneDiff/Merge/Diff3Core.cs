@@ -436,6 +436,12 @@ internal static class Diff3Core
     /// <summary>The runs of change between two sequences, with every run slid as far toward the end as it will go.</summary>
     public static List<Hunk> Hunks(int[] first, int[] second, DiffAlgorithm algorithm, CancellationToken cancellationToken)
     {
+        // The merge's own Myers mode follows git's alignment; the other algorithms are the library's.
+        if (algorithm == DiffAlgorithm.Myers)
+        {
+            return GitAlignment.Hunks(first, second, cancellationToken);
+        }
+
         EditScript script = Align(first, second, algorithm, cancellationToken);
         bool[] firstChanged = new bool[first.Length];
         bool[] secondChanged = new bool[second.Length];
@@ -454,13 +460,19 @@ internal static class Diff3Core
 
         Compact(firstChanged, first, secondChanged);
         Compact(secondChanged, second, firstChanged);
+        return ToHunks(firstChanged, secondChanged);
+    }
 
+    public static List<Hunk> ToHunks(bool[] firstChanged, bool[] secondChanged)
+    {
+        int firstLength = firstChanged.Length;
+        int secondLength = secondChanged.Length;
         var hunks = new List<Hunk>();
         int i = 0;
         int j = 0;
-        while (i < first.Length || j < second.Length)
+        while (i < firstLength || j < secondLength)
         {
-            while (i < first.Length && j < second.Length && !firstChanged[i] && !secondChanged[j])
+            while (i < firstLength && j < secondLength && !firstChanged[i] && !secondChanged[j])
             {
                 i++;
                 j++;
@@ -468,19 +480,19 @@ internal static class Diff3Core
 
             int startFirst = i;
             int startSecond = j;
-            while (i < first.Length && firstChanged[i])
+            while (i < firstLength && firstChanged[i])
             {
                 i++;
             }
 
-            while (j < second.Length && secondChanged[j])
+            while (j < secondLength && secondChanged[j])
             {
                 j++;
             }
 
             if (i == startFirst && j == startSecond)
             {
-                if (i >= first.Length && j >= second.Length)
+                if (i >= firstLength && j >= secondLength)
                 {
                     break;
                 }
@@ -494,12 +506,12 @@ internal static class Diff3Core
         return hunks;
     }
 
-    // Observed in output of git merge-file 2.51.2: a run of changed items that could sit in several places (the neighbouring item
-    // equals the run's edge item) is reported at the last such place, and runs that meet on the way become one run. Except that a
-    // run prefers a place where the other sequence has a run too, so that the two read as one replacement. Sliding each run as far
-    // up as it goes (joining the runs it meets), then as far down as it goes while remembering the last place that lined up with
-    // a run of the other sequence, and settling there, reproduces that.
-    private static void Compact(bool[] changed, int[] items, bool[] other)
+    // Observed in output of git 2.51.2 (diff and merge-file): a run of changed items that could sit in several places (the item
+    // next to it equals the item at its far edge) is placed like this. Slide it up as far as it goes, joining the runs it meets.
+    // Then slide it down as far as it goes, noting each place where it lines up with a run of the other sequence (the same
+    // number of unchanged items come before both). If sliding down joins it to the next run, start over with the joined run. At
+    // the end, settle at the last place that lined up, or at the bottom when none did.
+    internal static void Compact(bool[] changed, int[] items, bool[] other)
     {
         int n = changed.Length;
         HashSet<int> otherGaps = GapsOf(other);
@@ -523,58 +535,74 @@ internal static class Diff3Core
 
             // The number of unchanged items before the run is what lines it up with a run in the other sequence.
             int unchanged = start - changedBefore;
-
-            while (start > 0 && items[start - 1] == items[end - 1])
+            bool joined;
+            do
             {
-                changed[end - 1] = false;
-                changed[start - 1] = true;
-                start--;
-                end--;
-                unchanged--;
-                if (start > 0 && changed[start - 1])
+                joined = false;
+                while (start > 0 && items[start - 1] == items[end - 1])
                 {
-                    (int Start, int End, int Unchanged) previous = done[^1];
-                    done.RemoveAt(done.Count - 1);
-                    changedBefore -= previous.End - previous.Start;
-                    start = previous.Start;
-                    unchanged = previous.Unchanged;
-                }
-            }
-
-            int alignedEnd = -1;
-            while (true)
-            {
-                if (otherGaps.Contains(unchanged))
-                {
-                    alignedEnd = end;
-                }
-
-                if (end < n && items[end] == items[start])
-                {
-                    changed[start] = false;
-                    changed[end] = true;
-                    start++;
-                    end++;
-                    unchanged++;
-                    while (end < n && changed[end])
+                    changed[end - 1] = false;
+                    changed[start - 1] = true;
+                    start--;
+                    end--;
+                    unchanged--;
+                    if (start > 0 && changed[start - 1])
                     {
-                        end++;
+                        (int Start, int End, int Unchanged) previous = done[^1];
+                        done.RemoveAt(done.Count - 1);
+                        changedBefore -= previous.End - previous.Start;
+                        start = previous.Start;
+                        unchanged = previous.Unchanged;
                     }
                 }
-                else
+
+                int alignedEnd = -1;
+                while (true)
                 {
-                    break;
+                    if (otherGaps.Contains(unchanged))
+                    {
+                        alignedEnd = end;
+                    }
+
+                    if (end < n && items[end] == items[start])
+                    {
+                        changed[start] = false;
+                        changed[end] = true;
+                        start++;
+                        end++;
+                        unchanged++;
+                        if (end < n && changed[end])
+                        {
+                            while (end < n && changed[end])
+                            {
+                                end++;
+                            }
+
+                            joined = true;
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+
+                if (joined)
+                {
+                    continue;
+                }
+
+                while (alignedEnd != -1 && end > alignedEnd && start > 0 && !changed[start - 1] && items[start - 1] == items[end - 1])
+                {
+                    changed[end - 1] = false;
+                    changed[start - 1] = true;
+                    start--;
+                    end--;
+                    unchanged--;
                 }
             }
-
-            while (alignedEnd != -1 && end > alignedEnd && start > 0 && !changed[start - 1] && items[start - 1] == items[end - 1])
-            {
-                changed[end - 1] = false;
-                changed[start - 1] = true;
-                start--;
-                end--;
-                unchanged--;
-            }
+            while (joined);
 
             done.Add((start, end, unchanged));
             changedBefore += end - start;

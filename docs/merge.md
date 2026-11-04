@@ -8,7 +8,16 @@ A line ends at `\n` and keeps its ending. A lone `\r` is not a line break. Two l
 
 ## Aligning
 
-Each side is aligned with the base by the chosen algorithm (Myers by default). The alignment is turned into hunks: maximal runs of changed items, each a range of the base and the range of the side that replaces it. Observed: a run of changed items that could sit in several places is placed by sliding it up as far as it goes (joining runs it meets) and then down as far as it goes, settling at the last place where the other sequence also has a run (so a deletion and an insertion that belong together read as one replacement), or at the lowest place if there is none.
+Each side is aligned with the base, and the alignment is turned into hunks: maximal runs of changed items, each a range of the base and the range of the side that replaces it. With the default algorithm (Myers) the merge uses its own alignment, not the shortest-script one of `Diff`, because several equally short scripts exist and a merge is only as good as the extents of its hunks. Patience and histogram use the library's own alignments. The rules below were each found by comparing with the output of `git diff` and `git merge-file` 2.51.2 on crafted inputs (every pair over three lines up to length 4, 20,000 random pairs, 60,000 longer pairs with a frequent line) and then confirmed on the 2,599 merge triples. All are *observed in output of git 2.51.2*.
+
+1. **Trimming.** The common start and end of the two sequences are matched first and take no part in anything below.
+2. **Items that cannot match.** An item with no copy in the other sequence is changed. The counts are over the whole other sequence, before trimming.
+3. **Items with too many copies.** An item is *frequent* when the other sequence holds at least `limit(N)` copies of it, N being the length of the sequence the item is in. There is no limit under 8 items; the limit is 4 for N from 8 to 15, 8 for 16 to 63, 16 for 64 to 255, 32 for 256 to 1023, 64 from 1024 (a power of two near the square root of N).
+4. **Which frequent items stay.** Inside the trimmed range, look left and right from a frequent item over items that have no copy (counted as D, left and right) and over other frequent items (counted in P, which starts at 2), stopping at the first ordinary item. The item stays in the search when either D is zero, or when D left plus D right is at most three times P; otherwise it is changed. The looks are static: another frequent item being dropped does not change them.
+5. **The search.** Myers 1986 §4b on what is left (forward and reverse searches meeting at a middle snake, recursing on both halves), except that the forward diagonals of each step are visited from k = d down to k = -d; the reverse ones go up. For base `aab` against `ba` this matches the `b`, where visiting in the paper's order matches an `a`.
+6. **Sliding.** A run of changed items that could sit in several places is placed by sliding it up as far as it goes (joining runs it meets) and then down as far as it goes, noting each place where the other sequence has a run lined up with it; if sliding down joins the next run, the joined run starts again (up, then down with fresh memory); it settles at the last lined-up place, or at the lowest place if there is none. The first sequence is settled against the other one as searched; the second against the first as settled.
+
+The result is not always the shortest script. Items skipped by rules 2 to 4 never match, so the hunks can be longer than the minimum.
 
 ## Walking the hunks
 
@@ -39,6 +48,6 @@ Observed: marker lines (and the ending added to an unterminated last line) use C
 
 `Regions` tile the base, ours and theirs: each region holds the three ranges. Narrowed or trimmed conflicts share the conflict's base range: the first conflicting piece carries all of it, and shared items around the pieces are `BothSame` regions with an empty base range.
 
-## Known difference from git
+## Agreement with git
 
-The remaining differences on the merge corpus come from which of several equally short alignments the diff picks. git's picks differ from ours on some inputs, e.g. base `M V M` against ours `V M M M`: git matches the `V`, our Myers matches the first `M`. They show up as different conflict extents, not as different rules.
+On the 2,599 real merge triples of the corpus, the text produced equals the output of `git merge-file` 2.51.2 byte for byte in the merge, diff3 and zdiff3 styles, with git choosing its own alignment. The base-to-side alignments themselves still differ from `git diff` on a few corpus pairs (26 of 5,198); none of them changes a merge. Very large inputs may differ from git where git gives up searching for the shortest script, which is not modelled here; this alignment has no cost cap and is limited only by cancellation.

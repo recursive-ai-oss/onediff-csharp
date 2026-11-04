@@ -25,8 +25,11 @@ def disagrees(f):
             fh.write("".join(lines).encode("latin-1"))
     res = os.path.join(work, "res")
     shutil.rmtree(res, ignore_errors=True)
-    subprocess.run([dotnet, gate, git, os.path.join(work, "c"), res, f"--align={align}", "--jobs=1"],
+    subprocess.run([dotnet, gate, git, os.path.join(work, "c"), res, f"--align={align}", "--jobs=1"] + (["--pairs"] if style == "pairs" else []),
                    stdout=subprocess.DEVNULL, check=True)
+    if style == "pairs":
+        with open(os.path.join(res, "pairs.tsv")) as fh:
+            return len(fh.read().strip()) > 0
     with open(os.path.join(res, "results.tsv")) as fh:
         for line in fh:
             parts = line.rstrip("\n").split("\t")
