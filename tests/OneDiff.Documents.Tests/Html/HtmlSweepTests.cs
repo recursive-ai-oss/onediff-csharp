@@ -21,6 +21,17 @@ public class HtmlSweepTests
         _ => CompareSettings.TextOnly,
     };
 
+    /// <summary>With ONEDIFF_HTML_DUMP set, keeps the first pages written so a validator can be run over them.</summary>
+    private static void Dump(string name, string html, ref int dumped, int limit)
+    {
+        if (Environment.GetEnvironmentVariable("ONEDIFF_HTML_DUMP") is { Length: > 0 } dir && dumped < limit)
+        {
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(Path.Combine(dir, name + ".html"), html);
+            dumped++;
+        }
+    }
+
     private static void Report(string line)
     {
         if (Environment.GetEnvironmentVariable("ONEDIFF_HTML_REPORT") is { Length: > 0 } path)
@@ -35,6 +46,7 @@ public class HtmlSweepTests
         int cases = Env("ONEDIFF_HTML_CASES", 300), baseSeed = Env("ONEDIFF_PROPERTY_SEED", 0);
         bool allStyles = Environment.GetEnvironmentVariable("ONEDIFF_HTML_ALLSTYLES") == "1";
         long pages = 0, failures = 0;
+        int dumped = 0;
         int withMoves = 0, withSplitMerge = 0, withFormat = 0, withAttr = 0, withLedger = 0, withChanges = 0;
         string firstFailure = "";
         for (int i = 0; i < cases; i++)
@@ -62,6 +74,11 @@ public class HtmlSweepTests
                 {
                     string html = sbs ? HtmlRedline.SideBySide(c, style) : HtmlRedline.Inline(c, style);
                     pages++;
+                    if (seed % 25 == 0)
+                    {
+                        Dump($"random-{seed}-{style.Name}-{(sbs ? "sbs" : "inline")}", html, ref dumped, 240);
+                    }
+
                     List<string> errors = HtmlGate.Check(c, html, sbs);
                     if (errors.Count > 0)
                     {
@@ -92,6 +109,7 @@ public class HtmlSweepTests
         int perGitCorpus = Env("ONEDIFF_HTML_GIT_PAIRS", 30);
         long maxBytes = Env("ONEDIFF_HTML_MAX_BYTES", 4_000_000);
         long pairs = 0, pages = 0, failures = 0, skipped = 0;
+        int dumped = 0;
         string firstFailure = "";
         var perSet = new SortedDictionary<string, int>(StringComparer.Ordinal);
         foreach (string set in Directory.GetDirectories(root).Order(StringComparer.Ordinal))
@@ -126,6 +144,11 @@ public class HtmlSweepTests
                 {
                     string html = sbs ? HtmlRedline.SideBySide(c, style) : HtmlRedline.Inline(c, style);
                     pages++;
+                    if (pairs % 10 == 0 && html.Length < 400_000)
+                    {
+                        Dump($"corpus-{name}-{Path.GetFileName(dir)}-{(sbs ? "sbs" : "inline")}", html, ref dumped, 120);
+                    }
+
                     List<string> errors = HtmlGate.Check(c, html, sbs);
                     if (errors.Count > 0)
                     {
