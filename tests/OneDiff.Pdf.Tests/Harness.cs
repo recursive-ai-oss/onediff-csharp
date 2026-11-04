@@ -44,10 +44,10 @@ internal sealed class Run
     }
 
     /// <summary>The annotations of a PDF other than pop-ups.</summary>
-    public static List<ReadAnnotation> ReadAnnotations(byte[] pdfBytes)
+    public static List<ReadAnnotation> ReadAnnotations(byte[] pdfBytes, string? password = null)
     {
         var list = new List<ReadAnnotation>();
-        using PdfDocument pdf = PdfDocument.Open(pdfBytes);
+        using PdfDocument pdf = PdfDocument.Open(pdfBytes, new PdfOpenOptions { Password = password });
         IReadOnlyList<PdfPageText> texts = pdf.ExtractText(new PdfTextOptions { RetainGlyphs = true, DetectHeadersAndFooters = false, MaxDegreeOfParallelism = 1 });
         for (int p = 0; p < pdf.PageCount; p++)
         {

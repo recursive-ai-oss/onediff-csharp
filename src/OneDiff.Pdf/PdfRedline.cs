@@ -25,7 +25,8 @@ public sealed record PdfSkippedChange(int ChangeId, string Reason);
 /// <summary>What a markup writer did.</summary>
 /// <param name="Marks">The annotations added, in the order they were added.</param>
 /// <param name="Skipped">The changes that got no annotation.</param>
-public sealed record PdfMarkupResult(ImmutableArray<PdfMark> Marks, ImmutableArray<PdfSkippedChange> Skipped);
+/// <param name="SavedIncrementally">True when the output is the original bytes followed by an update. False when the whole file was rewritten, either because <see cref="PdfRedline.Incremental"/> is off or because the input needed repair on opening and cannot take an update.</param>
+public sealed record PdfMarkupResult(ImmutableArray<PdfMark> Marks, ImmutableArray<PdfSkippedChange> Skipped, bool SavedIncrementally);
 
 /// <summary>
 /// Marks a comparison's changes on the original pages of PDF inputs with real markup annotations (ISO 32000-2 12.5.6.10 to
@@ -73,7 +74,8 @@ public sealed record PdfRedline
 
     /// <summary>
     /// Whether to save as an incremental update (the default), which leaves the original bytes untouched, so a signature over them
-    /// stays intact where the signature's permissions allow markup, or to rewrite the whole file.
+    /// stays intact where the signature's permissions allow markup, or to rewrite the whole file. A file that was damaged and
+    /// rebuilt on opening cannot take an update and is always rewritten (<see cref="PdfMarkupResult.SavedIncrementally"/> says which happened).
     /// </summary>
     public bool Incremental { get; init; } = true;
 
@@ -175,16 +177,30 @@ public sealed record PdfRedline
             }
 
             ct.ThrowIfCancellationRequested();
-            if (Incremental)
+            // Saved to memory first: a file that was rebuilt by scanning cannot take an update, and then the whole file is
+            // written instead, which must not leave half an update in the caller's stream.
+            using var buffer = new MemoryStream();
+            bool incremental = Incremental;
+            if (incremental)
             {
-                pdf.SaveIncremental(output, cancellationToken: ct);
-            }
-            else
-            {
-                pdf.Save(output, cancellationToken: ct);
+                try
+                {
+                    pdf.SaveIncremental(buffer, cancellationToken: ct);
+                }
+                catch (PdfFormatException)
+                {
+                    buffer.SetLength(0);
+                    incremental = false;
+                }
             }
 
-            return new PdfMarkupResult(marks.ToImmutable(), skipped.ToImmutable());
+            if (!incremental)
+            {
+                pdf.Save(buffer, cancellationToken: ct);
+            }
+
+            buffer.WriteTo(output);
+            return new PdfMarkupResult(marks.ToImmutable(), skipped.ToImmutable(), incremental);
         }
     }
 

@@ -1,3 +1,4 @@
+using OneDiff.Documents;
 using OneDiff.Documents.Model;
 using OnePdf;
 
@@ -79,6 +80,29 @@ public class RobustnessTests
     }
 
     [Fact]
+    public void EncryptedInputIsMarkedWithThePasswordAndStaysEncrypted()
+    {
+        static byte[] Lock(byte[] plain)
+        {
+            using PdfDocument doc = PdfDocument.Open(plain, new PdfOpenOptions { AllowEditing = true });
+            using var ms = new MemoryStream();
+            doc.Save(ms, new PdfSaveOptions { Encryption = PdfEncryptionAction.Set, NewEncryption = new PdfEncryptionOptions { UserPassword = "secret" } });
+            return ms.ToArray();
+        }
+
+        byte[] a = Lock(Fixtures.Make(new Fixtures.Spec { Paragraphs = ["Alpha beta gamma.", "Dropped."] }));
+        byte[] b = Lock(Fixtures.Make(new Fixtures.Spec { Paragraphs = ["Alpha delta gamma."] }));
+        var source = new PdfDocumentSource(new PdfSourceOptions { Password = "secret" });
+        Comparison c = Comparison.Of(source.Read(DocumentInput.FromBytes(a)), source.Read(DocumentInput.FromBytes(b)));
+        using var ms = new MemoryStream();
+        PdfMarkupResult r = (PdfRedline.OnPages with { Password = "secret" }).MarkNewDocument(c, b, ms);
+        Assert.NotEmpty(r.Marks);
+        Assert.Throws<PdfPasswordException>(() => PdfDocument.Open(ms.ToArray()).Pages[0].Annotations.Count);
+        Assert.Equal(r.Marks.Length, Run.ReadAnnotations(ms.ToArray(), "secret").Count);
+        Assert.Throws<InvalidDataException>(() => PdfRedline.OnPages.MarkNewDocument(c, b, new MemoryStream()));
+    }
+
+    [Fact]
     public void LimitsAreEnforced()
     {
         byte[] pdf = Fixtures.Make(new Fixtures.Spec { PageHeight = 150, Paragraphs = [string.Concat(Enumerable.Repeat("word ", 600))] });
@@ -87,6 +111,28 @@ public class RobustnessTests
         InvalidDataException chars = Assert.Throws<InvalidDataException>(() => new PdfDocumentSource(new PdfSourceOptions { MaxCharacters = 100 }).Read(DocumentInput.FromBytes(pdf)));
         Assert.Equal(PdfSourceFailure.TooLarge, PdfSourceErrors.FailureOf(chars));
         Assert.Throws<ArgumentException>(() => new PdfDocumentSource(new PdfSourceOptions { MaxPages = 0 }));
+    }
+
+    [Fact]
+    public void ADamagedFileThatNeededRepairIsMarkedByRewritingIt()
+    {
+        byte[] good = Fixtures.Make(new Fixtures.Spec { Paragraphs = ["Alpha beta gamma."] });
+        byte[] damaged = System.Text.Encoding.Latin1.GetBytes(System.Text.Encoding.Latin1.GetString(good).Replace("startxref", "startxreX", StringComparison.Ordinal));
+        byte[] other = Fixtures.Make(new Fixtures.Spec { Paragraphs = ["Alpha delta gamma."] });
+        Comparison c = Comparison.Of(Run.Read(good), Run.Read(damaged));
+        Assert.Empty(c.Changes);
+        Comparison d = Comparison.Of(Run.Read(good), Run.Read(other));
+        Assert.NotEmpty(d.Changes);
+        Comparison e = Comparison.Of(Run.Read(damaged), Run.Read(other));
+        using var ms = new MemoryStream();
+        PdfMarkupResult r = PdfRedline.OnPages.MarkNewDocument(e, other, ms);
+        Assert.NotEmpty(r.Marks);
+        Comparison f = Comparison.Of(Run.Read(other), Run.Read(damaged));
+        using var ms2 = new MemoryStream();
+        PdfMarkupResult r2 = PdfRedline.OnPages.MarkNewDocument(f, damaged, ms2);
+        Assert.NotEmpty(r2.Marks);
+        Assert.False(r2.SavedIncrementally);
+        Assert.Equal(r2.Marks.Length, Run.ReadAnnotations(ms2.ToArray()).Count);
     }
 
     [Fact]

@@ -171,6 +171,8 @@ public class SourceTests
         Run full = Run.Of(a, b, redline: PdfRedline.OnPages with { Incremental = false });
         inc.AssertReextraction();
         full.AssertReextraction();
+        Assert.True(inc.Result.SavedIncrementally);
+        Assert.False(full.Result.SavedIncrementally);
         Assert.True(inc.Marked.AsSpan(0, b.Length).SequenceEqual(b));
         Assert.NotEqual(inc.Marked, full.Marked);
     }

@@ -18,9 +18,9 @@ public class GateSetTests
     private static string Sentence(Random r) =>
         $"{Subjects[r.Next(Subjects.Length)]} {Verbs[r.Next(Verbs.Length)]} {Objects[r.Next(Objects.Length)]} {Tails[r.Next(Tails.Length)]}.";
 
-    private static string Paragraph(Random r) => string.Join(' ', Enumerable.Range(0, 1 + r.Next(4)).Select(_ => Sentence(r)));
+    internal static string Paragraph(Random r) => string.Join(' ', Enumerable.Range(0, 1 + r.Next(4)).Select(_ => Sentence(r)));
 
-    private static List<string> Edit(Random r, List<string> doc)
+    internal static List<string> Edit(Random r, List<string> doc)
     {
         var d = new List<string>(doc);
         int edits = 1 + r.Next(4);
@@ -89,6 +89,8 @@ public class GateSetTests
     }
 
     public static TheoryData<int> Seeds() => [.. Enumerable.Range(0, 48)];
+
+    internal static Run PairForMeasure(int seed) => Pair(seed);
 
     private static Run Pair(int seed)
     {
