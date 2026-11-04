@@ -146,6 +146,10 @@ public static class ThreeWayMerge
     /// <exception cref="ArgumentNullException">A text is null.</exception>
     /// <exception cref="ArgumentOutOfRangeException">The settings hold an undefined value or a marker size below 1.</exception>
     public static TextMerge Lines(string baseText, string ours, string theirs, MergeSettings? settings = null, CancellationToken cancellationToken = default)
+        => LinesAligned(baseText, ours, theirs, settings, null, cancellationToken);
+
+    // alignerFor, when given, builds the alignment from the text of each line id (the gate tool uses it to feed in another tool's alignment).
+    internal static TextMerge LinesAligned(string baseText, string ours, string theirs, MergeSettings? settings, Func<string[], Aligner>? alignerFor, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(baseText);
         ArgumentNullException.ThrowIfNull(ours);
@@ -164,7 +168,8 @@ public static class ThreeWayMerge
         int[] oursIds = InternLines(ours, oursStarts, ids, lookup, alnum);
         int[] theirsIds = InternLines(theirs, theirsStarts, ids, lookup, alnum);
 
-        List<Segment> segments = Diff3Core.Merge(baseIds, oursIds, theirsIds, settings, alnum.ToArray(), cancellationToken);
+        Aligner? aligner = alignerFor?.Invoke(ids.OrderBy(kv => kv.Value).Select(kv => kv.Key).ToArray());
+        List<Segment> segments = Diff3Core.Merge(baseIds, oursIds, theirsIds, settings, alnum.ToArray(), cancellationToken, aligner);
         string text = new TextRenderer(baseText, ours, theirs, baseStarts, oursStarts, theirsStarts, settings).Render(segments);
         return new TextMerge(text, ToRegions(segments), CountOpen(segments, settings), baseText, ours, theirs, baseStarts, oursStarts, theirsStarts);
     }

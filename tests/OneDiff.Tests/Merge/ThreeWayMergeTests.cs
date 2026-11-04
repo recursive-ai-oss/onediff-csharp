@@ -126,20 +126,18 @@ public class ThreeWayMergeTests
     }
 
     [Fact]
-    public void RegionsDescribeAConflict()
+    public void RegionsDescribeOneSidedChanges()
     {
-        TextMerge merge = Diff.Merge("a\nb\nc\nd\ne\n", "a\nB\nc\nd\nE\n", "a\nb\nc\nD\ne\n");
+        TextMerge merge = Diff.Merge("a\nb\nc\nd\ne\nf\n", "a\nB\nc\nd\ne\nF\n", "a\nb\nc\nD\ne\nf\n");
 
-        Assert.Equal(
-            [
-                new MergeRegion(MergeRegionKind.Unchanged, new ItemRange(0, 1), new ItemRange(0, 1), new ItemRange(0, 1)),
-                new MergeRegion(MergeRegionKind.OursOnly, new ItemRange(1, 1), new ItemRange(1, 1), new ItemRange(1, 1)),
-                new MergeRegion(MergeRegionKind.Unchanged, new ItemRange(2, 1), new ItemRange(2, 1), new ItemRange(2, 1)),
-                new MergeRegion(MergeRegionKind.TheirsOnly, new ItemRange(3, 1), new ItemRange(3, 1), new ItemRange(3, 1)),
-                new MergeRegion(MergeRegionKind.OursOnly, new ItemRange(4, 1), new ItemRange(4, 1), new ItemRange(4, 1)),
-            ],
-            merge.Regions.ToArray());
-        Assert.Equal("a\nB\nc\nD\nE\n", merge.Text);
+        MergeRegionKind[] kinds =
+        [
+            MergeRegionKind.Unchanged, MergeRegionKind.OursOnly, MergeRegionKind.Unchanged,
+            MergeRegionKind.TheirsOnly, MergeRegionKind.Unchanged, MergeRegionKind.OursOnly,
+        ];
+        Assert.Equal(kinds, merge.Regions.Select(r => r.Kind).ToArray());
+        Assert.Equal(new MergeRegion(MergeRegionKind.TheirsOnly, new ItemRange(3, 1), new ItemRange(3, 1), new ItemRange(3, 1)), merge.Regions[3]);
+        Assert.Equal("a\nB\nc\nD\ne\nF\n", merge.Text);
     }
 
     [Fact]

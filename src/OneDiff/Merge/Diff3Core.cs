@@ -2,6 +2,9 @@ using OneDiff.Algorithms;
 
 namespace OneDiff.Merge;
 
+/// <summary>Finds the runs of change between two sequences of ids. Lets a caller substitute its own alignment for the built-in one.</summary>
+internal delegate List<Hunk> Aligner(int[] first, int[] second);
+
 /// <summary>One run of changed items between two sequences: a range of the first and the range of the second that replaces it.</summary>
 internal readonly record struct Hunk(int FirstStart, int FirstEnd, int SecondStart, int SecondEnd);
 
@@ -38,10 +41,11 @@ internal static class Diff3Core
 {
     // Khanna et al. 2007 §2: diff3 aligns the base with each side, then walks both change lists together. A stretch where only one
     // side changed is taken from that side; a stretch where both changed is a conflict unless the two sides made the same change.
-    public static List<Segment> Merge(int[] baseIds, int[] oursIds, int[] theirsIds, MergeSettings settings, bool[]? hasAlnum, CancellationToken cancellationToken)
+    public static List<Segment> Merge(int[] baseIds, int[] oursIds, int[] theirsIds, MergeSettings settings, bool[]? hasAlnum, CancellationToken cancellationToken, Aligner? aligner = null)
     {
-        List<Hunk> oursHunks = Hunks(baseIds, oursIds, settings.Algorithm, cancellationToken);
-        List<Hunk> theirsHunks = Hunks(baseIds, theirsIds, settings.Algorithm, cancellationToken);
+        aligner ??= (a, b) => Hunks(a, b, settings.Algorithm, cancellationToken);
+        List<Hunk> oursHunks = aligner(baseIds, oursIds);
+        List<Hunk> theirsHunks = aligner(baseIds, theirsIds);
 
         var segments = new List<Segment>();
         int position = 0;       // next base item not yet placed in a segment
@@ -154,7 +158,7 @@ internal static class Diff3Core
         switch (settings.Style)
         {
             case ConflictStyle.Merge:
-                segments = Simplify(Refine(segments, oursIds, theirsIds, settings.Algorithm, cancellationToken), oursIds, hasAlnum);
+                segments = Simplify(Refine(segments, oursIds, theirsIds, aligner, cancellationToken), oursIds, hasAlnum);
                 break;
             case ConflictStyle.ZDiff3:
                 segments = TrimCommonEdges(segments, oursIds, theirsIds);
@@ -186,18 +190,19 @@ internal static class Diff3Core
 
     // Observed in output of git merge-file 2.51.2 (merge style): each conflict is narrowed by diffing its ours side against its
     // theirs side. Items the sides share stay out of the markers and only the stretches where they differ remain conflicts.
-    private static List<Segment> Refine(List<Segment> segments, int[] oursIds, int[] theirsIds, DiffAlgorithm algorithm, CancellationToken cancellationToken)
+    private static List<Segment> Refine(List<Segment> segments, int[] oursIds, int[] theirsIds, Aligner aligner, CancellationToken cancellationToken)
     {
         var result = new List<Segment>(segments.Count);
         foreach (Segment s in segments)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (s.Kind != MergeRegionKind.Conflict)
             {
                 result.Add(s);
                 continue;
             }
 
-            List<Hunk> hunks = Hunks(oursIds.AsSpan(s.OursStart, s.OursLength).ToArray(), theirsIds.AsSpan(s.TheirsStart, s.TheirsLength).ToArray(), algorithm, cancellationToken);
+            List<Hunk> hunks = aligner(oursIds.AsSpan(s.OursStart, s.OursLength).ToArray(), theirsIds.AsSpan(s.TheirsStart, s.TheirsLength).ToArray());
             int baseCursor = s.BaseStart;
             bool baseTaken = false;
             int oursAt = 0;
