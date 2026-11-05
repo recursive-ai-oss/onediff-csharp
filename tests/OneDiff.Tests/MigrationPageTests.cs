@@ -20,6 +20,7 @@ public sealed class MigrationPageTests
     }
 
     [Fact]
+    [Trait("Host", "Native")] // reads documentation files from the source tree
     public void InlineLoop()
     {
         const string before = "Line 1\nOld line 2\nLine 3\n", after = "Line 1\nNew line 2\nLine 3\nLine 4\n";
@@ -38,6 +39,7 @@ public sealed class MigrationPageTests
     }
 
     [Fact]
+    [Trait("Host", "Native")] // reads documentation files from the source tree
     public void SideBySideLoop()
     {
         const string before = "Line 1\nOld line 2\nLine 3\n", after = "Line 1\nNew line 2\nLine 3\nLine 4\n";
@@ -60,6 +62,7 @@ public sealed class MigrationPageTests
     }
 
     [Fact]
+    [Trait("Host", "Native")] // reads documentation files from the source tree
     public void ConflictLoop()
     {
         string baseText = "a\nb\nc\n", oldText = "a\nx\nc\n", newText = "a\ny\nc\n";

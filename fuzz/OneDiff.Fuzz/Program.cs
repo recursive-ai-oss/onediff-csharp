@@ -23,10 +23,16 @@ internal static class Program
             return ComparisonJsonFuzz.Campaign(args[1..]);
         }
 
+        if (args.Length > 0 && args[0] == "pdf-source")
+        {
+            return PdfSourceFuzz.Campaign(args[1..]);
+        }
+
         if (args.Length < 2)
         {
             Console.Error.WriteLine("usage: OneDiff.Fuzz <unified-parse|unified-apply|dmp-parse|dmp-apply|unified-roundtrip|dmp-roundtrip> <seconds> [seed] [outDir]");
             Console.Error.WriteLine("       OneDiff.Fuzz comparison-json [--seconds N] [--seed N] [--crashes DIR]");
+            Console.Error.WriteLine("       OneDiff.Fuzz pdf-source --seeds DIR [--seconds N] [--seed N] [--crashes DIR]");
             return 2;
         }
 

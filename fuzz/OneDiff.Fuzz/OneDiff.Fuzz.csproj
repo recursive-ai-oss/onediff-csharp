@@ -9,6 +9,7 @@
   <ItemGroup>
     <ProjectReference Include="../../src/OneDiff/OneDiff.csproj" />
     <ProjectReference Include="../../src/OneDiff.Documents/OneDiff.Documents.csproj" />
+    <ProjectReference Include="../../src/OneDiff.Pdf/OneDiff.Pdf.csproj" />
   </ItemGroup>
 
 </Project>
