@@ -34,7 +34,7 @@ internal static class CompareCommand
           -h, --help                             show this text
         """;
 
-    public static int Run(string[] args)
+    public static int Run(string[] args, CliIo io)
     {
         var positional = new List<string>();
         string? output = null;
@@ -46,7 +46,7 @@ internal static class CompareCommand
             switch (a)
             {
                 case "-h" or "--help":
-                    Console.Out.WriteLine(Help);
+                    io.Write(null, TextEncoding.Utf8Bytes(Help + "\n"));
                     return 0;
                 case "--no-cover":
                     noCover = true;
@@ -63,7 +63,7 @@ internal static class CompareCommand
                 case "-o" or "--output":
                     if (i + 1 >= args.Length)
                     {
-                        return Fail($"{a} needs a value");
+                        return Fail(io, $"{a} needs a value");
                     }
 
                     output = args[++i];
@@ -71,7 +71,7 @@ internal static class CompareCommand
                 case "--form" or "--settings" or "--style" or "--title" or "--language" or "--timestamp":
                     if (i + 1 >= args.Length)
                     {
-                        return Fail($"{a} needs a value");
+                        return Fail(io, $"{a} needs a value");
                     }
 
                     string value = args[++i];
@@ -101,7 +101,7 @@ internal static class CompareCommand
                 default:
                     if (a.StartsWith('-') && a.Length > 1)
                     {
-                        return Fail($"unknown option '{a}'");
+                        return Fail(io, $"unknown option '{a}'");
                     }
 
                     positional.Add(a);
@@ -116,7 +116,7 @@ internal static class CompareCommand
 
         if (positional.Count != 3 || (output is not null && args.Count(x => x is "-o" or "--output") > 1))
         {
-            return Fail("expected <old> <new> <output>");
+            return Fail(io, "expected <old> <new> <output>");
         }
 
         CompareSettings? settings = settingsName?.ToLowerInvariant() switch
@@ -128,7 +128,7 @@ internal static class CompareCommand
         };
         if (settings is null)
         {
-            return Fail($"unknown settings '{settingsName}' (legal, strict, text)");
+            return Fail(io, $"unknown settings '{settingsName}' (legal, strict, text)");
         }
 
         RedlineForm? chosen = null;
@@ -143,7 +143,7 @@ internal static class CompareCommand
             };
             if (chosen is null)
             {
-                return Fail($"unknown form '{form}' (html, html-side-by-side, json)");
+                return Fail(io, $"unknown form '{form}' (html, html-side-by-side, json)");
             }
         }
 
@@ -158,7 +158,7 @@ internal static class CompareCommand
         };
         if (style is { Name: "" })
         {
-            return Fail($"unknown style '{styleName}' (blackline, sidebyside, word, developer)");
+            return Fail(io, $"unknown style '{styleName}' (blackline, sidebyside, word, developer)");
         }
 
         DateTimeOffset? when = null;
@@ -166,7 +166,7 @@ internal static class CompareCommand
         {
             if (!DateTimeOffset.TryParse(timestamp, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out DateTimeOffset parsed))
             {
-                return Fail($"cannot read the timestamp '{timestamp}'");
+                return Fail(io, $"cannot read the timestamp '{timestamp}'");
             }
 
             when = parsed;
@@ -201,15 +201,15 @@ internal static class CompareCommand
         }
         catch (Exception ex) when (ex is NotSupportedException or IOException or UnauthorizedAccessException or InvalidDataException)
         {
-            return Fail(ex.Message);
+            return Fail(io, ex.Message);
         }
 
         return 0;
     }
 
-    private static int Fail(string message)
+    private static int Fail(CliIo io, string message)
     {
-        Console.Error.WriteLine("onediff compare: " + message);
+        io.Info("onediff compare: " + message);
         return 2;
     }
 }

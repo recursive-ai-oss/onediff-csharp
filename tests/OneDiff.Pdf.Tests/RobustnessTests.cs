@@ -60,6 +60,7 @@ public class RobustnessTests
     }
 
     [Fact]
+    [Trait("Host", "Native")] // the browser runtime has no AES
     public void EncryptedWithoutPasswordIsRejectedAndWithItIsRead()
     {
         byte[] plain = Sample();
@@ -80,6 +81,7 @@ public class RobustnessTests
     }
 
     [Fact]
+    [Trait("Host", "Native")] // the browser runtime has no AES
     public void EncryptedInputIsMarkedWithThePasswordAndStaysEncrypted()
     {
         static byte[] Lock(byte[] plain)

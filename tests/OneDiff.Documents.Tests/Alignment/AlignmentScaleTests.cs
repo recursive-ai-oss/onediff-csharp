@@ -9,6 +9,7 @@ namespace OneDiff.Documents.Tests.Alignments;
 public class AlignmentScaleTests
 {
     [Fact]
+    [Trait("Host", "Native")] // reads the process working set
     public void ALargeContractAlignsCompletelyAndTheSeriesIsNearLinear()
     {
         bool full = Environment.GetEnvironmentVariable("ONEDIFF_ALIGN_SCALE") is not null;

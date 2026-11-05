@@ -32,6 +32,7 @@ public class PdfSampleTests
     }
 
     [Fact]
+    [Trait("Host", "Native")] // reads the committed sample files
     public void RenderedSamplesMatchTheWriters()
     {
         Comparison c = SamplePair.Create();
@@ -51,6 +52,7 @@ public class PdfSampleTests
     /// document's pages stay as they were and the review sits on top as highlights, carets and notes.
     /// </summary>
     [Fact]
+    [Trait("Host", "Native")] // reads the committed sample files
     public void MarkupSampleMatchesTheWriter()
     {
         byte[] oldPdf = Fixtures.Make(new Fixtures.Spec

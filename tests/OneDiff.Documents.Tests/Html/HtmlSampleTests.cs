@@ -30,6 +30,7 @@ public class HtmlSampleTests
     }
 
     [Fact]
+    [Trait("Host", "Native")] // reads the committed sample files
     public void CommittedSamplesMatchTheWriters()
     {
         Comparison c = SampleComparison();

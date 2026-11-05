@@ -18,6 +18,25 @@
     <ArtifactsPath Condition="'$(ONEDIFF_ARTIFACTS)' == ''">$([System.IO.Path]::Combine($(OneDiffDefaultArtifacts), 'onediff', 'build'))</ArtifactsPath>
   </PropertyGroup>
 
+  <PropertyGroup Label="Sister-library previews">
+    <!-- Some sister libraries are pinned to a prerelease that is not on nuget.org yet (docs/building.md). ONEDIFF_PREVIEW_FEED names a
+         folder or feed that holds them; it is used as one more restore source, so no NuGet.Config is needed. -->
+    <RestoreAdditionalProjectSources Condition="'$(ONEDIFF_PREVIEW_FEED)' != ''">$(RestoreAdditionalProjectSources);$(ONEDIFF_PREVIEW_FEED)</RestoreAdditionalProjectSources>
+  </PropertyGroup>
+
+  <!-- A fresh clone has no preview source, so restoring a project that needs a prerelease sister library would fail with a wall of
+       NU1102 errors. Say it once, in plain words. Silenced by a feed (ONEDIFF_PREVIEW_FEED), a NuGet.Config at the repository root,
+       or OneDiffPreviewsConfigured=true for a source configured elsewhere. -->
+  <Target Name="OneDiffCheckPreviewSource" BeforeTargets="_GenerateRestoreGraphProjectEntry" Condition="'$(ONEDIFF_PREVIEW_FEED)' == '' And '$(OneDiffPreviewsConfigured)' != 'true' And !Exists('$(MSBuildThisFileDirectory)NuGet.Config')">
+    <PropertyGroup>
+      <_OneDiffReferenced>;@(PackageReference->'%(Identity)');</_OneDiffReferenced>
+    </PropertyGroup>
+    <ItemGroup>
+      <_OneDiffPreviewPin Include="@(PackageVersion)" Condition="$([System.String]::new('%(PackageVersion.Version)').Contains('-')) And $([System.String]::new('%(PackageVersion.Identity)').StartsWith('RecursiveAI.')) And $(_OneDiffReferenced.Contains(';%(PackageVersion.Identity);'))" />
+    </ItemGroup>
+    <Error Condition="'@(_OneDiffPreviewPin)' != ''" Text="$(MSBuildProjectName) needs sister-library previews that are not on nuget.org yet: @(_OneDiffPreviewPin->'%(Identity) %(Version)', ', '). Set ONEDIFF_PREVIEW_FEED to a folder or feed that holds them, then restore again (see docs/building.md)." />
+  </Target>
+
   <PropertyGroup Label="Packing">
     <!-- Nothing packs unless a project under src/ says so (src/Directory.Build.props turns it on, and a project there sets
          IsPackable to false until its package has content). Release packing runs `dotnet pack` over the solution, so this

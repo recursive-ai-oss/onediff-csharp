@@ -28,6 +28,7 @@ public class OneRenderGapTests
     /// their own content inside the page area, which <see cref="RenderedGate"/> checks.
     /// </summary>
     [Fact]
+    [Trait("Host", "Native")] // reads a fixture file
     public void AnOverwideTableIsDrawnIntoTheSideMargins()
     {
         string html = File.ReadAllText(Path.Combine(TestData(), "table-row-lines-lost.html"));

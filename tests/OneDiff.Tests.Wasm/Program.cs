@@ -36,7 +36,7 @@ internal static class Program
                     continue;
                 }
 
-                if (fact.Skip is not null)
+                if (fact.Skip is not null || NeedsNativeHost(method) || NeedsNativeHost(type))
                 {
                     skipped++;
                     total++;
@@ -65,6 +65,11 @@ internal static class Program
                     {
                         passed++;
                     }
+                    else if (error.Contains("$XunitDynamicSkip$", StringComparison.Ordinal))
+                    {
+                        // Assert.SkipUnless: the test asked not to run here (no corpus, no oracle binaries).
+                        skipped++;
+                    }
                     else
                     {
                         failed++;
@@ -76,6 +81,29 @@ internal static class Program
 
         Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"RESULT total={total} passed={passed} failed={failed} skipped={skipped}"));
         return failed == 0 && total > 0 ? 0 : 1;
+    }
+
+    /// <summary>
+    /// True for a test or class carrying [Trait("Host", "Native")]: it reads files, starts threads or processes, or needs
+    /// a native oracle, none of which a browser tab has, so it is counted as skipped.
+    /// </summary>
+    private static bool NeedsNativeHost(MemberInfo member)
+    {
+        foreach (object attribute in member.GetCustomAttributes(inherit: true))
+        {
+            if (attribute is Xunit.v3.ITraitAttribute trait)
+            {
+                foreach (KeyValuePair<string, string> pair in trait.GetTraits() ?? [])
+                {
+                    if (pair.Key == "Host" && pair.Value == "Native")
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 
     private static async Task<List<object?[]>> RowsAsync(MethodInfo method, FactAttribute fact)
@@ -194,6 +222,12 @@ internal static class Program
     private static string Describe(Exception e)
     {
         string text = e.GetType().Name + ": " + e.Message;
+        if (e is TypeLoadException or MissingMethodException or MissingFieldException or PlatformNotSupportedException)
+        {
+            // A platform or packaging fault, not an assertion: the first frames say where.
+            text += " @ " + string.Join(" <- ", (e.StackTrace ?? string.Empty).Split('\n').Take(4).Select(l => l.Trim()));
+        }
+
         return text.Length > 600 ? string.Concat(text.AsSpan(0, 600), "…") : text;
     }
 

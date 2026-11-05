@@ -148,6 +148,17 @@ jobs:
           # One package per public project, and nothing else.
           packed=$(find "$RUNNER_TEMP/packages" -name '*.nupkg' | wc -l)
           if [ "$packed" -ne "$expected" ]; then echo "::error::packed $packed packages, expected $expected"; exit 1; fi
+          # The release is exactly this set (a package joins it by PublishToNuGet in its project and by a name here), and every
+          # package carries the licences and the third-party notices.
+          version=${GITHUB_REF_NAME#v}
+          want="RecursiveAI.OneDiff RecursiveAI.OneDiff.Documents RecursiveAI.OneDiff.Ocr RecursiveAI.OneDiff.Pdf RecursiveAI.OneDiff.Tool"
+          got=$(for f in "$RUNNER_TEMP"/packages/*.nupkg; do b=$(basename "$f" .nupkg); echo "${b%."$version"}"; done | sort | tr '\n' ' ' | sed 's/ $//')
+          if [ "$got" != "$want" ]; then echo "::error::packed [$got], the release set is [$want]"; exit 1; fi
+          for f in "$RUNNER_TEMP"/packages/*.nupkg; do
+            for part in THIRD-PARTY-NOTICES.md LICENSE-MIT LICENSE-APACHE PACKAGE.md; do
+              unzip -l "$f" | grep -q " $part\$" || { echo "::error::$(basename "$f") has no $part"; exit 1; }
+            done
+          done
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2

@@ -202,55 +202,63 @@ internal static class GitAlignment
         private int[] forward = new int[16];
         private int[] reverse = new int[16];
 
-        // Compares a[aLow..aHigh) with b[bLow..bHigh).
+        // Compares a[aLow..aHigh) with b[bLow..bHigh). The two halves a split leaves are worked in the same order a recursive
+        // search would (first half, then second), but from an explicit stack: an unbalanced run of splits can nest as deep as the
+        // input is long, which would overflow the call stack of a small host such as a browser.
         public void Compare(int aLow, int aHigh, int bLow, int bHigh)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            while (aLow < aHigh && bLow < bHigh && a[aLow] == b[bLow])
+            var pending = new Stack<(int ALow, int AHigh, int BLow, int BHigh)>();
+            pending.Push((aLow, aHigh, bLow, bHigh));
+            while (pending.Count > 0)
             {
-                aLow++;
-                bLow++;
-            }
+                (aLow, aHigh, bLow, bHigh) = pending.Pop();
+                cancellationToken.ThrowIfCancellationRequested();
+                while (aLow < aHigh && bLow < bHigh && a[aLow] == b[bLow])
+                {
+                    aLow++;
+                    bLow++;
+                }
 
-            while (aLow < aHigh && bLow < bHigh && a[aHigh - 1] == b[bHigh - 1])
-            {
-                aHigh--;
-                bHigh--;
-            }
+                while (aLow < aHigh && bLow < bHigh && a[aHigh - 1] == b[bHigh - 1])
+                {
+                    aHigh--;
+                    bHigh--;
+                }
 
-            if (aLow == aHigh)
-            {
-                Array.Fill(bChanged, true, bLow, bHigh - bLow);
-                return;
-            }
+                if (aLow == aHigh)
+                {
+                    Array.Fill(bChanged, true, bLow, bHigh - bLow);
+                    continue;
+                }
 
-            if (bLow == bHigh)
-            {
-                Array.Fill(aChanged, true, aLow, aHigh - aLow);
-                return;
-            }
+                if (bLow == bHigh)
+                {
+                    Array.Fill(aChanged, true, aLow, aHigh - aLow);
+                    continue;
+                }
 
-            // Out of budget: this stretch, and every one not yet searched, is reported as changed on both sides.
-            (int X, int Y)? split = budget is { IsSpent: true } ? null : MiddleSnake(aLow, aHigh, bLow, bHigh);
-            if (split is null)
-            {
-                budget!.Exceeded = true;
-                Array.Fill(aChanged, true, aLow, aHigh - aLow);
-                Array.Fill(bChanged, true, bLow, bHigh - bLow);
-                return;
-            }
+                // Out of budget: this stretch, and every one not yet searched, is reported as changed on both sides.
+                (int X, int Y)? split = budget is { IsSpent: true } ? null : MiddleSnake(aLow, aHigh, bLow, bHigh);
+                if (split is null)
+                {
+                    budget!.Exceeded = true;
+                    Array.Fill(aChanged, true, aLow, aHigh - aLow);
+                    Array.Fill(bChanged, true, bLow, bHigh - bLow);
+                    continue;
+                }
 
-            (int x, int y) = split.Value;
-            if ((x == aLow && y == bLow) || (x == aHigh && y == bHigh))
-            {
-                // The split would not make the problem smaller.
-                Array.Fill(aChanged, true, aLow, aHigh - aLow);
-                Array.Fill(bChanged, true, bLow, bHigh - bLow);
-                return;
-            }
+                (int x, int y) = split.Value;
+                if ((x == aLow && y == bLow) || (x == aHigh && y == bHigh))
+                {
+                    // The split would not make the problem smaller.
+                    Array.Fill(aChanged, true, aLow, aHigh - aLow);
+                    Array.Fill(bChanged, true, bLow, bHigh - bLow);
+                    continue;
+                }
 
-            Compare(aLow, x, bLow, y);
-            Compare(x, aHigh, y, bHigh);
+                pending.Push((x, aHigh, y, bHigh));
+                pending.Push((aLow, x, bLow, y));
+            }
         }
 
         // Myers 1986 §4b: grow forward paths from the start and reverse paths from the end, one edit at a time, until they overlap;

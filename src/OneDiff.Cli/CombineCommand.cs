@@ -25,7 +25,7 @@ internal static class CombineCommand
           -h, --help                             show this text
         """;
 
-    public static int Run(string command, string[] args)
+    public static int Run(string command, string[] args, CliIo io)
     {
         var positional = new List<string>();
         string? output = null, settingsName = null;
@@ -35,12 +35,12 @@ internal static class CombineCommand
             switch (a)
             {
                 case "-h" or "--help":
-                    Console.Out.WriteLine(Help);
+                    io.Write(null, TextEncoding.Utf8Bytes(Help + "\n"));
                     return 0;
                 case "-o" or "--output" or "--settings":
                     if (i + 1 >= args.Length)
                     {
-                        return Fail(command, $"{a} needs a value");
+                        return Fail(io, command, $"{a} needs a value");
                     }
 
                     if (a == "--settings")
@@ -56,7 +56,7 @@ internal static class CombineCommand
                 default:
                     if (a.StartsWith('-') && a.Length > 1)
                     {
-                        return Fail(command, $"unknown option '{a}'");
+                        return Fail(io, command, $"unknown option '{a}'");
                     }
 
                     positional.Add(a);
@@ -66,12 +66,12 @@ internal static class CombineCommand
 
         if (output is null)
         {
-            return Fail(command, "-o <output> is required");
+            return Fail(io, command, "-o <output> is required");
         }
 
         if (positional.Count < 2)
         {
-            return Fail(command, command == "combine" ? "expected <original> and at least one <copy>" : "expected at least two versions");
+            return Fail(io, command, command == "combine" ? "expected <original> and at least one <copy>" : "expected at least two versions");
         }
 
         CompareSettings? settings = settingsName?.ToLowerInvariant() switch
@@ -83,7 +83,7 @@ internal static class CombineCommand
         };
         if (settings is null)
         {
-            return Fail(command, $"unknown settings '{settingsName}' (legal, strict, text)");
+            return Fail(io, command, $"unknown settings '{settingsName}' (legal, strict, text)");
         }
 
         try
@@ -99,15 +99,15 @@ internal static class CombineCommand
         }
         catch (Exception ex) when (ex is NotSupportedException or IOException or UnauthorizedAccessException or InvalidDataException)
         {
-            return Fail(command, ex.Message);
+            return Fail(io, command, ex.Message);
         }
 
         return 0;
     }
 
-    private static int Fail(string command, string message)
+    private static int Fail(CliIo io, string command, string message)
     {
-        Console.Error.WriteLine($"onediff {command}: {message}");
+        io.Info($"onediff {command}: {message}");
         return 2;
     }
 }

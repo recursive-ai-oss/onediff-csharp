@@ -7,6 +7,9 @@ using OnePdf;
 
 namespace OneDiff.Ocr.Tests;
 
+// Every test here rasterizes a scanned PDF through OneImage.Pdf, which fails to load an internal OneImage type under the browser runtime
+// (TypeLoadException for OneImage.DeterministicMath, OneImage 1.10.4); the browser run skips them until that is fixed upstream.
+[Trait("Host", "Native")]
 public class SourceTests
 {
     private static readonly string[] Old = ["The supplier shall deliver the goods within thirty days of the order.", "Payment is due in sixty days from the invoice date.", "This agreement is governed by the laws of Delaware."];

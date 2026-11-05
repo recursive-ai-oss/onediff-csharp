@@ -11,20 +11,31 @@ The SDK version is pinned in `global.json`. Build output goes outside the checko
 
 ## Sister-library previews
 
-Some packages depend on a prerelease of another Recursive AI library (OnePDF, OneFont, OneNLP, OneOffice with its OneArchive and OneCompress) that is not on nuget.org yet. The pins are the prerelease `RecursiveAI.*` entries in `Directory.Packages.props`. To restore them, point NuGet at a folder or feed that holds them:
+Some packages depend on a prerelease of another Recursive AI library (OnePDF, OneFont, OneNLP, OneOffice with its OneArchive and OneCompress) that is not on nuget.org yet. The pins are the prerelease `RecursiveAI.*` entries in `Directory.Packages.props`.
 
-1. Copy `docs/nuget-local.config.example` to `NuGet.Config` in the repository root (the path is not tracked).
-2. Set `ONEDIFF_PREVIEW_FEED` to the folder (or feed URL).
+**A fresh clone with nothing configured** builds the projects that need no preview (for example `dotnet build src/OneDiff`). Building or testing a project that does need one stops at restore with a single message naming the project and the packages:
 
-Only the sister-library packages named in that file come from the preview source; everything else comes from nuget.org. Once the previews are published, the pins move to the released versions and none of this is needed. The OnePDF and OneFont pins are two properties at the top of `Directory.Packages.props`, `OnePdfVersion` and `OneFontVersion`; moving them to the released `1.18.0` and `1.4.0` is a two-line change (the CI selector reads them too).
+```
+OneDiff.Pdf needs sister-library previews that are not on nuget.org yet: RecursiveAI.OnePdf 1.18.0-preview.3. Set ONEDIFF_PREVIEW_FEED to a folder or feed that holds them, then restore again (see docs/building.md).
+```
+
+**To restore them,** set `ONEDIFF_PREVIEW_FEED` to a folder or feed that holds the `.nupkg` files; `Directory.Build.props` adds it as one more restore source, so no other setup is needed:
+
+```
+ONEDIFF_PREVIEW_FEED=/path/to/previews dotnet build OneDiff.slnx -c Release
+```
+
+The other ways in: a `NuGet.Config` at the repository root (copy `docs/nuget-local.config.example`; the path is not tracked; the message above is not shown when the file exists and it maps the previews to a folder), or `-p:OneDiffPreviewsConfigured=true` when a source is configured elsewhere, such as the user-level NuGet config.
+
+Once the previews are published, the pins move to the released versions and none of this is needed. The OnePDF and OneFont pins are two properties at the top of `Directory.Packages.props`, `OnePdfVersion` and `OneFontVersion`; moving them to the released `1.18.0` and `1.4.0` is a two-line change (the CI selector reads them too).
 
 ## CI
 
 `.github/workflows/ci.yml` runs on every push and pull request:
 
-- **build**: build and test on linux-x64, linux-arm64, osx-arm64 and win-x64; publish and run the NativeAOT smoke app on each with warnings as errors.
+- **build**: build and test on linux-x64, linux-arm64, osx-arm64 and win-x64; publish and run the NativeAOT smoke app (every package's main path: text diff, documents, PDF comparison with on-page markup and rendered output, scans, JSON, HTML, combine) and the NativeAOT `onediff` tool on each with warnings as errors.
 - **pack**: packs every packable project as a workflow artifact (nothing is pushed anywhere).
-- **wasm**: publishes the core tests as a browser WebAssembly app and runs them in headless Chrome.
+- **wasm**: publishes the test sources of the core, `.Documents`, `.Pdf` and `.Ocr` as browser WebAssembly apps (`tests/OneDiff.Tests.Wasm`, one per suite) and runs each in headless Chrome. A test that needs files, threads, processes or a native oracle carries `[Trait("Host", "Native")]` (or `Assert.SkipUnless`) and is counted as skipped; the run fails on any other failure. Locally: `tests/OneDiff.Tests.Wasm/run.sh <output-folder> [Core Documents Pdf Ocr]`, which needs the `wasm-tools` workload and `uv` or a Python with `playwright`.
 - **plan**: decides what the jobs above build, from the preview pins.
 
 Hosted runners cannot restore a prerelease that is not on nuget.org, so `plan` runs `tools/ci/select-solution.py`:
@@ -36,7 +47,7 @@ Hosted runners cannot restore a prerelease that is not on nuget.org, so `plan` r
 
 A package **packs** when its project is under `src/` and `IsPackable` is true: `Directory.Build.props` makes everything non-packable, `src/Directory.Build.props` makes projects under `src/` packable, and a project whose package has no content yet sets `IsPackable` to false until it does. A local `dotnet pack OneDiff.slnx` packs all of them.
 
-A package is **published to nuget.org** only when its project also sets `PublishToNuGet` to true (`src/Directory.Build.props` sets it to false). That is the one list of what the release publishes: the packages whose dependencies are all on nuget.org. `.github/workflows/release.yml` builds and tests the solution that restores without prerelease packages, packs each published project, and checks that it produced exactly one package per project marked `PublishToNuGet`. A package joins a release by setting the property; it must not depend on a prerelease.
+A package is **published to nuget.org** only when its project also sets `PublishToNuGet` to true (`src/Directory.Build.props` sets it to false). That is the one list of what the release publishes: `RecursiveAI.OneDiff`, `.Documents`, `.Pdf`, `.Ocr` and `.Tool` (the `onediff` command), the packages whose dependencies are all on nuget.org once the sister libraries are released. The release also checks that the packed set is exactly these five and that each carries both licences, the third-party notices and its readme. `EnablePackageValidation` is on in every one of those projects. `.github/workflows/release.yml` builds and tests the solution that restores without prerelease packages, packs each published project, and checks that it produced exactly one package per project marked `PublishToNuGet`. A package joins a release by setting the property; it must not depend on a prerelease.
 
 Each package has its own `PACKAGE.md` beside its project; it is the readme shown on nuget.org, so its links are absolute.
 

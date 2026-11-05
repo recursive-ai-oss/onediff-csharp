@@ -27,6 +27,18 @@ public sealed class CliTests : IDisposable
         return (code, Encoding.UTF8.GetString(output.ToArray()), Encoding.UTF8.GetString(error.ToArray()));
     }
 
+    [Fact]
+    public void CompareAndCombineReportThroughTheGivenStreams()
+    {
+        (int code, string output, string err) = Run("", "compare", "--help");
+        Assert.Equal(0, code);
+        Assert.StartsWith("usage: onediff compare", output);
+        Assert.Equal(2, Run("", "compare", "only-one").Code);
+        Assert.Contains("onediff compare: expected <old> <new> <output>", Run("", "compare", "only-one").Err);
+        Assert.Contains("onediff combine: -o <output> is required", Run("", "combine", "x", "y").Err);
+        Assert.Equal(string.Empty, err);
+    }
+
     // ---- diff
 
     [Fact]
