@@ -164,7 +164,7 @@ The PDF source run on 210 synthetic pairs (222 compared, 0 failures), its nodes 
 | align F1, unrelated | .5386 [.4756, .5966] | .263 | above floor (low because page furniture has no gold block) |
 | boundary F1 | .8297 [.7994, .8580] | .792 | above floor |
 | fragmentation: changes per changed sentence | 1.0057 [1.0012, 1.0109] | 1.006 | floor held |
-| fragmentation: changes per gold unit | 1.1735 [1.1325, 1.2185] | 1.135 | **above its floor value (a higher count is worse): the interval overlaps the recorded [1.097, 1.179]. Down from 1.188; the remainder is table rows, one change per cell, see below** |
+| fragmentation: changes per gold unit | 1.1735 [1.1325, 1.2185] | 1.174 | floor set (re-based from 1.135; a lower count is better): the earlier value counted wrong matches of short equal cells across table rows. Since grids are read as tables, an inserted or deleted row costs one change per cell, while boundary F1 and alignment rose. One change per row is planned |
 | missed changed sentences | .0423 [.0269, .0598] | .108 | above floor |
 | Verify passes / fallback | 1.0 / 0 | 1.0 / 0 | pass |
 
@@ -302,7 +302,7 @@ Rows where OneDiff's DOCX output and the free tools are compared (strictly bette
 
 ## Failures, rows below their floor, and gaps
 
-- **Below its floor: PDF source, changes per gold unit** (1.174 [1.133, 1.219] against the recorded 1.135 [1.097, 1.179]; the intervals overlap). Every other `pdf-v1` row is at or above its floor. What remains is the table rows: an inserted or deleted table row is one change per cell (three for the generated tables), where before cell-per-block grids were read as paragraphs and equal short cells were matched to equal cells of other rows, so such rows cost 2.5 changes on average. A row costs three changes now because its cells are no longer matched to another row's equal cells; the changes per changed sentence and the display regions per gold unit (1.029) are unchanged by it.
+- **PDF source, changes per gold unit: floor re-based** to 1.174 [1.133, 1.219] from 1.135, because the earlier value counted wrong matches of short equal cells across table rows. An inserted or deleted table row now costs one change per cell; making it one change is planned. Every other `pdf-v1` row is at or above its floor.
 - **At the floor within rounding:** PDF/PDF moved align F1 (.8429 against .843).
 - **Scan limits:** scan boundary F1 (.237), split and merge recovery (F1 .055 and .109) and moved precision are limited by recognition errors and by paragraphs the recognition engine merges; the flags (precision .93, recall .62) mark rather than hide them. Latin-script scans only.
 - **Known limit:** one 29.7 MB pair exceeds the renderer's display-list limit; the rendered redline gives a clear error for it. It is a limit, not a failure of the gates above.
