@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../tools/OneDiff.GoldSets/OneDiff.GoldSets.csproj" />
+    <ProjectReference Include="../../tools/OneDiff.GoldSets.Docx/OneDiff.GoldSets.Docx.csproj" />
   </ItemGroup>
 
 </Project>

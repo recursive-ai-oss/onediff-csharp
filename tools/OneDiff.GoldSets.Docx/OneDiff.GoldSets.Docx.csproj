@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Renders gold-set documents to DOCX through OneOffice's package and document model, and reads the tracked-changes output
+       of other comparison tools back through OneOffice's revision model. Tooling only: nothing here ships. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>$(LibName).GoldSets.Docx</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="RecursiveAI.OneOffice" />
+    <PackageReference Include="RecursiveAI.OneOffice.Documents" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="OneDiff.GoldSets.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../OneDiff.GoldSets/OneDiff.GoldSets.csproj" />
+  </ItemGroup>
+
+</Project>

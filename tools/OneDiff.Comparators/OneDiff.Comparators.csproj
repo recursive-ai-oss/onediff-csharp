@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Runs the free DOCX comparison tools that are .NET packages (in process) on a directory of document pairs and writes each
+       tracked-changes result. They are only called through their public APIs. Tooling only: nothing here ships. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>$(LibName).Comparators</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Docxodus" />
+    <PackageReference Include="OfficeIMO.Word" />
+  </ItemGroup>
+
+</Project>

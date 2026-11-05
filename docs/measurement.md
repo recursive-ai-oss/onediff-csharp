@@ -125,3 +125,43 @@ Evaluation data is written only under `~/onediff/eval/`; training data under `~/
 - **Pairs with no difference.** A pair whose two documents are identical (the generator can undo a defined-term rename with a second one) has nothing to compare, whatever its unit labels say. Its unit and sentence labels are left out of the boundary and fragmentation counts and `pairs.nodiff` reports how many pairs were left out. Alignment rows still count them.
 - **Aggregation.** Counts are summed per base document (all pairs of the document in the scope); documents are the resampling unit. The interval is the percentile bootstrap (2.5% and 97.5%) of the metric recomputed on 10,000 resamples of the documents with replacement, seed 20261104. The tool also prints the per-document distribution (minimum, median, 90th percentile, maximum) of boundary F1, changes per changed sentence and regions per changed sentence. `--resamples N` changes the resample count (0 skips the intervals, for sweeps that compare point values); every reported row uses 10,000. `<out>.missed.txt` lists, per pair, the changed sentences no change touched. A metric whose denominator is zero in more than 10% of resamples has no interval.
 - **Verification** is scored too: `verify.pass` and `verify.fallback` are the shares of pairs that passed and that needed a coarser grouping.
+
+## DOCX gold set and comparison tools
+
+The DOCX set is the evaluation split of the synthetic pairs written as Word files, so the labels carry over exactly. Everything here is indicative until a final run is published (`docs/results/docx-v1-comparators.md`).
+
+### Rendering and block maps
+
+`tools/OneDiff.GoldSets.Docx render --data DIR --out DIR` writes `docx/<id>.{old,new}.docx`, `<id>.blocks.json` and a manifest whose hash is the set identity. Packages are assembled from OOXML parts and opened and read back through OneOffice, which is also how list labels are checked (`labelsOk` equals `labelsTotal` on every side). Six looks, picked by a hash of the pair id, so each language and edit type appears in each: three plain looks (different fonts, page set-up and table styles), one with bookmarks and cross-reference fields, one with a footnote and a comment on the title, one with a content control around the title. Every look has numbering, a table with a header row and a merged-cell signature box, a header with a picture and a footer with page-number fields.
+
+A block map lists, per side, the gold content blocks in order (`node`, `kind`, `label`, `text`, and for PDFs the page). PDF and DOCX renderings write the same shape. The scorer maps a source's content nodes onto gold blocks by the longest common subsequence of equal texts after dropping white space, soft hyphens and direction marks, so order is kept and repeated texts pair up in order; a block's list label may prefix the text (a PDF prints it). Offsets are mapped by counting the characters kept. A source node that matches nothing gets an id past the gold nodes, so lookups never fail and the node counts as unmatched in the printed `block map: matched/total` line.
+
+- `score --cmp DIR --blocks DIR` maps comparisons made from rendered files (read as `<id>.cmp.json`); `OneDiff.GoldSets.Pdf compare --pdf DIR --out DIR [--every N]` makes them from PDFs.
+- `score --changes DIR --blocks DIR` maps another tool's output, read as `<id>.changes.json` (schema `onediff.changes/1`: two line views and the changes as line intervals). A missing file scores as an empty result and is counted as "pairs without output". `--ids FILE` limits the pairs.
+
+### Tracked-changes outputs
+
+`OneDiff.GoldSets.Docx read --tool T --tracked DIR --docx DIR --out DIR` reads each tool's DOCX through OneOffice's markup and revision model, writes `<id>.changes.json`, and runs accept-all and reject-all on copies, comparing the paragraph sequence with the new and old input (`roundtrip.jsonl`). The two views are the document with every revision rejected and with every revision accepted, one line per non-empty paragraph; a removed paragraph mark joins a paragraph to the next (ECMA-376 §17.13.5).
+
+A change is a run of adjacent revisions in one paragraph with no non-blank unchanged text between them (white space between two revisions does not split a change); the two halves of a move are one change, paired by the name on their range markers; formatting revisions are not changes. Every change is its own display region, so `regions.*` equal `frag.*` for tool outputs. One package quirk is repaired before reading: some tools type every `.xml` part through one default content type and give the main part no override; the reader adds the override and changes nothing else.
+
+### Comparison tools
+
+Run only as released binaries, from the harness in `tools/OneDiff.Comparators` (in-process .NET packages), `tools/comparators/wmlcomparer.py` (a Python package that carries the engine as a compiled binary; install with `--only-binary` into a virtual environment) and `tools/comparators/libreoffice_compare.py` (headless office through its UNO bridge, run with the Python shipped in the office's program folder). `tools/install-libreoffice.sh` installs LibreOffice 26.8.2 from the release tarball (sha256 checked) under the oracle root, Linux x64 or macOS arm64; the office is only executed. Pins and settings are in `docs/results/docx-v1-comparators.md`. Each runner records one line per pair (`runs.jsonl`: ok, milliseconds, output size, error) and skips recorded pairs, so a run resumes.
+
+`tools/score-docx-comparators.sh` scores each tool on all pairs, on completed pairs only and per look; `tools/summarize-docx-comparators.py` makes the tables. The engine's own row is scored the same way once its Word package writes comparisons: `score --cmp DIR --blocks docx/` and the name `onediff` in the script.
+
+### Real DOCX pairs
+
+`tools/fetch-real-pairs.py --only docx --root DIR` fetches eight pairs of related Bonterms templates (CC BY 4.0) pinned in `tools/real-pairs-pins.json` with their SHA-256. They carry no labels: the gates are that each tool runs, the output opens, and accept-all and reject-all reproduce the inputs.
+
+### DOCX speed
+
+`bench/OneDiff.Bench.Docx` times document in, tracked-changes document out, in process and single threaded, for the in-process tools, on joined gold-set pairs of about 5, 40 and 120 pages (`OneDiff.GoldSets.Docx bench-pairs --data DIR --out DIR --lang en --sizes 1,8,24`). One command runs it with the machine record (CPU, cores, ISA flags, load before and after):
+
+```
+dotnet build bench/OneDiff.Bench.Docx -c Release
+ONEDIFF_DOCX_BENCH=<bench-pairs folder> bench/run-docx-bench.sh OUT
+```
+
+The engine's row is one more `[Benchmark]` method in `DocxBench` with the same shape (open both, compare, save). The out-of-process tools' wall time per pair is in their `runs.jsonl` and is information only, since it includes process start.

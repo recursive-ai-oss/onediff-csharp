@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Times the DOCX comparison tools that are .NET packages on pairs of Word files, in process and single threaded.
+       They are only called through their public entry points and nothing here ships. The engine's own rows are added
+       beside them when its Word package exists (see DocxBench). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>$(LibName).Bench.Docx</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" />
+    <PackageReference Include="Docxodus" />
+    <PackageReference Include="OfficeIMO.Word" />
+  </ItemGroup>
+
+</Project>

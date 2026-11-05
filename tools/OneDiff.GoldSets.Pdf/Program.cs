@@ -2,6 +2,10 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using OneDiff.Documents;
+using OneDiff.Documents.Serialization;
+using OneDiff.Documents.Model;
+using OneDiff.Pdf;
 using OnePdf;
 using OnePdf.Hyphenation;
 using OnePdf.Layout;
@@ -31,16 +35,66 @@ internal static class Program
 {
     private const string Usage = """
         OneDiff.GoldSets.Pdf render --out DIR [--data DIR] [--real DIR] [--fonts DIR[,DIR]] [--jobs N] [--limit N]
+        OneDiff.GoldSets.Pdf compare --pdf DIR --out DIR [--every N] [--limit N] [--jobs N]
 
           --data   a gold-set directory made by OneDiff.GoldSets generate (renders pairs/<id>.docs.json)
           --real   fetched real pairs: <source>/<pair>/{old.txt,new.txt}
           writes DIR/pdf/<id>.{old,new}.pdf and <id>.blocks.json, then manifest.json and manifest.sha256
+
+          compare reads each DIR/<id>.{old,new}.pdf through the PDF source, compares with the default settings and writes
+          OUT/<id>.cmp.json, which `OneDiff.GoldSets score --cmp OUT --blocks DIR` maps onto the gold nodes (--every keeps every Nth pair)
         """;
 
     private static readonly string[] DefaultFontDirs = ["/usr/share/fonts/opentype/noto", "/usr/share/fonts/truetype/noto"];
 
+    private static int Compare(string[] args)
+    {
+        var opt = new Dictionary<string, string>();
+        for (int i = 1; i < args.Length; i++)
+        {
+            opt[args[i][2..]] = i + 1 < args.Length && !args[i + 1].StartsWith("--", StringComparison.Ordinal) ? args[++i] : "true";
+        }
+
+        string pdfDir = Path.GetFullPath(opt.GetValueOrDefault("pdf") ?? throw new ArgumentException("--pdf is required"));
+        string outDir = Path.GetFullPath(opt.GetValueOrDefault("out") ?? throw new ArgumentException("--out is required"));
+        int every = int.Parse(opt.GetValueOrDefault("every") ?? "1", CultureInfo.InvariantCulture);
+        int limit = int.Parse(opt.GetValueOrDefault("limit") ?? "0", CultureInfo.InvariantCulture);
+        int jobs = int.Parse(opt.GetValueOrDefault("jobs") ?? "4", CultureInfo.InvariantCulture);
+        Directory.CreateDirectory(outDir);
+        string[] ids = [.. Directory.EnumerateFiles(pdfDir, "*.old.pdf").Select(f => Path.GetFileName(f)[..^".old.pdf".Length]).OrderBy(x => x, StringComparer.Ordinal)
+            .Where((_, i) => i % every == 0)];
+        if (limit > 0)
+        {
+            ids = [.. ids.Take(limit)];
+        }
+
+        int failed = 0;
+        Parallel.ForEach(ids, new ParallelOptions { MaxDegreeOfParallelism = jobs }, id =>
+        {
+            try
+            {
+                var source = new PdfDocumentSource();
+                CompareDocument o = source.Read(DocumentInput.FromBytes(File.ReadAllBytes(Path.Combine(pdfDir, id + ".old.pdf")), id + ".old.pdf"));
+                CompareDocument n = source.Read(DocumentInput.FromBytes(File.ReadAllBytes(Path.Combine(pdfDir, id + ".new.pdf")), id + ".new.pdf"));
+                File.WriteAllBytes(Path.Combine(outDir, id + ".cmp.json"), ComparisonJson.Write(Comparison.Of(o, n)));
+            }
+            catch (Exception e) when (e is not OutOfMemoryException)
+            {
+                Interlocked.Increment(ref failed);
+                Console.Error.WriteLine($"{id}: {e.GetType().Name}: {e.Message}");
+            }
+        });
+        Console.WriteLine($"compared {ids.Length} pairs, {failed} failed");
+        return failed == 0 ? 0 : 1;
+    }
+
     private static int Main(string[] args)
     {
+        if (args.Length > 0 && args[0] == "compare")
+        {
+            return Compare(args);
+        }
+
         if (args.Length == 0 || args[0] != "render")
         {
             Console.WriteLine(Usage);
