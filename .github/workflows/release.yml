@@ -88,19 +88,32 @@ jobs:
         run: |
           if [ -n "$ONEDIFF_PREVIEW_FEED" ]; then cp docs/nuget-local.config.example NuGet.Config; fi
 
+      # What is built, tested and packed: everything, or (without a preview feed) the projects that restore from nuget.org alone.
+      # The published packages must be among them, so a public package never depends on a prerelease.
+      - name: Select the solution
+        id: select
+        env:
+          ONEDIFF_PREVIEW_FEED: ${{ vars.ONEDIFF_PREVIEW_FEED }}
+        run: python3 tools/ci/select-solution.py >> "$GITHUB_OUTPUT"
+
       - name: Restore
-        run: dotnet restore OneDiff.slnx
+        env:
+          SOLUTION: ${{ steps.select.outputs.solution }}
+        run: dotnet restore "$SOLUTION"
 
       - name: Tag matches the package version
         env:
           TAG: ${{ github.ref_name }}
         run: |
-          # Every project that ships must build the version the tag names. Which projects ship is decided by
-          # IsPackable in the projects themselves (Directory.Build.props), so a new package joins without a change here.
+          # Which projects publish is decided by PublishToNuGet in the projects themselves (src/Directory.Build.props sets it to
+          # false), so a package joins the release by one property. Each must be packable and build the version the tag names.
           shipped=0
           for project in src/*/*.csproj; do
-            packable=$(dotnet msbuild "$project" -getProperty:IsPackable | tr -d '[:space:]')
-            [ "$packable" = "true" ] || continue
+            [ "$(dotnet msbuild "$project" -getProperty:PublishToNuGet | tr -d '[:space:]')" = "true" ] || continue
+            if [ "$(dotnet msbuild "$project" -getProperty:IsPackable | tr -d '[:space:]')" != "true" ]; then
+              echo "::error::$project is marked PublishToNuGet but is not packable"
+              exit 1
+            fi
             shipped=$((shipped + 1))
             version=$(dotnet msbuild "$project" -getProperty:PackageVersion | tr -d '[:space:]')
             if [ "v$version" != "$TAG" ]; then
@@ -108,25 +121,31 @@ jobs:
               exit 1
             fi
           done
-          if [ "$shipped" -eq 0 ]; then echo "::error::no packable project found"; exit 1; fi
+          if [ "$shipped" -eq 0 ]; then echo "::error::no project is marked PublishToNuGet"; exit 1; fi
           echo "$shipped packages at $TAG"
 
       # A tag that does not build and pass its tests never publishes.
       - name: Build
-        run: dotnet build OneDiff.slnx -c Release --no-restore
+        env:
+          SOLUTION: ${{ steps.select.outputs.solution }}
+        run: dotnet build "$SOLUTION" -c Release --no-restore
       - name: Test
-        run: dotnet test --solution OneDiff.slnx -c Release --no-build --results-directory "$ONEDIFF_ARTIFACTS/TestResults"
+        env:
+          SOLUTION: ${{ steps.select.outputs.solution }}
+        run: dotnet test --solution "$SOLUTION" -c Release --no-build --results-directory "$ONEDIFF_ARTIFACTS/TestResults"
 
       - name: Pack
-        # Every packable project (the packages and the tool), from the binaries the tests ran on. Symbols come out as .snupkg files.
+        # Only the projects marked PublishToNuGet, from the binaries the tests ran on. Packages that are not public yet
+        # (their dependencies are not on nuget.org) are never packed here. Symbols come out as .snupkg files.
         run: |
-          dotnet pack OneDiff.slnx -c Release --no-build -o "$RUNNER_TEMP/packages"
-          ls -l "$RUNNER_TEMP/packages"
-          # One package per shipped project, and nothing else.
           expected=0
           for project in src/*/*.csproj; do
-            if [ "$(dotnet msbuild "$project" -getProperty:IsPackable | tr -d '[:space:]')" = "true" ]; then expected=$((expected + 1)); fi
+            [ "$(dotnet msbuild "$project" -getProperty:PublishToNuGet | tr -d '[:space:]')" = "true" ] || continue
+            expected=$((expected + 1))
+            dotnet pack "$project" -c Release --no-build -o "$RUNNER_TEMP/packages"
           done
+          ls -l "$RUNNER_TEMP/packages"
+          # One package per public project, and nothing else.
           packed=$(find "$RUNNER_TEMP/packages" -name '*.nupkg' | wc -l)
           if [ "$packed" -ne "$expected" ]; then echo "::error::packed $packed packages, expected $expected"; exit 1; fi
 

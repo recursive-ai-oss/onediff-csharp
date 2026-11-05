@@ -54,12 +54,16 @@ public class TimingTests
     [Fact]
     public void ReadAndCompareAHundredPages()
     {
-        if (Environment.GetEnvironmentVariable("ONEDIFF_WORD_TIMING") is null)
+        // ONEDIFF_WORD_TIMING=file writes the figures there (any other value writes word-timing.txt in the temp folder);
+        // ONEDIFF_BUDGET_PAGES sets the size (default 100 pages and 3 changes a page). The first repetition is a warm-up.
+        string? target = Environment.GetEnvironmentVariable("ONEDIFF_WORD_TIMING");
+        if (target is null)
         {
             return;
         }
 
-        (DocSpec o, DocSpec n) = Contract(100, 300, 7);
+        int pages = int.Parse(Environment.GetEnvironmentVariable("ONEDIFF_BUDGET_PAGES") ?? "100", CultureInfo.InvariantCulture);
+        (DocSpec o, DocSpec n) = Contract(pages, pages * 3, 7);
         byte[] oldBytes = DocFactory.Build(o), newBytes = DocFactory.Build(n);
         var source = new WordDocumentSource();
         var results = new List<string>();
@@ -83,6 +87,7 @@ public class TimingTests
         }
 
         Console.WriteLine(string.Join('\n', results));
-        File.WriteAllLines(Path.Combine(Path.GetTempPath(), "word-timing.txt"), results);
+        results.Add(string.Create(CultureInfo.InvariantCulture, $"pages={pages} bytes_old={oldBytes.Length} bytes_new={newBytes.Length}"));
+        File.WriteAllLines(Path.IsPathRooted(target) ? target : Path.Combine(Path.GetTempPath(), "word-timing.txt"), results);
     }
 }
