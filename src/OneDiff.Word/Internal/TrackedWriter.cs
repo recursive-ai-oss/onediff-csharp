@@ -1035,6 +1035,11 @@ internal sealed partial class TrackedWriter : IDisposable
             {
                 beforeRun.InsertXmlBefore(Wx.Bytes(xml));
             }
+            else if (Count(xml, "fldCharType=\"begin\"") > Count(xml, "fldCharType=\"end\""))
+            {
+                // The copy opens a field that the field around this point closes, so it goes before the closing run.
+                beforeRun.InsertXmlBefore(Wx.Bytes(xml));
+            }
             else
             {
                 beforeRun.InsertXmlAfter(Wx.Bytes(xml));
@@ -1131,6 +1136,17 @@ internal sealed partial class TrackedWriter : IDisposable
 
         run = siblings[outerBegin];
         return true;
+    }
+
+    private static int Count(string text, string part)
+    {
+        int n = 0;
+        for (int i = text.IndexOf(part, StringComparison.Ordinal); i >= 0; i = text.IndexOf(part, i + part.Length, StringComparison.Ordinal))
+        {
+            n++;
+        }
+
+        return n;
     }
 
     private static string? FieldCharType(MarkupNode e)
