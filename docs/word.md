@@ -153,3 +153,8 @@ A revision cannot express these differences, so they are listed in `DocxRedlineR
 - A resolved revision leaves the empty wrapper of a hyperlink, smart tag, simple field or content control behind, and a paragraph that joins the next carries it along.
 - There is no way to mark existing runs as inserted or deleted without going through delete text: the writer authors a deletion under a marker author and renames it (`w:del` to `w:ins`, `w:delText` to `w:t`).
 - The notes part hands out an id a copied note already took; the writer chooses ids from what the part holds.
+
+
+## Development notes: Word/PDF pairs
+
+Dev notes, not results. A PDF reads clauses as `Paragraph("1.1 text")` unless the clause number is taken as the list label; a Word file has `ListItem(label "1.1", text)`, so the aligner could not link them. The PDF source now reads dotted-decimal numbers (`1.1`, `10.2.3.`; not `7.500`, `0.5`) as labels and reads a grid whose cells come back one block each as a table. Quick score on every fifth pair of the synthetic set (210 pairs, legal settings, alignment F1 same / edited / moved): Word old, PDF new before .27 / .05 / .00, after .97 / .71 / .61; PDF old, Word new before .26 / .06 / .00, after .97 / .72 / .59; PDF/PDF before .92 / .93 / .86, after .95 / .93 / .86; Word/Word .87 / .88 / .88 (unchanged). Boundary F1 for cross pairs with TextOnly settings is .54 (Word/Word .83). What is left comes from Word-only content the PDF has no counterpart for: cross-reference and page-number fields (a field child is U+FFFC in the Word model, the result text in the PDF), images, footnotes, running headers and footers, and table cells that are empty in Word. `tools/run-cross-score.sh` reproduces the rows.

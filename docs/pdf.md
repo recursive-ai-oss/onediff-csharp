@@ -10,7 +10,7 @@ How `RecursiveAI.OneDiff.Pdf` reads a digital PDF into the compare model, and ho
 
 | Source content | Node |
 |---|---|
-| Body block | `Paragraph`; a block that starts with a bullet, a number or a letter marker (`•`, `-`, `1.`, `(a)`, `iv)`) is a `ListItem` with the marker as the `list.label` attribute and the rest as its text |
+| Body block | `Paragraph`; a block that starts with a bullet, a number or a letter marker (`•`, `-`, `1.`, `(a)`, `iv)`, or a dotted-decimal clause number such as `1.1` or `10.2.3.`) is a `ListItem` with the marker as the `list.label` attribute and the rest as its text |
 | A marker that the text analysis made a block of its own, beside a block on the same baseline | the same `ListItem` |
 | Block recognized as a table | `Table` → `TableRow` (a line) → `TableCell` (the words between two cell starts) → `Paragraph` |
 | Running headers and footers | a second `Section` after the body: one `Header` and one `Footer` node for a page whose header or footer text differs from the previous page's, holding its paragraphs. Pages that repeat the text add nothing, so a document with more pages does not gain a header per page |
@@ -21,6 +21,8 @@ Body paragraphs are joined where layout cut them:
 - **Across columns:** within a page, a block that starts higher up the page than the previous one ended continues it under the same rule.
 - **Split-off lines:** a block that starts closer under the previous line than any paragraph gap (less than 0.4 line heights) continues it under the same rule. The text analysis splits a justified first line off this way.
 - A list item is continued the same way; a table never is.
+- **Grids the text analysis did not flag as tables:** when it returns each cell of a grid as a block of its own, consecutive short blocks (at most three lines and eight words each, not list markers) that fall into rows of the same number of cells (two or more), each cell overlapping the one above it, for at least two rows, become a `Table` of `TableRow` and `TableCell` nodes. A block right under a cell of the row (closer than half a line height) and overlapping it is that cell's next line, because a narrow cell wraps ("1 200" and "EUR"). Any block or row that breaks the pattern ends the grid; a grid with fewer than two complete rows stays paragraphs.
+- A clause number that opens a wrapped line inside a block starts an item only after a line that ended a sentence or is three words or fewer, because a reference to a clause ("see clause\n2.2.") can fall there. Reading the clause number as the label gives a Word file's `ListItem` and a PDF's the same shape, which is what lets a Word/PDF pair align. A decimal that starts a line (`3.5 million`) is read as a label too; that is the cost of the rule.
 
 Not in the model: images, vector graphics, annotations, form fields and document properties.
 

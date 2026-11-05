@@ -1270,7 +1270,8 @@ internal sealed partial class TrackedWriter : IDisposable
                 PropertyChange(be, de, "tblPr", "tblPrChange", ["tblPrChange"], insertAtStart: true);
                 break;
             case NodeKind.TableRow:
-                PropertyChange(be, de, "trPr", "trPrChange", ["ins", "del", "trPrChange"], insertAtStart: false);
+                // w:trPr comes before the cells (CT_Row), so a row that had none gets it first.
+                PropertyChange(be, de, "trPr", "trPrChange", ["ins", "del", "trPrChange"], insertAtStart: true);
                 break;
             default:
                 PropertyChange(be, de, "tcPr", "tcPrChange", ["cellIns", "cellDel", "cellMerge", "tcPrChange"], insertAtStart: true);

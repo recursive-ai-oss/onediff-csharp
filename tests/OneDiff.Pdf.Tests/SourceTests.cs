@@ -1,6 +1,8 @@
 using OneDiff.Documents;
 using OneDiff.Documents.Model;
+using OneDiff.Documents.Pipeline;
 using OneDiff.Documents.Serialization;
+using OneDiff.Pdf.Internal;
 using OnePdf;
 
 namespace OneDiff.Pdf.Tests;
@@ -12,6 +14,50 @@ public class SourceTests
     private static string Long(int repeats) => string.Concat(Enumerable.Repeat(Sentence, repeats)).TrimEnd();
 
     private static byte[] Doc(Fixtures.Spec spec) => Fixtures.Make(spec);
+
+    [Theory]
+    [InlineData("1.", true)]
+    [InlineData("(a)", true)]
+    [InlineData("1.1", true)]
+    [InlineData("12.3.4.", true)]
+    [InlineData("1.1.1.1", true)]
+    [InlineData("1.1.1.1.1", false)]
+    [InlineData("1234.5", false)]
+    [InlineData("1..2", false)]
+    [InlineData(".5", false)]
+    [InlineData("3.5%", false)]
+    [InlineData("1", false)]
+    [InlineData("7.500", false)]
+    [InlineData("250.000.", false)]
+    [InlineData("1.250.000", false)]
+    [InlineData("0.5", false)]
+    [InlineData("2.1000", false)]
+    [InlineData("10.200.1", true)]
+    public void ClauseNumbersAreListMarkers(string word, bool marker) => Assert.Equal(marker, PdfText.IsListMarker(word));
+
+    [Fact]
+    public void ClauseNumberIsTheListLabelSoClausesReadLikeAWordFilesListItems()
+    {
+        // A Word source reads "1.1" as the label of a ListItem whose text has no number; the PDF source reads a printed clause number the
+        // same way, so the two models of one contract align clause for clause.
+        CompareDocument doc = Run.Read(Doc(new Fixtures.Spec { Paragraphs = ["1.1 The supplier shall deliver the goods within thirty days.", "1.2 Payment is due within sixty days of the invoice."] }));
+        Node[] items = [.. doc.Nodes.Where(n => n.Kind == NodeKind.ListItem)];
+        Assert.Equal(["1.1", "1.2"], items.Select(n => n.Attributes.Get(FormatKeys.ListLabel)).ToArray());
+        Assert.StartsWith("The supplier shall deliver", items[0].Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void LabelledClausesAlignAndOnlyTheEditedWordsChange()
+    {
+        byte[] a = Doc(new Fixtures.Spec { Paragraphs = ["1.1 The supplier shall deliver the goods within thirty days.", "1.2 Payment is due within sixty days of the invoice."] });
+        byte[] b = Doc(new Fixtures.Spec { Paragraphs = ["1.1 The supplier shall deliver the goods within forty days.", "1.2 Payment is due within sixty days of the invoice."] });
+        foreach ((byte[] o, byte[] n) in new[] { (a, b), (b, a) })
+        {
+            Comparison c = Comparison.Of(Run.Read(o, "o.pdf"), Run.Read(n, "n.pdf"));
+            Assert.Equal(2, c.Alignment.Links.Count(l => l.Kind == LinkKind.Match && c.Old[l.OldNodes[0]].Kind == NodeKind.ListItem));
+            Assert.DoesNotContain(c.Changes, ch => ch.Kind is ChangeKind.Insert or ChangeKind.Delete);
+        }
+    }
 
     [Fact]
     public void SniffsByContentNotByName()
