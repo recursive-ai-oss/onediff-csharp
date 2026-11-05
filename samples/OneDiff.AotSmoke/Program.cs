@@ -1,4 +1,5 @@
 using OneDiff.Documents;
+using OneDiff.Documents.Combine;
 using OneDiff.Documents.Model;
 using OneDiff.Documents.Serialization;
 using OneDiff.Pdf;
@@ -44,9 +45,42 @@ internal static class Program
         failures += CheckPdf();
         failures += CheckWord();
         failures += CheckRedline();
+        failures += CheckCombine();
 
         Console.Out.WriteLine(failures == 0 ? "ok" : "FAILED");
         return failures == 0 ? 0 : 1;
+    }
+
+    /// <summary>Combine and chain under NativeAOT: attribution, a conflict, the report page, both JSON forms and the checks.</summary>
+    private static int CheckCombine()
+    {
+        CompareDocument original = CompareDocument.FromText("Pay within 30 days.\n\nDeliver the goods.\n\nEnglish law governs.", "original");
+        CompareDocument alice = CompareDocument.FromText("Pay within 60 days.\n\nDeliver the goods.\n\nEnglish law governs.", "alice");
+        CompareDocument bob = CompareDocument.FromText("Pay within 10 days.\n\nDeliver the goods.\n\nEnglish law governs.", "bob");
+        CompareDocument carol = CompareDocument.FromText("Pay within 60 days.\n\nDeliver the goods.\n\nScots law governs.", "carol");
+        int failures = 0;
+        Combination c = Combination.Of(original, [alice, bob, carol]);
+        if (!c.Check().IsEmpty || c.Conflicts.Length != 1 || !c.Changes.Any(x => x.Reviewers.Length == 2))
+        {
+            Console.Error.WriteLine("combine: unexpected result");
+            failures++;
+        }
+
+        string html = ChangeReport.From(c).ToHtml();
+        if (!html.Contains("class=\"conflict\"", StringComparison.Ordinal) || CombineJson.Write(c).Length == 0)
+        {
+            Console.Error.WriteLine("combine: report or JSON missing");
+            failures++;
+        }
+
+        ComparisonChain chain = ComparisonChain.Of([original, alice, carol]);
+        if (!chain.Check().IsEmpty || chain.Net.Changes.Any(n => chain.StepsOf(n.Id).IsEmpty) || CombineJson.Write(chain).Length == 0 || !ChangeReport.From(chain).ToHtml().Contains("net:", StringComparison.Ordinal))
+        {
+            Console.Error.WriteLine("chain: unexpected result");
+            failures++;
+        }
+
+        return failures;
     }
 
     /// <summary>The happy path under NativeAOT: Redline.Create to HTML (inline and side by side) and JSON, and SaveAs.</summary>

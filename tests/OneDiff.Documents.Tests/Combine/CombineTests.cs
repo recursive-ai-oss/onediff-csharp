@@ -153,7 +153,7 @@ public class CombineTests
     {
         int cases = int.TryParse(Environment.GetEnvironmentVariable("ONEDIFF_COMBINE_CASES"), CultureInfo.InvariantCulture, out int n) ? n : 150;
         int baseSeed = int.TryParse(Environment.GetEnvironmentVariable("ONEDIFF_COMBINE_SEED"), CultureInfo.InvariantCulture, out int s0) ? s0 : 0;
-        int shared = 0, conflicts = 0, chainsOk = 0;
+        int shared = 0, conflicts = 0;
         for (int i = 0; i < cases; i++)
         {
             int seed = baseSeed + i;
@@ -162,14 +162,20 @@ public class CombineTests
             ImmutableCheck(c, context);
             shared += c.Changes.Count(x => x.Reviewers.Length > 1);
             conflicts += c.Conflicts.Length;
-            if (seed % 4 == 0)
-            {
-                chainsOk += RandomChain(seed) ? 1 : 0;
-            }
         }
 
         Assert.True(cases < 50 || (shared > 0 && conflicts > 0), $"shared {shared}, conflicts {conflicts}");
-        _ = chainsOk;
+    }
+
+    [Fact]
+    public void RandomChainsAlwaysVerify()
+    {
+        int cases = int.TryParse(Environment.GetEnvironmentVariable("ONEDIFF_CHAIN_CASES"), CultureInfo.InvariantCulture, out int n) ? n : 60;
+        int baseSeed = int.TryParse(Environment.GetEnvironmentVariable("ONEDIFF_CHAIN_SEED"), CultureInfo.InvariantCulture, out int s0) ? s0 : 0;
+        for (int i = 0; i < cases; i++)
+        {
+            RandomChain(baseSeed + i);
+        }
     }
 
     internal static (Combination, string) RandomCombination(int seed)
@@ -235,7 +241,7 @@ public class CombineTests
         var r = new Random(seed * 7 + 1);
         GNode cur = DocumentGenerator.Random(r);
         var versions = new List<CompareDocument> { DocumentGenerator.Build(cur, "v1") };
-        for (int s = r.Next(2, 5); s > 0; s--)
+        for (int s = r.Next(3, 6); s > 0; s--)
         {
             cur = cur.Clone();
             for (int e = r.Next(0, 5); e > 0; e--)
