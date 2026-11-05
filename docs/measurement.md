@@ -70,6 +70,16 @@ Settings, so the work is the same on both sides:
 
 `bench/run-bench.sh OUT [BenchmarkDotNet args]` runs everything: the suites (with `ONEDIFF_BENCH_MODE=smoke` for a short indicative pass), the input and edit-distance listing, peak working set per row (one cold run per child process, reported above a load-only baseline), and `results-table.md`: per size, ours against each comparator with time ratio, allocations and allocation ratio, a geometric mean per area and comparator, and the verdict against the bars (geomean at most 1.0, no row above 1.25). `bench/record-run.sh` writes the CPU model, core count, instruction-set flags and the load average before, during and after into the same folder. Timings from a machine that was doing other work are not results.
 
+## Restoring the sister-library previews
+
+`RecursiveAI.OneDiff.Pdf` builds on a preview of `RecursiveAI.OnePdf` that is not on nuget.org yet. Until it is, restore needs one extra package source that is kept out of the repository:
+
+1. Put the preview `.nupkg` files (`RecursiveAI.OnePdf`, `.Layout` and `.Fonts` at the version in `Directory.Packages.props`) in a folder and point `ONEDIFF_PREVIEW_FEED` at it.
+2. Copy `docs/nuget-local.config.example` to `NuGet.Config` at the repository root. The file is not tracked, so no machine path ever lands in a commit. It maps only the OnePDF package ids to that folder and everything else to nuget.org; the mapping also keeps central package management from warning about several sources.
+3. `dotnet restore` as usual. Without the file, restore of the PDF projects fails with an unresolved package version; every other project restores from nuget.org alone.
+
+Hosted CI cannot restore the PDF projects until the version is published.
+
 ## Gold sets
 
 The document engine is measured against labelled pairs. Three kinds of data exist, and each has a fixed role: **synthetic pairs with exact labels** (the scored set), **the same pairs rendered to PDF plus real version pairs** (the PDF gate set and the exact gates), and **real pairs without labels** (invertibility, fallback and re-extraction only). Nothing in this section is committed except the tools; data lives under `~/onediff/eval/` (evaluation) and is regenerated from seeds and pins.

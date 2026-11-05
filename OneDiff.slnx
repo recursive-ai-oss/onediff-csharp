@@ -18,6 +18,7 @@
     <Project Path="tests/OneDiff.Cli.Tests/OneDiff.Cli.Tests.csproj" />
     <Project Path="tests/OneDiff.Documents.Tests/OneDiff.Documents.Tests.csproj" />
     <Project Path="tests/OneDiff.GoldSets.Tests/OneDiff.GoldSets.Tests.csproj" />
+    <Project Path="tests/OneDiff.Pdf.Tests/OneDiff.Pdf.Tests.csproj" />
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/OneDiff.AotSmoke/OneDiff.AotSmoke.csproj" />

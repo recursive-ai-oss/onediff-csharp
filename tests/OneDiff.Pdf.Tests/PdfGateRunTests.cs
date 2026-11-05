@@ -1,0 +1,160 @@
+using System.Collections.Concurrent;
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
+using OneDiff.Documents;
+using OneDiff.Documents.Model;
+using OneDiff.Documents.Serialization;
+
+namespace OneDiff.Pdf.Tests;
+
+/// <summary>
+/// The PDF gate over a directory of rendered pairs (<c>pdf/&lt;id&gt;.old.pdf</c> and <c>.new.pdf</c>). Opt-in: it does nothing unless
+/// ONEDIFF_PDF_GATE_DIR is set. For every pair it compares under the Legal and the Strict settings and requires verification
+/// without fallback, marks the new and the old PDF, reads the new marks back against the change list, and compares a second run
+/// byte for byte. ONEDIFF_PDF_GATE_FROM and ONEDIFF_PDF_GATE_COUNT select a slice of the sorted pair ids (chunks);
+/// ONEDIFF_PDF_GATE_OUT receives one line per pair; ONEDIFF_PDF_GATE_JOBS sets the parallelism (default 4).
+/// </summary>
+public class PdfGateRunTests
+{
+    private static string Hex(byte[] b) => Convert.ToHexStringLower(SHA256.HashData(b));
+
+    [Fact]
+    public void EveryPairOfTheDirectoryPassesTheGates()
+    {
+        string? dir = Environment.GetEnvironmentVariable("ONEDIFF_PDF_GATE_DIR");
+        if (dir is null)
+        {
+            Assert.Skip("ONEDIFF_PDF_GATE_DIR is not set");
+        }
+
+        string outFile = Environment.GetEnvironmentVariable("ONEDIFF_PDF_GATE_OUT") ?? Path.Combine(Path.GetTempPath(), "pdf-gate.txt");
+        int from = Int("ONEDIFF_PDF_GATE_FROM", 0), count = Int("ONEDIFF_PDF_GATE_COUNT", int.MaxValue), jobs = Int("ONEDIFF_PDF_GATE_JOBS", 4);
+        string[] ids = [.. Directory.EnumerateFiles(Path.Combine(dir, "pdf"), "*.old.pdf")
+            .Select(p => Path.GetFileName(p)[..^".old.pdf".Length]).OrderBy(x => x, StringComparer.Ordinal).Skip(from).Take(count)];
+        // ONEDIFF_PDF_GATE_EVERY=n keeps every n-th pair of the slice (a spread across the set, for cross-machine digests).
+        int every = Int("ONEDIFF_PDF_GATE_EVERY", 1);
+        ids = [.. ids.Where((_, i) => i % every == 0)];
+
+        var lines = new ConcurrentDictionary<string, string>();
+        var failures = new ConcurrentBag<string>();
+        Parallel.For(0, ids.Length, new ParallelOptions { MaxDegreeOfParallelism = jobs }, i =>
+        {
+            string id = ids[i];
+            try
+            {
+                lines[id] = CheckPair(dir, id, failures);
+            }
+            catch (Exception e)
+            {
+                failures.Add($"{id}: exception {e.GetType().Name}: {e.Message}");
+                lines[id] = id + " EXCEPTION";
+            }
+        });
+
+        File.WriteAllLines(outFile, ids.Select(id => lines[id]));
+        File.WriteAllLines(outFile + ".failures", failures.Order(StringComparer.Ordinal));
+        Assert.True(failures.IsEmpty, $"{failures.Count} of {ids.Length} pairs failed; first: {failures.Order(StringComparer.Ordinal).FirstOrDefault()}");
+    }
+
+    [Fact]
+    public void ExplainOnePair()
+    {
+        string? dir = Environment.GetEnvironmentVariable("ONEDIFF_PDF_GATE_DIR"), id = Environment.GetEnvironmentVariable("ONEDIFF_PDF_GATE_EXPLAIN");
+        if (dir is null || id is null)
+        {
+            Assert.Skip("ONEDIFF_PDF_GATE_EXPLAIN is not set");
+        }
+
+        Run run = Run.Of(File.ReadAllBytes(Path.Combine(dir, "pdf", id + ".old.pdf")), File.ReadAllBytes(Path.Combine(dir, "pdf", id + ".new.pdf")));
+        var sb = new StringBuilder();
+        static string Clip(string s) => s.Length <= 70 ? s : s[..70] + "...";
+        foreach (Change c in run.Comparison.Changes)
+        {
+            sb.AppendLine(CultureInfo.InvariantCulture, $"#{c.Id} {c.Kind} link={c.LinkId} old[nodes={string.Join('+', c.Old.Nodes)} {c.Old.Start}+{c.Old.Length} '{Clip(c.Old.Text)}'] new[nodes={string.Join('+', c.New.Nodes)} {c.New.Start}+{c.New.Length} '{Clip(c.New.Text)}']");
+        }
+
+        foreach (PdfMark m in run.Result.Marks)
+        {
+            sb.AppendLine(CultureInfo.InvariantCulture, $"mark {m.Name} {m.Kind} quads={m.QuadCount}");
+        }
+
+        if (int.TryParse(Environment.GetEnvironmentVariable("ONEDIFF_PDF_GATE_CHANGE"), out int cid))
+        {
+            Change ch = run.Comparison.Changes.First(c => c.Id == cid);
+            foreach (int n in ch.New.Nodes)
+            {
+                foreach (Quad q in run.Comparison.New[n].Anchor.Quads)
+                {
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"node {n} quad p{q.Page} x {q.X1:F1}..{q.X3:F1} y {q.Y1:F1}..{q.Y3:F1}");
+                    using OnePdf.PdfDocument pdf = OnePdf.PdfDocument.Open(File.ReadAllBytes(Path.Combine(dir, "pdf", id + ".new.pdf")));
+                    var texts = pdf.ExtractText(new OnePdf.Text.PdfTextOptions { RetainGlyphs = true, DetectHeadersAndFooters = false, MaxDegreeOfParallelism = 1 });
+                    foreach (OnePdf.Text.PdfTextGlyph g in texts[q.Page].Glyphs)
+                    {
+                        OnePdf.Text.PdfQuad gq = g.Quad;
+                        double cx = (gq.X0 + gq.X2) / 2, cy = (gq.Y0 + gq.Y2) / 2;
+                        if (cx >= q.X1 && cx <= q.X3 && cy >= q.Y1 && cy <= q.Y3)
+                        {
+                            sb.AppendLine(CultureInfo.InvariantCulture, $"  glyph '{g.Text}' c=({cx:F1},{cy:F1}) y {Math.Min(gq.Y0, gq.Y2):F1}..{Math.Max(gq.Y0, gq.Y2):F1}");
+                        }
+                    }
+                }
+            }
+        }
+
+        File.WriteAllText(Environment.GetEnvironmentVariable("ONEDIFF_PDF_GATE_OUT") ?? Path.Combine(Path.GetTempPath(), "explain.txt"), sb.ToString());
+    }
+
+    private static string CheckPair(string dir, string id, ConcurrentBag<string> failures)
+    {
+        byte[] oldPdf = File.ReadAllBytes(Path.Combine(dir, "pdf", id + ".old.pdf")), newPdf = File.ReadAllBytes(Path.Combine(dir, "pdf", id + ".new.pdf"));
+        var sb = new StringBuilder(id);
+        sb.Append(CultureInfo.InvariantCulture, $" in.old={Hex(oldPdf)} in.new={Hex(newPdf)}");
+        foreach ((string name, CompareSettings settings) in new[] { ("legal", CompareSettings.Legal), ("strict", CompareSettings.Strict) })
+        {
+            Run one = Run.Of(oldPdf, newPdf, settings);
+            if (!one.Comparison.Verification.Passed || one.Comparison.Verification.FallbackLevel != 0 || one.Comparison.Check().Length != 0)
+            {
+                failures.Add($"{id} {name}: verification passed={one.Comparison.Verification.Passed} fallback={one.Comparison.Verification.FallbackLevel} recheck={one.Comparison.Check().Length}");
+            }
+
+            try
+            {
+                one.AssertReextraction();
+            }
+            catch (Exception e)
+            {
+                failures.Add($"{id} {name}: re-extraction: {e.Message.ReplaceLineEndings(" | ")} (kinds {string.Join(",", one.Comparison.Changes.Select(c => c.Kind).Distinct())})");
+            }
+
+            try
+            {
+                one.AssertOldReextraction();
+            }
+            catch (Exception e)
+            {
+                failures.Add($"{id} {name}: old-document re-extraction: {e.Message.ReplaceLineEndings(" | ")}");
+            }
+
+            using var oldMarked = new MemoryStream();
+            PdfRedline.OnPages.MarkOldDocument(one.Comparison, oldPdf, oldMarked);
+
+            // Determinism: a second run from the bytes gives identical comparison JSON and identical marked PDFs.
+            Run two = Run.Of(oldPdf, newPdf, settings);
+            byte[] j1 = ComparisonJson.Write(one.Comparison), j2 = ComparisonJson.Write(two.Comparison);
+            using var oldMarked2 = new MemoryStream();
+            PdfRedline.OnPages.MarkOldDocument(two.Comparison, oldPdf, oldMarked2);
+            if (!j1.AsSpan().SequenceEqual(j2) || !one.Marked.AsSpan().SequenceEqual(two.Marked) || !oldMarked.ToArray().AsSpan().SequenceEqual(oldMarked2.ToArray()))
+            {
+                failures.Add($"{id} {name}: second run differs");
+            }
+
+            sb.Append(CultureInfo.InvariantCulture, $" {name} changes={one.Comparison.Changes.Length} marks={one.Result.Marks.Length} json={Hex(j1)} new={Hex(one.Marked)} old={Hex(oldMarked.ToArray())}");
+        }
+
+        return sb.ToString();
+    }
+
+    private static int Int(string name, int fallback) =>
+        int.TryParse(Environment.GetEnvironmentVariable(name), CultureInfo.InvariantCulture, out int v) ? v : fallback;
+}

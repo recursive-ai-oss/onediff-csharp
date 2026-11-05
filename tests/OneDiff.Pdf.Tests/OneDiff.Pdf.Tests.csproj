@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>OneDiff.Pdf.Tests</RootNamespace>
+    <AssemblyName>OneDiff.Pdf.Tests</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <NoWarn>$(NoWarn);xUnit1051</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <!-- The tests write their PDFs from text with OnePDF's own layout engine; the library under test does not use it. -->
+    <PackageReference Include="RecursiveAI.OnePdf.Layout" />
+    <PackageReference Include="RecursiveAI.OnePdf.Fonts" />
+    <PackageReference Include="RecursiveAI.OnePdf.Hyphenation" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/OneDiff.Pdf/OneDiff.Pdf.csproj" />
+  </ItemGroup>
+
+</Project>
