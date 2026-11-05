@@ -9,7 +9,7 @@
     <PackageId>$(PackagePrefix)OneDiff.Tool</PackageId>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>onediff</ToolCommandName>
-    <Description>Text diff and document comparison for .NET: the onediff command-line tool.</Description>
+    <Description>Text diff and document comparison for .NET: the onediff command-line tool, which compares text and PDF files.</Description>
     <IsPackable>true</IsPackable>
     <PackageTags>$(PackageTags);cli;dotnet-tool</PackageTags>
   </PropertyGroup>
@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="../OneDiff/OneDiff.csproj" />
     <ProjectReference Include="../OneDiff.Documents/OneDiff.Documents.csproj" />
+    <ProjectReference Include="../OneDiff.Pdf/OneDiff.Pdf.csproj" />
   </ItemGroup>
 
 </Project>

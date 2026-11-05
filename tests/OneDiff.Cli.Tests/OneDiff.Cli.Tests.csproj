@@ -14,6 +14,9 @@
 
   <ItemGroup>
     <PackageReference Include="xunit.v3" />
+    <!-- The PDF tests write their input files from text with OnePDF's own layout engine; the tool under test does not use it. -->
+    <PackageReference Include="RecursiveAI.OnePdf.Layout" />
+    <PackageReference Include="RecursiveAI.OnePdf.Fonts" />
   </ItemGroup>
 
   <ItemGroup>

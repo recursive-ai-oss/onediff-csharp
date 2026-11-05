@@ -9,7 +9,8 @@ namespace OneDiff.Pdf.Tests;
 /// Opt-in timing of the document budgets, run by <c>bench/run-budgets.sh</c> (it does nothing unless ONEDIFF_BUDGET_OUT is set).
 /// One process times one part, so that its peak memory belongs to that part alone:
 /// ONEDIFF_BUDGET_PART = <c>markup</c> (read both PDFs, compare, mark the new document's pages),
-/// <c>rendered-inline</c> or <c>rendered-side-by-side</c> (read, compare, then write the rendered redline);
+/// <c>rendered-inline</c> or <c>rendered-side-by-side</c> (read, compare, then write the rendered redline), or
+/// <c>baseline</c> (load the inputs and do nothing, so that the script can subtract what merely having them costs);
 /// ONEDIFF_BUDGET_PAGES = pages of the new document (default 100; about 17 paragraphs a page, about 3 changes a page);
 /// ONEDIFF_BUDGET_DIR = folder for the generated pair: part <c>generate</c> writes old.pdf and new.pdf there, and the timed parts read them, so
 /// that a timed part's peak memory does not include the cost of writing the inputs;
@@ -30,11 +31,8 @@ public class BudgetTests
         string part = Environment.GetEnvironmentVariable("ONEDIFF_BUDGET_PART") ?? "markup";
         int pages = int.Parse(Environment.GetEnvironmentVariable("ONEDIFF_BUDGET_PAGES") ?? "100", CultureInfo.InvariantCulture);
         int reps = int.Parse(Environment.GetEnvironmentVariable("ONEDIFF_BUDGET_REPS") ?? "3", CultureInfo.InvariantCulture);
-        Assert.True(part is "generate" or "markup" or "rendered-inline" or "rendered-side-by-side", "unknown ONEDIFF_BUDGET_PART");
+        Assert.True(part is "generate" or "baseline" or "markup" or "rendered-inline" or "rendered-side-by-side", "unknown ONEDIFF_BUDGET_PART");
         string? dir = Environment.GetEnvironmentVariable("ONEDIFF_BUDGET_DIR");
-
-        using var proc = Process.GetCurrentProcess();
-        long baseline = proc.WorkingSet64;
 
         byte[] a, b;
         if (part != "generate" && dir is not null && File.Exists(Path.Combine(dir, "new.pdf")))
@@ -70,16 +68,9 @@ public class BudgetTests
             newPages = d.PageCount;
         }
 
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        GC.Collect();
-        proc.Refresh();
-        // Inputs are in memory now; what the run adds above this is the cost of the work itself.
-        long inputsResident = proc.WorkingSet64;
-
-        if (part == "generate")
+        if (part is "generate" or "baseline")
         {
-            File.WriteAllText(path, $"generated pages_new={newPages} bytes_old={a.Length} bytes_new={b.Length}\n");
+            File.WriteAllText(path, $"{part} pages_new={newPages} bytes_old={a.Length} bytes_new={b.Length}\n");
             return;
         }
 
@@ -129,11 +120,7 @@ public class BudgetTests
         }
 
         totals.Sort();
-        proc.Refresh();
-        long peak = proc.PeakWorkingSet64;
         lines.Add(string.Create(CultureInfo.InvariantCulture, $"median_total_ms={totals[totals.Count / 2]:F0} min_total_ms={totals[0]:F0} max_total_ms={totals[^1]:F0}"));
-        lines.Add(string.Create(CultureInfo.InvariantCulture,
-            $"peak_working_set_MB={peak / (1024 * 1024)} baseline_MB={baseline / (1024 * 1024)} inputs_resident_MB={inputsResident / (1024 * 1024)} bytes_per_page={(peak - inputsResident) / Math.Max(newPages, 1)}"));
         File.WriteAllLines(path, lines);
     }
 

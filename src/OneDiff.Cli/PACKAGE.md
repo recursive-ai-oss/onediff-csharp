@@ -2,12 +2,16 @@
 
 **Text diff and document comparison for .NET.**
 
-The `onediff` command-line tool: `diff`, `patch`, `merge`, `compare`, `combine` and `chain` over the OneDiff libraries. Exit codes follow GNU diff, GNU patch and git merge-file.
+The `onediff` command-line tool: `diff`, `patch`, `merge`, `compare`, `combine` and `chain` over the OneDiff libraries, for text and PDF files. Exit codes follow GNU diff, GNU patch and git merge-file.
 
 ```
 dotnet tool install --global RecursiveAI.OneDiff.Tool
 onediff diff -u old.txt new.txt
+onediff compare v1.pdf v2.pdf -o markup.pdf     # changes marked on the pages of v2.pdf
+onediff compare v1.txt v2.txt -o redline.pdf     # a rendered redline PDF
 ```
+
+The tool carries the PDF packages (`RecursiveAI.OneDiff.Pdf`, OnePDF and OneRender), so it is larger than the text tools; only Latin text is drawn in rendered redlines. Word documents are not read by this tool.
 
 > **Preview.** Early releases; the public API may change before 1.0.
 

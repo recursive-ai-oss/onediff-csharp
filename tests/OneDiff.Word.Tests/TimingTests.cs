@@ -87,8 +87,7 @@ public class TimingTests
         }
 
         Console.WriteLine(string.Join('\n', results));
-        using var proc = Process.GetCurrentProcess();
-        results.Add(string.Create(CultureInfo.InvariantCulture, $"pages={pages} bytes_old={oldBytes.Length} bytes_new={newBytes.Length} peak_working_set_MB={proc.PeakWorkingSet64 / (1024 * 1024)}"));
+        results.Add(string.Create(CultureInfo.InvariantCulture, $"pages={pages} bytes_old={oldBytes.Length} bytes_new={newBytes.Length}"));
         File.WriteAllLines(Path.IsPathRooted(target) ? target : Path.Combine(Path.GetTempPath(), "word-timing.txt"), results);
     }
 }

@@ -119,8 +119,11 @@ Set: `pdf-v1`, sha256 `eb10c6b3a7af57239c71482da8d1fdd9011aaf3a3bd0036db23e2e586
 | Marks on the new document, re-extracted with OnePDF, equal the change list (annotation text under the quadrilaterals, pop-up text, skip reasons) | 2,220 comparisons, 0 failures | pass |
 | Marks on the old document, re-extracted likewise | 2,220 comparisons, 0 failures | pass |
 | Second run gives byte-identical comparison JSON and marked PDFs | 2,220 comparisons, 0 failures | pass |
-| Same digest of generated inputs, comparison JSON and marked PDFs on x64 and arm64 | `8901effd…` on both | pass |
-| Rendered redline PDF, read back with OnePDF, equals the change list (inline and side by side), on the text corpus and on pdf-v1 | pending: counts of the final run | pending |
+| Same digest of generated inputs, comparison JSON and marked PDFs on x64 and arm64 | `72923d7c…` on both | pass |
+| Rendered redline PDF (OneRender 1.3.3), read back with OnePDF, equals the change list, inline and side by side each: text corpus | 638 pairs, 20,235 pages, 0 failures | pass |
+| The same, pdf-v1 | all 1,110 pairs, 15,184 pages, 0 failures | pass |
+| The same, pairs over 300 kB | 24 pairs, 0 failures | pass |
+| Same rendered text-corpus digest on x64 and arm64 | `1cf5ca96…` on both | pass |
 | HTML redlines parsed back: every mark carries its change, text equals the change list | 96,000 generated pages and 1,324 corpus pages, 0 mismatches | pass |
 | HTML pages against the W3C Nu Html Checker 26.11.4 | 0 errors | pass |
 | Same HTML page hashes on x64 and arm64 | identical | pass |
@@ -242,7 +245,7 @@ Rows where OneDiff's DOCX output and the free tools are compared (strictly bette
 ## Pending, not in this release, and losing rows
 
 - **Budgets** above: pending (measured at release).
-- **Rendered redline re-extraction counts**: pending (see the PDF gates).
+- **Known limit:** one 29.7 MB pair exceeds the renderer's display-list limit; the rendered redline gives a clear error for it. It is a limit, not a failure of the gates above.
 - **DOCX engine rows, DOCX speed rows against Docxodus and OfficeIMO:** pending; the package is not in this release.
 - **Blind-preference rows** against the free comparators, grids, slides and scan rows, and the model rows: not run; the packages that produce them are not built yet.
 - **A WASM timing row** and speed rows for the document engine against a managed comparator: not run (there is none for PDF).

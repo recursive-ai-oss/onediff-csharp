@@ -14,11 +14,14 @@ internal static class CompareCommand
 
     private const string Help = """
         usage: onediff compare <old> <new> <output> [options]
+               onediff compare <old> <new> -o <output> [options]
 
-        Compares two documents (recognized by content) and writes the redline. The output form follows the extension
-        of <output>: .html (inline), .json (the change list).
+        Compares two documents (text or PDF, recognized by content) and writes the redline. The output form follows the
+        extension of <output>: .html (inline), .json (the change list), .pdf (the new PDF with the changes marked on its
+        own pages when the new document is a PDF, otherwise a rendered redline).
 
         options:
+          -o, --output <file>                    the output file (instead of the third argument)
           --form <html|html-side-by-side|json>   choose the output form instead of using the extension
           --settings <legal|strict|text>         what to show and hide (default legal)
           --style <blackline|sidebyside|word|developer>
@@ -34,6 +37,7 @@ internal static class CompareCommand
     public static int Run(string[] args)
     {
         var positional = new List<string>();
+        string? output = null;
         string? form = null, settingsName = null, styleName = null, title = null, language = null, timestamp = null;
         bool noCover = false, noFooter = false, noBars = false, typeTags = false;
         for (int i = 0; i < args.Length; i++)
@@ -55,6 +59,14 @@ internal static class CompareCommand
                     break;
                 case "--type-tags":
                     typeTags = true;
+                    break;
+                case "-o" or "--output":
+                    if (i + 1 >= args.Length)
+                    {
+                        return Fail($"{a} needs a value");
+                    }
+
+                    output = args[++i];
                     break;
                 case "--form" or "--settings" or "--style" or "--title" or "--language" or "--timestamp":
                     if (i + 1 >= args.Length)
@@ -97,7 +109,12 @@ internal static class CompareCommand
             }
         }
 
-        if (positional.Count != 3)
+        if (output is not null)
+        {
+            positional.Add(output);
+        }
+
+        if (positional.Count != 3 || (output is not null && args.Count(x => x is "-o" or "--output") > 1))
         {
             return Fail("expected <old> <new> <output>");
         }

@@ -24,7 +24,7 @@ On nuget.org in this preview:
 | `RecursiveAI.OneDiff` | The text core: diff algorithms, tokenizers, cleanup, unified and diff-match-patch patches, three-way merge. Depends on nothing beyond the .NET base class library. |
 | `RecursiveAI.OneDiff.Documents` | The document comparison engine: compare model, alignment, grouping, typed changes, cascades and renames, verification, combine and chains, the change report, JSON, and HTML redlines. Depends on the core and `RecursiveAI.OneFont`. |
 | `RecursiveAI.OneDiff.Pdf` | PDF compare: reads digital PDFs, marks the changes on the original pages, and writes a rendered redline PDF. Depends on `.Documents`, `RecursiveAI.OnePdf` and `RecursiveAI.OneRender.Pdf`. |
-| `RecursiveAI.OneDiff.Tool` | The `onediff` command-line tool: `diff`, `patch`, `merge`, `compare`, `combine` and `chain`. |
+| `RecursiveAI.OneDiff.Tool` | The `onediff` command-line tool: `diff`, `patch`, `merge`, `compare`, `combine` and `chain`, for text and PDF files (`onediff compare v1.pdf v2.pdf -o markup.pdf`). |
 
 Preview, not yet on nuget.org (they depend on previews of other libraries that are not published yet; they build from this repository):
 

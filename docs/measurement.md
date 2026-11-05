@@ -203,6 +203,8 @@ The combine set is built by `OneDiff.GoldSets generate-combine --out DIR` (seed 
 - the PDF pair of 100 pages and about 300 changes (the test generator `BudgetTests` in `tests/OneDiff.Pdf.Tests`, seed 2026, written once to `OUT/pair` so that the peak memory of a timed part does not include writing the inputs): read both, compare, mark the new document's pages;
 - the same pair to a rendered redline, inline and side by side, with the peak working set of each process;
 - a 100-page DOCX contract with about 300 changes to a tracked-changes DOCX (`TimingTests` in `tests/OneDiff.Word.Tests`; information only);
-- bytes per page: the peak working set above the resident inputs, divided by the pages.
+- bytes per page: the peak resident set of the part above that of a process that only loads the same inputs (the `baseline` part), divided by the pages.
+
+The peak is the operating system's own maximum resident set size for each process: `/usr/bin/time -l` on macOS, `/usr/bin/time -v` on Linux (or `VmHWM` where GNU time is missing). The .NET process counters are not used, because they read 0 on macOS. A run that cannot measure the peak prints `unmeasured` and exits non-zero rather than print a zero or a negative figure.
 
 `ONEDIFF_BUDGET_PAGES` and `ONEDIFF_BUDGET_REPS` shrink a run for a quick check; such runs are indicative. Budgets are proposals: PDF pair 2 s; rendered inline 2 s with a peak of at most 1 GB.
