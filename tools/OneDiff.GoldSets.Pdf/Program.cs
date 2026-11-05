@@ -37,14 +37,14 @@ internal static class Program
     private const string Usage = """
         OneDiff.GoldSets.Pdf render --out DIR [--data DIR] [--real DIR] [--fonts DIR[,DIR]] [--jobs N] [--limit N]
         OneDiff.GoldSets.Pdf compare --pdf DIR --out DIR [--every N] [--limit N] [--jobs N]
-        OneDiff.GoldSets.Pdf cross --mode dp|pd --pdf DIR --docx DIR --out DIR [--settings legal|textonly] [--every N] [--limit N] [--jobs N]
+        OneDiff.GoldSets.Pdf cross --mode dp|pd|dd|pp --pdf DIR --docx DIR --out DIR [--settings legal|textonly] [--every N] [--limit N] [--jobs N]
 
           --data   a gold-set directory made by OneDiff.GoldSets generate (renders pairs/<id>.docs.json)
           --real   fetched real pairs: <source>/<pair>/{old.txt,new.txt}
           writes DIR/pdf/<id>.{old,new}.pdf and <id>.blocks.json, then manifest.json and manifest.sha256
 
           cross compares a Word file with a PDF of the same pair: dp reads the old side from DIR/<id>.old.docx and the new side
-          from the PDF, pd the other way round. It writes OUT/<id>.cmp.json and OUT/<id>.blocks.json, a block map with the Word
+          from the PDF, pd the other way round (dd reads both sides from Word files and pp from PDFs, for reference). It writes OUT/<id>.cmp.json and OUT/<id>.blocks.json, a block map with the Word
           file's side taken from the Word set's map, so that `OneDiff.GoldSets score --cmp OUT --blocks OUT` scores it. Only ids in both sets.
 
           compare reads each DIR/<id>.{old,new}.pdf through the PDF source, compares with the default settings and writes
@@ -103,10 +103,12 @@ internal static class Program
         }
 
         string mode = opt.GetValueOrDefault("mode") ?? throw new ArgumentException("--mode dp|pd is required");
-        if (mode is not ("dp" or "pd"))
+        if (mode is not ("dp" or "pd" or "dd" or "pp"))
         {
-            throw new ArgumentException("--mode is dp or pd");
+            throw new ArgumentException("--mode is dp, pd, dd or pp");
         }
+
+        bool oldWord = mode is "dp" or "dd", newWord = mode is "pd" or "dd";
 
         string pdfDir = Path.GetFullPath(opt.GetValueOrDefault("pdf") ?? throw new ArgumentException("--pdf is required"));
         string docxDir = Path.GetFullPath(opt.GetValueOrDefault("docx") ?? throw new ArgumentException("--docx is required"));
@@ -136,10 +138,10 @@ internal static class Program
             {
                 var pdf = new PdfDocumentSource();
                 var word = new OneDiff.Word.WordDocumentSource();
-                CompareDocument o = mode == "dp"
+                CompareDocument o = oldWord
                     ? word.Read(DocumentInput.FromBytes(File.ReadAllBytes(Path.Combine(docxDir, id + ".old.docx")), id + ".old.docx"))
                     : pdf.Read(DocumentInput.FromBytes(File.ReadAllBytes(Path.Combine(pdfDir, id + ".old.pdf")), id + ".old.pdf"));
-                CompareDocument n = mode == "pd"
+                CompareDocument n = newWord
                     ? word.Read(DocumentInput.FromBytes(File.ReadAllBytes(Path.Combine(docxDir, id + ".new.docx")), id + ".new.docx"))
                     : pdf.Read(DocumentInput.FromBytes(File.ReadAllBytes(Path.Combine(pdfDir, id + ".new.pdf")), id + ".new.pdf"));
                 File.WriteAllBytes(Path.Combine(outDir, id + ".cmp.json"), ComparisonJson.Write(Comparison.Of(o, n, settings)));
@@ -147,8 +149,16 @@ internal static class Program
                 // The gold node ids are the source documents' own, so a side's block map is the same whichever rendering it comes from.
                 JsonNode pdfMap = JsonNode.Parse(File.ReadAllBytes(Path.Combine(pdfDir, id + ".blocks.json")))!;
                 JsonNode docxMap = JsonNode.Parse(File.ReadAllBytes(Path.Combine(docxDir, id + ".blocks.json")))!;
-                string side = mode == "dp" ? "old" : "new";
-                pdfMap[side] = docxMap[side]!.DeepClone();
+                if (oldWord)
+                {
+                    pdfMap["old"] = docxMap["old"]!.DeepClone();
+                }
+
+                if (newWord)
+                {
+                    pdfMap["new"] = docxMap["new"]!.DeepClone();
+                }
+
                 File.WriteAllText(Path.Combine(outDir, id + ".blocks.json"), pdfMap.ToJsonString());
             }
             catch (Exception e) when (e is not OutOfMemoryException)
