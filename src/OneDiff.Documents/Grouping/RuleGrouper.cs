@@ -32,7 +32,13 @@ internal static class RuleGrouper
     /// <summary>The largest gap, in characters, the local join looks at; a longer gap is never "a few words".</summary>
     private const int MaxLocalGap = 200;
 
-    public static ChangeSet Group(PairDiffs diffs, CancellationToken ct) => ReferenceGrouper.Group(diffs, ct, Units, groupMoves: true);
+    public static ChangeSet Group(PairDiffs diffs, CancellationToken ct)
+    {
+        // The edits that rename a defined term, and those that rewrite a clause number a renumbering moved, stand alone, so each can be
+        // shown in a group of its occurrences without swallowing the other edits of the sentence (docs/semantics.md).
+        Semantics.SemanticPins? pins = diffs.Alignment.Settings.CollapseCascades ? Semantics.SemanticGrouping.Pins(diffs, ct) : null;
+        return ReferenceGrouper.Group(diffs, ct, (link, og, ng, diff, al) => Units(link, og, ng, diff, al, pins), groupMoves: true);
+    }
 
     private sealed class Unit
     {
@@ -76,7 +82,7 @@ internal static class RuleGrouper
     private static void SortEdits(List<RegionEdit> edits) =>
         edits.Sort(static (x, y) => x.OldStart != y.OldStart ? x.OldStart.CompareTo(y.OldStart) : x.NewStart.CompareTo(y.NewStart));
 
-    private static List<(int Position, Change Change)> Units(AlignmentLink link, ProjectedGroup og, ProjectedGroup ng, LinkDiff diff, Alignment al)
+    private static List<(int Position, Change Change)> Units(AlignmentLink link, ProjectedGroup og, ProjectedGroup ng, LinkDiff diff, Alignment al, Semantics.SemanticPins? pins)
     {
         var result = new List<(int, Change)>();
         if (diff.Edits.IsDefaultOrEmpty)
@@ -84,34 +90,67 @@ internal static class RuleGrouper
             return result;
         }
 
-        var units = new List<Unit>();
-        var formatEdits = new List<RegionEdit>();
-        foreach (RegionEdit e in diff.Edits)
-        {
-            if (e.IsFormatOnly)
-            {
-                formatEdits.Add(e);
-            }
-            else
-            {
-                units.Add(Unit.Of(e));
-            }
-        }
-
         string a = og.Text, b = ng.Text;
-        foreach (Unit u in units)
+
+        // Pinned edits, by what they pin: one key per renamed term, one per clause number that is a reference (all edits inside one
+        // number belong together).
+        var pinned = new Dictionary<long, List<RegionEdit>>();
+        if (pins is not null)
         {
-            WidenToValues(u, a, b);
+            long next = 0;
+            foreach (RegionEdit e in diff.Edits)
+            {
+                if (e.IsFormatOnly)
+                {
+                    continue;
+                }
+
+                long key = pins.Renames.Contains((e.OldText.Trim(), e.NewText.Trim())) ? --next : pins.ReferenceNumber(a, b, e);
+                if (key != long.MinValue)
+                {
+                    if (!pinned.TryGetValue(key, out List<RegionEdit>? list))
+                    {
+                        list = [];
+                        pinned[key] = list;
+                    }
+
+                    list.Add(e);
+                }
+            }
         }
 
-        Stabilize(units, formatEdits);
-        if (units.Count > 1)
+        // A pin stays alone unless the units built without it reach it; then its edits go back among the others.
+        List<Unit> units;
+        var pinUnits = new Dictionary<long, Unit>();
+        while (true)
         {
-            units = JoinByStructure(units, a, b);
-            Stabilize(units, formatEdits);
+            var kept = new HashSet<RegionEdit>(pinned.Values.SelectMany(static v => v));
+            units = BuildUnits(diff.Edits.Where(e => !kept.Contains(e)), a, b);
+            pinUnits.Clear();
+            foreach (KeyValuePair<long, List<RegionEdit>> kv in pinned)
+            {
+                Unit u = Unit.Of(kv.Value[0]);
+                for (int i = 1; i < kv.Value.Count; i++)
+                {
+                    u.Absorb(kv.Value[i]);
+                }
+
+                pinUnits[kv.Key] = u;
+            }
+
+            List<long> clash = [.. pinUnits.Where(p => units.Exists(u => u.OldFrom <= p.Value.OldTo && p.Value.OldFrom <= u.OldTo || u.NewFrom <= p.Value.NewTo && p.Value.NewFrom <= u.NewTo)).Select(static p => p.Key)];
+            if (clash.Count == 0)
+            {
+                break;
+            }
+
+            foreach (long k in clash)
+            {
+                pinned.Remove(k);
+            }
         }
 
-        units.AddRange(FormatUnits(units, formatEdits, b));
+        units.AddRange(pinUnits.Values);
         units.Sort(static (x, y) => x.NewFrom != y.NewFrom ? x.NewFrom.CompareTo(y.NewFrom) : x.OldFrom.CompareTo(y.OldFrom));
 
         foreach (Unit u in units)
@@ -127,6 +166,40 @@ internal static class RuleGrouper
         }
 
         return result;
+    }
+
+    /// <summary>The change units for some of a link's edits: values widened, units joined, formatting units added, sorted by position.</summary>
+    private static List<Unit> BuildUnits(IEnumerable<RegionEdit> edits, string a, string b)
+    {
+        var units = new List<Unit>();
+        var formatEdits = new List<RegionEdit>();
+        foreach (RegionEdit e in edits)
+        {
+            if (e.IsFormatOnly)
+            {
+                formatEdits.Add(e);
+            }
+            else
+            {
+                units.Add(Unit.Of(e));
+            }
+        }
+
+        foreach (Unit u in units)
+        {
+            WidenToValues(u, a, b);
+        }
+
+        Stabilize(units, formatEdits);
+        if (units.Count > 1)
+        {
+            units = JoinByStructure(units, a, b);
+            Stabilize(units, formatEdits);
+        }
+
+        units.AddRange(FormatUnits(units, formatEdits, b));
+        units.Sort(static (x, y) => x.NewFrom != y.NewFrom ? x.NewFrom.CompareTo(y.NewFrom) : x.OldFrom.CompareTo(y.OldFrom));
+        return units;
     }
 
     // ---- values ----

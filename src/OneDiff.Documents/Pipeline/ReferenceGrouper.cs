@@ -3,7 +3,7 @@ using OneDiff.Documents.Model;
 
 namespace OneDiff.Documents.Pipeline;
 
-/// <summary>The reference grouping and classification: one change per diff region, plain kinds, no typing.</summary>
+/// <summary>The reference grouping: one change per diff region and one region per change, plain kinds.</summary>
 internal static class ReferenceGrouper
 {
     /// <summary>Makes the changes for the text and format edits of one ordinary link (not a split or merge), each with the new-text position it sorts by.</summary>
@@ -179,19 +179,6 @@ internal static class ReferenceGrouper
         }
 
         return -1;
-    }
-
-    public static ChangeSet Classify(ChangeSet set, CancellationToken ct)
-    {
-        var decision = new Decision(DecidedBy.Rule, "reference", 1.0);
-        ImmutableArray<Change>.Builder b = ImmutableArray.CreateBuilder<Change>(set.Changes.Length);
-        foreach (Change c in set.Changes)
-        {
-            ct.ThrowIfCancellationRequested();
-            b.Add(c with { Decision = decision });
-        }
-
-        return new ChangeSet(set.Alignment, b.MoveToImmutable(), set.Groups, set.Ledger, set.Diagnostics, true);
     }
 
     /// <summary>The side of a change for a range of the joined text of <paramref name="nodes"/>.</summary>

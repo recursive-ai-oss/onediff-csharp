@@ -40,6 +40,7 @@ internal static class Program
         }
 
         failures += CheckDocuments();
+        failures += CheckSemantics();
         failures += CheckPdf();
         failures += CheckWord();
         failures += CheckRedline();
@@ -159,6 +160,66 @@ internal static class Program
                 Console.Error.WriteLine($"{settings.Name}: JSON round trip failed");
                 failures++;
             }
+        }
+
+        return failures;
+    }
+
+    /// <summary>Compares numbered clauses and prints the typed changes, the substantive filter, the cascade and rename groups, and the resolved values.</summary>
+    private static int CheckSemantics()
+    {
+        static CompareDocument Clauses(params (string Label, string Text)[] items)
+        {
+            var b = new CompareDocumentBuilder(DocumentKind.Flowing);
+            foreach ((string label, string text) in items)
+            {
+                b.Add(NodeKind.ListItem, new NodeContent { Text = text, Attributes = FormatSet.Of(FormatKeys.ListLabel, label) });
+            }
+
+            return b.Build();
+        }
+
+        CompareDocument a = Clauses(
+            ("1.1", "\"Software\" means the programs in Schedule 1."),
+            ("1.2", "The Supplier shall deliver the Software within 30 days of 3 March 2025 for USD 5,000."),
+            ("1.3", "Fees are set out in Section 1.4."),
+            ("1.4", "The Customer shall not copy the Software."));
+        CompareDocument b = Clauses(
+            ("1.1", "\"Platform\" means the programs in Schedule 1."),
+            ("1.2", "The Supplier shall deliver the Platform within 60 days of 3 March 2025 for USD 6,500."),
+            ("1.3", "A new clause is added."),
+            ("1.4", "Fees are set out in Section 1.5."),
+            ("1.5", "The Customer shall not copy the Platform."));
+        Comparison c = Comparison.Of(a, b, CompareSettings.Legal);
+        int failures = 0;
+        foreach (Change ch in c.Changes.Where(x => x.IsSubstantive && x.Type != ChangeType.None))
+        {
+            Console.WriteLine($"typed {ch.Type}: {ch.OldValue?.Canonical} -> {ch.NewValue?.Canonical}");
+        }
+
+        foreach (ChangeGroup g in c.Groups.Where(x => x.Kind != GroupKind.Region))
+        {
+            Console.WriteLine($"group {g.Kind}: {g.Title} ({g.ChangeIds.Length} changes)");
+        }
+
+        bool Has(ChangeType t, string o, string n) => c.Changes.Any(x => x.Type == t && x.OldValue?.Canonical == o && x.NewValue?.Canonical == n);
+        if (!Has(ChangeType.Duration, "30 d", "60 d") || !Has(ChangeType.Amount, "USD 5000", "USD 6500") || !Has(ChangeType.DefinedTerm, "Software", "Platform") || !Has(ChangeType.Reference, "1.4", "1.5"))
+        {
+            Console.Error.WriteLine("semantics: expected typed values are missing");
+            failures++;
+        }
+
+        if (!c.Groups.Any(x => x.Kind == GroupKind.Cascade) || !c.Groups.Any(x => x.Kind == GroupKind.Rename) || c.Changes.Any(x => x.Type == ChangeType.Numbering && x.IsSubstantive))
+        {
+            Console.Error.WriteLine("semantics: expected cascade and rename groups are missing");
+            failures++;
+        }
+
+        byte[] json = ComparisonJson.Write(c);
+        if (!ComparisonJson.Write(ComparisonJson.Read(json)).AsSpan().SequenceEqual(json) || c.Verification.FallbackLevel != 0 || !c.Check().IsEmpty)
+        {
+            Console.Error.WriteLine("semantics: JSON round trip or verification failed");
+            failures++;
         }
 
         return failures;

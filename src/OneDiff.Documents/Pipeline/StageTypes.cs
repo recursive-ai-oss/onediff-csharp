@@ -55,7 +55,7 @@ public sealed class PairDiffs
 }
 
 /// <summary>
-/// The output of <see cref="Stages.Group"/> and <see cref="Stages.Classify"/>: atomic changes, the display groups over them, and
+/// The output of <see cref="Stages.Group"/> and <see cref="Stages.Classify(ChangeSet, CancellationToken)"/>: atomic changes, the display groups over them, and
 /// the ledger. Custom stages and tests make variants with the <c>With</c> methods; <see cref="Stages.Verify"/> checks whatever
 /// it is given. Immutable.
 /// </summary>
@@ -67,7 +67,7 @@ public sealed class ChangeSet
     /// <param name="groups">The display groups; every change must be in exactly one.</param>
     /// <param name="ledger">The hidden differences.</param>
     /// <param name="diagnostics">All diagnostics so far.</param>
-    /// <param name="isClassified">Whether <see cref="Stages.Classify"/> has run.</param>
+    /// <param name="isClassified">Whether <see cref="Stages.Classify(ChangeSet, CancellationToken)"/> has run.</param>
     public ChangeSet(
         Alignment alignment,
         ImmutableArray<Change> changes,

@@ -20,8 +20,8 @@ public class GroupingScaleTests
         "warranty", "remedy", "indemnify", "assign", "consent", "written", "receipt", "reasonable", "applicable", "obligation",
     ];
 
-    [Fact]
-    public void ThreeThousandBlocksWithThreeHundredChangesAreComplete()
+    /// <summary>A 3,000-paragraph contract and a copy with 300 edits.</summary>
+    private static (CompareDocument Old, CompareDocument New) Contract()
     {
         var r = new Random(20261104);
         var oldParas = new List<string>();
@@ -56,7 +56,91 @@ public class GroupingScaleTests
             };
         }
 
-        CompareDocument a = Helpers.Text([.. oldParas]), b = Helpers.Text([.. newParas]);
+        return (Helpers.Text([.. oldParas]), Helpers.Text([.. newParas]));
+    }
+
+    /// <summary>
+    /// The contract as numbered clauses with quoted definitions, and the new version with a clause inserted near the top, so every
+    /// label after it moves and the references to the moved clauses are rewritten: the worst case for the cascade pass.
+    /// </summary>
+    private static (CompareDocument Old, CompareDocument New) NumberedContract()
+    {
+        (CompareDocument plain, CompareDocument edited) = Contract();
+        CompareDocument Number(CompareDocument d, bool insert)
+        {
+            var b = new CompareDocumentBuilder(DocumentKind.Flowing);
+            int label = 0;
+            foreach (Node n in d.Nodes)
+            {
+                if (insert && label == 10)
+                {
+                    label++;
+                    b.Add(NodeKind.ListItem, new NodeContent { Text = "A clause added by the Buyer.", Attributes = FormatSet.Of(FormatKeys.ListLabel, "1." + label) });
+                }
+
+                label++;
+                string text = label % 40 == 0 ? $"\"Term{label}\" means the thing described in Section 1.{label + (insert ? 0 : 1)}." : n.Text;
+                b.Add(NodeKind.ListItem, new NodeContent { Text = text, Attributes = FormatSet.Of(FormatKeys.ListLabel, "1." + label) });
+            }
+
+            return b.Build();
+        }
+
+        return (Number(plain, false), Number(edited, true));
+    }
+
+    /// <summary>
+    /// What the semantic passes (cascade and rename grouping, typing, the substantive flag) add to a whole comparison, as medians of
+    /// interleaved runs with the passes off and on, on the contract above and on its renumbered variant. Written where
+    /// <c>ONEDIFF_SCALE_OUT</c> says; no time is asserted.
+    /// </summary>
+    [Fact]
+    public void SemanticPassesCostLittleOnTheScaleContract()
+    {
+        CompareSettings off = CompareSettings.Legal with { CollapseCascades = false, TypedChanges = false };
+        CompareSettings on = CompareSettings.Legal;
+        foreach ((string name, (CompareDocument a, CompareDocument b)) in new[] { ("flat", Contract()), ("numbered", NumberedContract()) })
+        {
+            var tOff = new List<double>();
+            var tOn = new List<double>();
+            int changes = 0, groups = 0;
+            for (int i = 0; i < 12; i++)
+            {
+                foreach (bool semantic in i % 2 == 0 ? new[] { false, true } : new[] { true, false })
+                {
+                    var sw = Stopwatch.StartNew();
+                    Comparison c = Comparison.Of(a, b, semantic ? on : off);
+                    double ms = sw.Elapsed.TotalMilliseconds;
+                    Assert.True(c.Verification.Passed);
+                    Assert.Equal(0, c.Verification.FallbackLevel);
+                    if (i >= 2)
+                    {
+                        (semantic ? tOn : tOff).Add(ms);
+                    }
+
+                    if (semantic)
+                    {
+                        changes = c.Changes.Length;
+                        groups = c.Groups.Count(g => g.Kind != GroupKind.Region);
+                    }
+                }
+            }
+
+            tOff.Sort();
+            tOn.Sort();
+            double mOff = tOff[tOff.Count / 2], mOn = tOn[tOn.Count / 2];
+            string? outFile = Environment.GetEnvironmentVariable("ONEDIFF_SCALE_OUT");
+            if (!string.IsNullOrEmpty(outFile))
+            {
+                File.AppendAllText(outFile, string.Create(CultureInfo.InvariantCulture, $"semantic passes {name}: changes={changes} semantic-groups={groups} off={mOff:F0}ms on={mOn:F0}ms ratio={mOn / mOff:F3} cores={Environment.ProcessorCount}\n"));
+            }
+        }
+    }
+
+    [Fact]
+    public void ThreeThousandBlocksWithThreeHundredChangesAreComplete()
+    {
+        (CompareDocument a, CompareDocument b) = Contract();
         GC.Collect();
         long before = GC.GetTotalAllocatedBytes(true);
         var total = Stopwatch.StartNew();

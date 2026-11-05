@@ -47,7 +47,7 @@
         "required": ["id", "kind", "title", "changes"],
         "properties": {
           "id": { "type": "integer", "minimum": 0 },
-          "kind": { "enum": ["region", "cascade", "rename", "custom"] },
+          "kind": { "enum": ["region", "cascade", "rename", "custom"], "description": "region: changes shown together as one. cascade: a renumbering and the references it caused. rename: a defined term replaced in its definition and every use. The group's changes are its occurrences; each is a full change elsewhere in the list." },
           "title": { "type": "string" },
           "changes": { "$ref": "#/$defs/ids" }
         }
@@ -277,7 +277,27 @@
             "score": { "type": "number", "minimum": 0, "maximum": 1 }
           }
         },
+        "type": {
+          "enum": ["none", "amount", "date", "duration", "percentage", "number", "party", "definedTerm", "reference", "numbering", "formatting", "typography"],
+          "description": "Optional (omitted for 'none'). What the change is about; set only when settings.typedChanges is on. See docs/semantics.md."
+        },
+        "oldValue": { "$ref": "#/$defs/resolvedValue" },
+        "newValue": { "$ref": "#/$defs/resolvedValue" },
+        "substantive": {
+          "const": false,
+          "description": "Optional. Written only when the change is not substantive (formatting, list labels and the references they caused, white space and typography, attributes); a reader treats a missing member as true."
+        },
         "properties": { "$ref": "#/$defs/format" }
+      }
+    },
+    "resolvedValue": {
+      "type": "object",
+      "description": "A value in canonical, language-neutral form: 'USD 25000', '2027-03-01', '30 d', '12.5%', '8.4'. Optional on a change: absent when there is no value on that side or it could not be resolved.",
+      "required": ["canonical"],
+      "properties": {
+        "canonical": { "type": "string" },
+        "number": { "type": "string", "description": "The numeric part as invariant decimal text (amounts, durations, percentages, numbers)." },
+        "unit": { "type": "string", "description": "A currency code, a duration unit (s, min, h, d, bd, w, mo, y) or '%'." }
       }
     },
     "mark": {
