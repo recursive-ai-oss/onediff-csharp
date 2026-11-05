@@ -128,7 +128,7 @@ public sealed record AttributeEdit(int OldNode, int NewNode, string Key, string?
 /// <param name="Edits">Text and format edits of the link's joined text (empty for whole-node and move changes).</param>
 /// <param name="AttributeEdits">Attribute edits (empty except for attribute changes and splits and merges).</param>
 /// <param name="Decision">Who decided and with what score.</param>
-/// <param name="Properties">Open slots for later stages (type, resolved values, substantive flag); empty here.</param>
+/// <param name="Properties">Open slots a stage or a user may fill with their own key/value pairs; empty from the reference stages.</param>
 public sealed record Change(
     int Id,
     ChangeKind Kind,
@@ -138,7 +138,27 @@ public sealed record Change(
     ImmutableArray<RegionEdit> Edits,
     ImmutableArray<AttributeEdit> AttributeEdits,
     Decision Decision,
-    FormatSet Properties);
+    FormatSet Properties)
+{
+    /// <summary>
+    /// What the change is about: a value, a name, a reference, a list label. <see cref="ChangeType.None"/> for an ordinary text change,
+    /// and always for a comparison made without <see cref="CompareSettings.TypedChanges"/>. Set by <see cref="Stages.Classify(Pipeline.ChangeSet, CancellationToken)"/>.
+    /// </summary>
+    public ChangeType Type { get; init; }
+
+    /// <summary>The old value in canonical form (<c>30 d</c>), or null when the change has no typed old value or the old text could not be resolved.</summary>
+    public ResolvedValue? OldValue { get; init; }
+
+    /// <summary>The new value in canonical form (<c>60 d</c>), or null when the change has no typed new value or the new text could not be resolved.</summary>
+    public ResolvedValue? NewValue { get; init; }
+
+    /// <summary>
+    /// Whether the change alters what the document says or means. False for formatting, list labels and the references a renumbering
+    /// caused, white-space and typography, empty paragraphs, other attributes, and splits and merges that change no words. True
+    /// otherwise, and for a change nobody has classified yet. Filter with <c>comparison.Changes.Where(c =&gt; c.IsSubstantive)</c>.
+    /// </summary>
+    public bool IsSubstantive { get; init; } = true;
+}
 
 /// <summary>What a <see cref="ChangeGroup"/> collects.</summary>
 public enum GroupKind
@@ -146,10 +166,10 @@ public enum GroupKind
     /// <summary>One display region: the changes shown together as one.</summary>
     Region = 0,
 
-    /// <summary>A renumbering and the references it caused.</summary>
+    /// <summary>A renumbering and the references it caused: the changes of every list label that moved and every reference rewritten to follow. Display only; each change stays a change.</summary>
     Cascade = 1,
 
-    /// <summary>A defined term renamed everywhere.</summary>
+    /// <summary>A defined term renamed everywhere: the changes that replace the old term by the new one, in the definition and in every use. Display only; each occurrence stays a change.</summary>
     Rename = 2,
 
     /// <summary>A grouping a user or a later stage defined.</summary>

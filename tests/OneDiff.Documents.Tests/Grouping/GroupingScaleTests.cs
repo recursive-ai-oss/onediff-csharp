@@ -20,8 +20,8 @@ public class GroupingScaleTests
         "warranty", "remedy", "indemnify", "assign", "consent", "written", "receipt", "reasonable", "applicable", "obligation",
     ];
 
-    [Fact]
-    public void ThreeThousandBlocksWithThreeHundredChangesAreComplete()
+    /// <summary>A 3,000-paragraph contract and a copy with 300 edits.</summary>
+    private static (CompareDocument Old, CompareDocument New) Contract()
     {
         var r = new Random(20261104);
         var oldParas = new List<string>();
@@ -56,7 +56,48 @@ public class GroupingScaleTests
             };
         }
 
-        CompareDocument a = Helpers.Text([.. oldParas]), b = Helpers.Text([.. newParas]);
+        return (Helpers.Text([.. oldParas]), Helpers.Text([.. newParas]));
+    }
+
+    /// <summary>
+    /// What the semantic passes (cascade and rename grouping, typing, the substantive flag) add to a whole comparison of the contract
+    /// above, as medians of five runs with the passes off and on. Written where <c>ONEDIFF_SCALE_OUT</c> says; no time is asserted.
+    /// </summary>
+    [Fact]
+    public void SemanticPassesCostLittleOnTheScaleContract()
+    {
+        (CompareDocument a, CompareDocument b) = Contract();
+        CompareSettings off = CompareSettings.Legal with { CollapseCascades = false, TypedChanges = false };
+        CompareSettings on = CompareSettings.Legal;
+        double Median(CompareSettings settings)
+        {
+            var times = new List<double>();
+            for (int i = 0; i < 6; i++)
+            {
+                var sw = Stopwatch.StartNew();
+                Comparison c = Comparison.Of(a, b, settings);
+                times.Add(sw.Elapsed.TotalMilliseconds);
+                Assert.True(c.Verification.Passed);
+                Assert.Equal(0, c.Verification.FallbackLevel);
+            }
+
+            times.RemoveAt(0);
+            times.Sort();
+            return times[2];
+        }
+
+        double tOff = Median(off), tOn = Median(on);
+        string? outFile = Environment.GetEnvironmentVariable("ONEDIFF_SCALE_OUT");
+        if (!string.IsNullOrEmpty(outFile))
+        {
+            File.AppendAllText(outFile, string.Create(CultureInfo.InvariantCulture, $"semantic passes: off={tOff:F0}ms on={tOn:F0}ms ratio={tOn / tOff:F3} cores={Environment.ProcessorCount}\n"));
+        }
+    }
+
+    [Fact]
+    public void ThreeThousandBlocksWithThreeHundredChangesAreComplete()
+    {
+        (CompareDocument a, CompareDocument b) = Contract();
         GC.Collect();
         long before = GC.GetTotalAllocatedBytes(true);
         var total = Stopwatch.StartNew();

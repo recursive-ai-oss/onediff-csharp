@@ -84,6 +84,70 @@ internal static class HtmlPage
 
         Legend(o, style);
         o.Raw("</header>\n");
+        GroupSummary(o, c);
+    }
+
+    /// <summary>
+    /// A renumbering and a renamed term are many changes shown as one: a section lists each group once with its occurrences. The
+    /// marks in the text stay as they are, so nothing is hidden; the section only says which of them belong together.
+    /// </summary>
+    private static void GroupSummary(HtmlOut o, Comparison c)
+    {
+        const int Shown = 200;
+        bool any = false;
+        Dictionary<int, Change>? byId = null;
+        foreach (ChangeGroup g in c.Groups)
+        {
+            if (g.Kind is not (GroupKind.Cascade or GroupKind.Rename))
+            {
+                continue;
+            }
+
+            if (!any)
+            {
+                o.Raw("<section class=\"groups\" aria-labelledby=\"groups-h\">\n<h2 id=\"groups-h\">Grouped changes</h2>\n");
+                any = true;
+            }
+
+            o.Raw("<h3 data-group=\"");
+            o.Int(g.Id);
+            o.Raw(g.Kind == GroupKind.Cascade ? "\" data-group-kind=\"cascade\">" : "\" data-group-kind=\"rename\">");
+            o.Text(g.Kind == GroupKind.Cascade ? "Renumbering and the references it changed" : "Renamed term " + g.Title);
+            o.Raw(" <span class=\"gcount\">(");
+            o.Int(g.ChangeIds.Length);
+            o.Raw(g.ChangeIds.Length == 1 ? " change)</span></h3>\n<ul class=\"occ\">\n" : " changes)</span></h3>\n<ul class=\"occ\">\n");
+            int n = 0;
+            foreach (int id in g.ChangeIds)
+            {
+                if (n++ == Shown)
+                {
+                    o.Raw("<li>and ");
+                    o.Int(g.ChangeIds.Length - Shown);
+                    o.Raw(" more</li>\n");
+                    break;
+                }
+
+                byId ??= c.Changes.ToDictionary(static x => x.Id);
+                Change ch = byId[id];
+                (string from, string to) = ch.Kind == ChangeKind.Attribute && ch.AttributeEdits.Length > 0
+                    ? (ch.AttributeEdits[0].OldValue ?? "", ch.AttributeEdits[0].NewValue ?? "")
+                    : (ch.Old.Text.Trim(), ch.New.Text.Trim());
+                o.Raw("<li data-occurrence=\"");
+                o.Int(id);
+                o.Raw("\"><span class=\"oc-old\">");
+                o.Text(from);
+                o.Raw("</span> \u2192 <span class=\"oc-new\">");
+                o.Text(to);
+                o.Raw("</span></li>\n");
+            }
+
+            o.Raw("</ul>\n");
+        }
+
+        if (any)
+        {
+            o.Raw("</section>\n");
+        }
     }
 
     /// <summary>"lineBreaks" as "line breaks".</summary>
@@ -354,6 +418,7 @@ internal static class HtmlPage
         b.Append(".attrs{font-size:.85rem;color:#333;margin:.1rem 0}.ae{display:block}\n");
         b.Append("table.blk{border-collapse:collapse;margin:.4rem 0}table.blk td{border:1px solid #bbb;padding:.2rem .5rem;vertical-align:top}\n");
         b.Append("td.self{border:0}\n");
+        b.Append("h3{font-size:1rem;margin:1rem 0 .25rem}.gcount{font-weight:400;color:#444}ul.occ{margin:.25rem 0 .75rem;columns:2}ul.occ li{break-inside:avoid}\n");
         b.Append(".ledger summary{cursor:pointer}.ledger ul{margin:.25rem 0 .75rem}\n");
         b.Append("footer{margin-top:2.5rem;border-top:1px solid #bbb;padding-top:.5rem;font-size:.85rem;color:#333}\n");
         if (sideBySide)

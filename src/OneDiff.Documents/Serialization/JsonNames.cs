@@ -52,6 +52,11 @@ internal static class JsonNames
 
     public static readonly EnumNames<DecidedBy> DecidedBys = new(["none", "rule", "model", "user"], static v => (int)v, static i => (DecidedBy)i);
 
+    public static readonly EnumNames<ChangeType> ChangeTypes = new(
+        ["none", "amount", "date", "duration", "percentage", "number", "party", "definedTerm", "reference", "numbering", "formatting", "typography"],
+        static v => (int)v,
+        static i => (ChangeType)i);
+
     public static readonly EnumNames<GroupKind> GroupKinds = new(["region", "cascade", "rename", "custom"], static v => (int)v, static i => (GroupKind)i);
 
     public static readonly EnumNames<LinkKind> LinkKinds = new(["match", "move", "split", "merge"], static v => (int)v, static i => (LinkKind)i);

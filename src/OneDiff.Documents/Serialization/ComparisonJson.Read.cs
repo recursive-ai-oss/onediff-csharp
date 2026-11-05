@@ -320,8 +320,20 @@ public static partial class ComparisonJson
                 edits.ToImmutable(),
                 attrs.ToImmutable(),
                 new Decision(Enum(JsonNames.DecidedBys, Str(dec, "by")), Str(dec, "source"), Num(dec, "score")),
-                Opt(c, "properties") is JsonElement p ? ReadFormat(p) : FormatSet.Empty);
+                Opt(c, "properties") is JsonElement p ? ReadFormat(p) : FormatSet.Empty)
+            {
+                Type = Opt(c, "type") is JsonElement ty ? Enum(JsonNames.ChangeTypes, Text(ty)) : ChangeType.None,
+                OldValue = Opt(c, "oldValue") is JsonElement ov2 ? ReadValue(ov2) : null,
+                NewValue = Opt(c, "newValue") is JsonElement nv2 ? ReadValue(nv2) : null,
+                IsSubstantive = Opt(c, "substantive") is not JsonElement sub || sub.ValueKind != JsonValueKind.False,
+            };
         }
+
+        private static ResolvedValue ReadValue(JsonElement v) =>
+            new(
+                Str(v, "canonical"),
+                Opt(v, "number") is JsonElement num && decimal.TryParse(Text(num), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out decimal d) ? d : null,
+                Opt(v, "unit") is JsonElement unit ? Text(unit) : null);
 
         private ChangeSide ReadSide(JsonElement s) =>
             new(Ints(Member(s, "nodes")), Int(s, "start"), Int(s, "length"), Str(s, "text"), ReadAnchor(Member(s, "anchor")));

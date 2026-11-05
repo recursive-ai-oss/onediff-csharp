@@ -31,7 +31,7 @@ Rules, in order, per ordinary link:
 
 A unit's kind is `Format` when all its edits are format-only, otherwise `Insert` when its old side is empty, `Delete` when its new side is empty, else `Replace`. Units are ordered by where they start in the new text. The thresholds (join distance, the two density shares and their minimum unit counts) were chosen on the synthetic dev and train splits and never on the eval split. On dev, boundary F1 moves by at most 0.001 over join distances 0 to 6, whole-clause shares 0.15 to 0.4, scattered shares 0.09 to 0.2 and minimum counts 2 to 4, so the values above are kept; the density rules together are worth about 0.015 boundary F1 (on dev, switching them off scored 0.887 against 0.902, measured before the value rule above and the no-difference rule in docs/measurement.md).
 
-What is deliberately not here: cascades (renumbering and cross-references), defined-term renames, typed values with resolved meaning, and substantive filtering. Each can take units, or join them under a `ChangeGroup` of its own kind, without changing an edit.
+Cascades, defined-term renames, typed values and the substantive filter are in docs/semantics.md. They arrange or label the units made here and never change an edit; one thing reaches back into this stage: an edit that replaces a renamed defined term by its new name stays a unit of its own (the *pinned* edits, section 1 of docs/semantics.md), unless the units around it reach it.
 
 ## 3. Why the units are not merged edits
 

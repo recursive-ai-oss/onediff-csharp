@@ -333,9 +333,43 @@ public static partial class ComparisonJson
         w.WriteString("source", c.Decision.Source);
         w.WriteNumber("score", c.Decision.Score);
         w.WriteEndObject();
+        if (c.Type != ChangeType.None)
+        {
+            w.WriteString("type", JsonNames.ChangeTypes.Name(c.Type));
+        }
+
+        WriteValue(w, "oldValue", c.OldValue);
+        WriteValue(w, "newValue", c.NewValue);
+        if (!c.IsSubstantive)
+        {
+            w.WriteBoolean("substantive", false);
+        }
+
         if (!c.Properties.IsEmpty)
         {
             WriteFormat(w, "properties", c.Properties);
+        }
+
+        w.WriteEndObject();
+    }
+
+    private static void WriteValue(Utf8JsonWriter w, string name, ResolvedValue? v)
+    {
+        if (v is null)
+        {
+            return;
+        }
+
+        w.WriteStartObject(name);
+        w.WriteString("canonical", v.Canonical);
+        if (v.Number is { } n)
+        {
+            w.WriteString("number", BuiltInValueRecognizer.Format(n));
+        }
+
+        if (v.Unit is not null)
+        {
+            w.WriteString("unit", v.Unit);
         }
 
         w.WriteEndObject();

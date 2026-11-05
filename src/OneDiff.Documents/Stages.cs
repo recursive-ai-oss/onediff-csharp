@@ -8,7 +8,7 @@ namespace OneDiff.Documents;
 
 /// <summary>
 /// The five stages of a comparison as pure functions over immutable values: <see cref="Align"/>, <see cref="DiffPairs"/>,
-/// <see cref="Group"/>, <see cref="Classify"/> and <see cref="Verify"/>. Each reads the settings (and with them the cost cap)
+/// <see cref="Group"/>, <see cref="Classify(ChangeSet, CancellationToken)"/> and <see cref="Verify"/>. Each reads the settings (and with them the cost cap)
 /// from the value it is given, observes the cancellation token, and is safe to call from many threads on shared inputs. A stage
 /// that hits the cost cap returns a coarser result that is still complete, with a diagnostic; nothing here throws for a cap.
 /// The implementations in this class are the reference stages; the values they exchange are the contract, so any stage can be
@@ -67,24 +67,40 @@ public static class Stages
     }
 
     /// <summary>
-    /// Turns edits into changes and changes into display groups. The reference grouping makes one change per diff region and one
-    /// group per change. Grouping only arranges; it never alters what a change says.
+    /// Turns edits into changes and changes into display groups. The rule grouping joins edits into change units that read like a
+    /// redline (docs/grouping.md). With <see cref="CompareSettings.CollapseCascades"/> it then lifts the changes of a renumbering and
+    /// of a defined-term rename into display groups of their own (docs/semantics.md). Grouping only arranges; it never alters what a
+    /// change says, and every edit stays in the change list.
     /// </summary>
     /// <param name="diffs">The output of <see cref="DiffPairs"/>.</param>
     /// <param name="cancellationToken">Observed per link.</param>
     public static ChangeSet Group(PairDiffs diffs, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(diffs);
-        return Grouping.RuleGrouper.Group(diffs, cancellationToken);
+        return Semantics.SemanticGrouping.Apply(Grouping.RuleGrouper.Group(diffs, cancellationToken), cancellationToken);
     }
 
-    /// <summary>Records who decided each change. The reference classification is plain: kinds stay as grouped, every decision is the reference rule at score 1, nothing is typed.</summary>
+    /// <summary>
+    /// Classifies each change with the built-in recognizer (<see cref="BuiltInValueRecognizer"/>): who decided (always a rule), whether
+    /// it is substantive, and, with <see cref="CompareSettings.TypedChanges"/>, its <see cref="Change.Type"/> and resolved values.
+    /// Kinds, sides and edits are never touched.
+    /// </summary>
     /// <param name="changes">The output of <see cref="Group"/>.</param>
     /// <param name="cancellationToken">Observed per change.</param>
-    public static ChangeSet Classify(ChangeSet changes, CancellationToken cancellationToken = default)
+    public static ChangeSet Classify(ChangeSet changes, CancellationToken cancellationToken = default) => Classify(changes, null, cancellationToken);
+
+    /// <summary>
+    /// Classifies each change, finding and resolving values with <paramref name="recognizer"/>. A recognizer from another package
+    /// (multilingual, model-backed) plugs in here; only amounts, dates, durations, percentages, numbers and party names come from it.
+    /// References, list labels, defined terms and the substantive flag are decided by the library's own rules (docs/semantics.md).
+    /// </summary>
+    /// <param name="changes">The output of <see cref="Group"/>.</param>
+    /// <param name="recognizer">The recognizer; <see cref="BuiltInValueRecognizer.Instance"/> when null.</param>
+    /// <param name="cancellationToken">Observed per change.</param>
+    public static ChangeSet Classify(ChangeSet changes, IValueRecognizer? recognizer, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(changes);
-        return ReferenceGrouper.Classify(changes, cancellationToken);
+        return Semantics.ChangeClassifier.Classify(changes, recognizer ?? BuiltInValueRecognizer.Instance, cancellationToken);
     }
 
     /// <summary>
@@ -95,7 +111,7 @@ public static class Stages
     /// aligned. The failures and the fallback taken are diagnostics, and <see cref="VerificationResult.FallbackLevel"/> records
     /// the level.
     /// </summary>
-    /// <param name="changes">The output of <see cref="Classify"/> or of a custom stage.</param>
+    /// <param name="changes">The output of <see cref="Classify(ChangeSet, CancellationToken)"/> or of a custom stage.</param>
     /// <param name="cancellationToken">Observed throughout.</param>
     /// <exception cref="ComparisonVerificationException">A check failed and the settings have <see cref="CompareSettings.ThrowOnFailure"/> set, or even the coarsest result failed (a defect in the documents themselves).</exception>
     public static Comparison Verify(ChangeSet changes, CancellationToken cancellationToken = default)
@@ -149,7 +165,7 @@ public static class Stages
     private static ChangeSet Reference(Alignment alignment, bool coarse, CancellationToken ct)
     {
         PairDiffs diffs = ReferenceDiff.Run(alignment, coarse, ct);
-        return ReferenceGrouper.Classify(ReferenceGrouper.Group(diffs, ct), ct);
+        return Semantics.ChangeClassifier.Classify(ReferenceGrouper.Group(diffs, ct), BuiltInValueRecognizer.Instance, ct);
     }
 
     private static void AddFailures(List<Diagnostic> diagnostics, List<VerificationFailure> failures, int level)

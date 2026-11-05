@@ -19,8 +19,19 @@ internal sealed class Counts
     public long UnitChanges, UnitRegions, UnitCounted, UnitMissed;
     public long Pairs, Passed, Fallbacks, NoDiff;
 
+    // Semantic rows (SemanticScorer): per gold typed kind, the units, the units matched to a change, the right types and the exact values.
+    public readonly long[] TyUnits = new long[7];
+    public readonly long[] TyMatched = new long[7];
+    public readonly long[] TyOk = new long[7];
+    public readonly long[] ValOk = new long[7];
+    public long CascGoldN, CascOursN, CascFoundN, RenGoldN, RenOursN, RenFoundN;
+    public long SubTp, SubFp, SubFn, RenChain;
+
     /// <summary>The changed sentences no change touched, for diagnosis; not summed.</summary>
     public List<string> Missed { get; } = [];
+
+    /// <summary>Semantic misses for diagnosis (typing, values, groups, substantive); not summed.</summary>
+    public List<string> SemDiag { get; } = [];
 
     /// <summary>The link keys that differ from the gold links ("gold" = missed, "pred" = not in the gold), for diagnosis; not summed.</summary>
     public List<string> AlignErrors { get; } = [];
@@ -49,6 +60,24 @@ internal sealed class Counts
         Passed += o.Passed;
         Fallbacks += o.Fallbacks;
         NoDiff += o.NoDiff;
+        for (int i = 0; i < 7; i++)
+        {
+            TyUnits[i] += o.TyUnits[i];
+            TyMatched[i] += o.TyMatched[i];
+            TyOk[i] += o.TyOk[i];
+            ValOk[i] += o.ValOk[i];
+        }
+
+        CascGoldN += o.CascGoldN;
+        CascOursN += o.CascOursN;
+        CascFoundN += o.CascFoundN;
+        RenGoldN += o.RenGoldN;
+        RenOursN += o.RenOursN;
+        RenFoundN += o.RenFoundN;
+        SubTp += o.SubTp;
+        SubFp += o.SubFp;
+        SubFn += o.SubFn;
+        RenChain += o.RenChain;
     }
 }
 
@@ -429,7 +458,25 @@ internal static class Report
         defs.Add(("regions.sentence", c => c.SentCounted == 0 ? double.NaN : (double)c.SentRegions / c.SentCounted));
         defs.Add(("regions.unit", c => c.UnitCounted == 0 ? double.NaN : (double)c.UnitRegions / c.UnitCounted));
         defs.Add(("missed.sentence", c => c.SentCounted + c.SentMissed == 0 ? double.NaN : (double)c.SentMissed / (c.SentCounted + c.SentMissed)));
+        for (int i = 0; i < SemanticScorer.Kinds.Length; i++)
+        {
+            int k = i;
+            string n = SemanticScorer.Kinds[k];
+            defs.Add(($"type.acc.{n}", c => c.TyMatched[k] == 0 ? double.NaN : (double)c.TyOk[k] / c.TyMatched[k]));
+            defs.Add(($"value.acc.{n}", c => c.TyMatched[k] == 0 ? double.NaN : (double)c.ValOk[k] / c.TyMatched[k]));
+        }
+
+        defs.Add(("type.acc.all", c => c.TyMatched.Sum() == 0 ? double.NaN : (double)c.TyOk.Sum() / c.TyMatched.Sum()));
+        defs.Add(("value.acc.all", c => c.TyMatched.Sum() == 0 ? double.NaN : (double)c.ValOk.Sum() / c.TyMatched.Sum()));
+        defs.Add(("type.coverage", c => c.TyUnits.Sum() == 0 ? double.NaN : (double)c.TyMatched.Sum() / c.TyUnits.Sum()));
+        defs.Add(("cascade.P", c => Bootstrap.Precision(c.CascFoundN, c.CascOursN - c.CascFoundN)));
+        defs.Add(("cascade.R", c => Bootstrap.Recall(c.CascFoundN, c.CascGoldN - c.CascFoundN)));
+        defs.Add(("rename.P", c => Bootstrap.Precision(c.RenFoundN, c.RenOursN - c.RenFoundN)));
+        defs.Add(("rename.R", c => Bootstrap.Recall(c.RenFoundN, c.RenGoldN - c.RenFoundN)));
+        defs.Add(("substantive.P", c => Bootstrap.Precision(c.SubTp, c.SubFp)));
+        defs.Add(("substantive.R", c => Bootstrap.Recall(c.SubTp, c.SubFn)));
         defs.Add(("pairs.nodiff", c => c.NoDiff));
+        defs.Add(("pairs.renamechain", c => c.RenChain));
         defs.Add(("verify.pass", c => c.Pairs == 0 ? double.NaN : (double)c.Passed / c.Pairs));
         defs.Add(("verify.fallback", c => c.Pairs == 0 ? double.NaN : (double)c.Fallbacks / c.Pairs));
         int pairs = (int)docs.Sum(d => d.Pairs);

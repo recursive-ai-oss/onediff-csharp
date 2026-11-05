@@ -329,6 +329,7 @@ internal static class Program
             var labels = GoldJson.Read<PairLabels>(File.ReadAllBytes(Path.Combine(data, "pairs", id + ".labels.json")));
             var docs = GoldJson.Read<PairDocs>(File.ReadAllBytes(Path.Combine(data, "pairs", id + ".docs.json")));
             ScoreInput input;
+            Comparison? semantic = null;
             BlockMap? blocks = blocksDir is null ? null : BlockMap.Read(Path.Combine(blocksDir, id + ".blocks.json"));
             if (changesDir is not null)
             {
@@ -366,6 +367,7 @@ internal static class Program
                 if (blocks is null)
                 {
                     input = ScoreInput.From(cmp);
+                    semantic = cmp;
                 }
                 else
                 {
@@ -381,11 +383,19 @@ internal static class Program
                 failures.Add($"{id}: verification passed={input.Passed} fallback={input.FallbackLevel}");
             }
 
-            results[i] = (labels, PairScorer.Score(input, labels, GoldJson.SameNodes(docs)));
+            bool noDiff = GoldJson.SameNodes(docs);
+            Counts counts = PairScorer.Score(input, labels, noDiff);
+            if (semantic is not null && !noDiff)
+            {
+                SemanticScorer.Add(counts, semantic, input, labels);
+            }
+
+            results[i] = (labels, counts);
         });
 
         File.WriteAllLines(outFile + ".missed.txt", results.Where(r => r.Counts.Missed.Count > 0).OrderBy(r => r.Labels.Id, StringComparer.Ordinal).Select(r => r.Labels.Id + " " + string.Join(" | ", r.Counts.Missed)));
         File.WriteAllLines(outFile + ".align.txt", results.Where(r => r.Counts.AlignErrors.Count > 0).OrderBy(r => r.Labels.Id, StringComparer.Ordinal).Select(r => r.Labels.Id + " " + string.Join(" ; ", r.Counts.AlignErrors.Order(StringComparer.Ordinal))));
+        File.WriteAllLines(outFile + ".semantic.txt", results.Where(r => r.Counts.SemDiag.Count > 0).OrderBy(r => r.Labels.Id, StringComparer.Ordinal).SelectMany(r => r.Counts.SemDiag));
         var rows = new List<MetricRow>();
         void Scope(string name, Func<PairLabels, bool> pick)
         {
@@ -481,7 +491,12 @@ internal static class Program
         Console.WriteLine("engine changes:");
         foreach (Change c in cmp.Changes)
         {
-            Console.WriteLine($"  #{c.Id} {c.Kind} old=[{string.Join(",", c.Old.Nodes)}]{c.Old.Start}+{c.Old.Length} '{c.Old.Text}' new=[{string.Join(",", c.New.Nodes)}]{c.New.Start}+{c.New.Length} '{c.New.Text}'");
+            Console.WriteLine($"  #{c.Id} {c.Kind} old=[{string.Join(",", c.Old.Nodes)}]{c.Old.Start}+{c.Old.Length} '{c.Old.Text}' new=[{string.Join(",", c.New.Nodes)}]{c.New.Start}+{c.New.Length} '{c.New.Text}' type={c.Type} {c.OldValue?.Canonical}->{c.NewValue?.Canonical} subst={c.IsSubstantive} attrs=[{string.Join(";", c.AttributeEdits.Select(e => e.Key + ":" + e.OldValue + ">" + e.NewValue))}]");
+        }
+
+        foreach (ChangeGroup g in cmp.Groups.Where(g => g.Kind != GroupKind.Region))
+        {
+            Console.WriteLine($"  group {g.Kind} '{g.Title}' [{string.Join(",", g.ChangeIds)}]");
         }
 
         return 0;
@@ -552,7 +567,7 @@ internal static class Program
 /// <summary>The settings the gold set is scored under: nothing hidden, so every labelled difference is a visible change.</summary>
 internal static class Pipeline
 {
-    public static CompareSettings Settings { get; } = CompareSettings.Strict with { ThrowOnFailure = false };
+    public static CompareSettings Settings { get; } = CompareSettings.Strict with { ThrowOnFailure = false, CollapseCascades = true, TypedChanges = true };
 
     /// <summary>The later stages run on the gold alignment of content blocks: a check that the scorer gives 1.0 to the right answer.</summary>
     public static Comparison OracleAlignment(CompareDocument o, CompareDocument n, PairLabels labels)

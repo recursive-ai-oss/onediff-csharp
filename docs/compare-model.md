@@ -113,7 +113,7 @@ Seams: `IPairScorer` (`Score`, `ScoreBatch`) for alignment candidates, `ITextNor
 
 ## 6. JSON
 
-`ComparisonJson.Write` / `Read`; schema version 1 in `docs/schema/comparison-v1.json`. The output is compact UTF-8, keys in a fixed order, empty optional members omitted, non-ASCII escaped, so equal comparisons give equal bytes on every platform; the reader is bounded (`ComparisonJsonLimits`: input bytes, array length, depth) and throws only `ComparisonFormatException`. Reading validates structure but does not re-prove completeness: call `Comparison.Check()`.
+`ComparisonJson.Write` / `Read`; schema version 1 in `docs/schema/comparison-v1.json`. The output is compact UTF-8, keys in a fixed order, empty optional members omitted, non-ASCII escaped, so equal comparisons give equal bytes on every platform; a change's `type`, `oldValue`, `newValue` and `substantive` members are optional additions to version 1 (docs/semantics.md) and a reader that does not know them can ignore them; the reader is bounded (`ComparisonJsonLimits`: input bytes, array length, depth) and throws only `ComparisonFormatException`. Reading validates structure but does not re-prove completeness: call `Comparison.Check()`.
 
 ## 7. Plain text
 
