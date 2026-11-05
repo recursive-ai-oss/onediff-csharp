@@ -380,7 +380,13 @@ public class SweepTests
             }
         }
 
-        Console.WriteLine($"word sweep: pairs={pairs} first={first} failures={failures} fallbacks={fallbacks} withChanges={withChanges} digest={digest}");
+        string summary = $"word sweep: pairs={pairs} first={first} failures={failures} fallbacks={fallbacks} withChanges={withChanges} digest={digest}";
+        Console.WriteLine(summary);
+        if (Environment.GetEnvironmentVariable("ONEDIFF_WORD_SWEEP_OUT") is { Length: > 0 } path)
+        {
+            File.WriteAllText(path, summary + "\n");
+        }
+
         Assert.True(failures == 0 && fallbacks == 0, string.Join("\n", messages.Take(10)));
         Assert.True(withChanges > pairs, "the edits should show as changes");
     }
