@@ -146,10 +146,9 @@ The engine's own row on a Word source is scored on body content (`score --body-o
 
 ### OneOffice gaps met (workarounds in the writer)
 
-- Accepting or rejecting moves the content of a paragraph whose mark goes by serialized fragments, which can only be read back when the prefixes they use (`r:` for a hyperlink) are declared on the part's root; when they are not, the join fails silently and the emptied paragraph stays. The writer declares the well-known prefixes on every part root it saves.
-- A paragraph whose pPr holds both a paragraph-mark revision and a `w:pPrChange` is not joined on reject (the property restore replaces the element the mark revision points to). The writer never produces that pair.
-- A resolved revision leaves the empty wrapper of a hyperlink, smart tag, simple field or content control behind, and a paragraph that joins the next carries it along.
+On OneOffice 0.1.0-preview.3 (moved markup keeps its namespace declarations, notes get free ids across parts, emptied smart-tag and custom-XML wrappers go, and rejecting a moved or property-changed paragraph restores its mark), these remain:
+
+- A paragraph whose pPr holds a paragraph-mark revision that was transferred onto it next to a `w:pPrChange` is not joined on reject. A moved paragraph with a `w:pPrChange` of its own resolves, but the writer does not hand a transferred mark to a paragraph that has a `w:pPrChange` (it lists `paragraph-mark-*` instead).
+- A resolved revision leaves the empty wrapper of a hyperlink, simple field or content control behind (documented behaviour), and a paragraph that joins the next carries it along; the gate's reader drops empty hyperlink wrappers before comparing.
 - There is no way to mark existing runs as inserted or deleted without going through delete text: the writer authors a deletion under a marker author and renames it (`w:del` to `w:ins`, `w:delText` to `w:t`).
-- A text box is listed twice once edited with a copy in `mc:Fallback` (the revision list shows each change per branch, with the same id). The writer edits the exposed branch only and does not call `SyncAlternate`, so each revision exists once; the fallback copy keeps the base text, and Word reads the exposed branch. Ids are renumbered in document order at the end, as for everything else.
-- Rejecting a paragraph with `w:pPrChange` after `InsertParagraph` leaves a paragraph-mark revision; the writer never produces that pair (see above).
-- The notes part hands out an id a copied note already took; the writer chooses ids from what the part holds.
+- A text box with a copy in `mc:Fallback` is listed twice once edited (see above).

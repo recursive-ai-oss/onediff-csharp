@@ -129,15 +129,6 @@ internal sealed partial class TrackedWriter : IDisposable
 
         FixTailMarks();
         RenumberRevisions();
-        foreach (string part in b.PartNames)
-        {
-            MarkupNode root = b.Root(part);
-            if (!root.IsNull)
-            {
-                Wx.DeclareOnRoot(root);
-            }
-        }
-
         using var ms = new MemoryStream();
         b.Doc.SaveAs(ms, OfficeFormat.Docx);
         return ms.ToArray();
@@ -519,13 +510,7 @@ internal sealed partial class TrackedWriter : IDisposable
             try
             {
                 FineEdits(bid, did, bp, dp, link);
-                if (!move)
-                {
-                    // A moved paragraph exists twice (moved from, moved to), each with its own properties, so it needs no property
-                    // change; and rejecting one next to a paragraph-mark revision would not resolve the mark (a gap in OneOffice).
-                    PropertyChange(bp, dp, "pPr", "pPrChange", ["rPr", "sectPr", "pPrChange"], insertAtStart: true);
-                }
-
+                PropertyChange(bp, dp, "pPr", "pPrChange", ["rPr", "sectPr", "pPrChange"], insertAtStart: true);
             }
             catch (Exception ex) when (ex is ReplaceNeeded or ArgumentException or InvalidOperationException)
             {

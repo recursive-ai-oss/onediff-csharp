@@ -24,7 +24,7 @@ public class TrackedChangesTests
         WordBuildOn on = Environment.GetEnvironmentVariable("ONEDIFF_TRACKED_BUILD") == "old" ? WordBuildOn.Old : WordBuildOn.New;
         string logDir = Environment.GetEnvironmentVariable("ONEDIFF_TRACKED_LOG") ?? "";
         var lines = new List<string>();
-        int failures = 0, crashes = 0, allowed = 0, schemaFailures = 0;
+        int failures = 0, crashes = 0, allowed = 0, schemaFailures = 0, markEntries = 0;
         bool schema = Environment.GetEnvironmentVariable("ONEDIFF_TRACKED_SCHEMA") == "1";
         for (int s = first; s < first + pairs; s++)
         {
@@ -40,6 +40,7 @@ public class TrackedChangesTests
                     var filtered = new List<string>();
                     List<string> p = TrackedGate.Problems(o, nw, ms.ToArray(), settings, on, res.NotCarried, detail: logDir.Length > 0, filtered: filtered);
                     allowed += filtered.Count;
+                    markEntries += res.NotCarried.Count(x => x.Category.StartsWith("paragraph-mark", StringComparison.Ordinal));
                     if (schema)
                     {
                         baseline ??= [.. SchemaCheck.Signatures(ob), .. SchemaCheck.Signatures(nb)];
@@ -72,7 +73,7 @@ public class TrackedChangesTests
             }
         }
 
-        string summary = $"tracked sweep: pairs={pairs} first={first} build={on} failures={failures} crashes={crashes} filteredAsNotCarried={allowed} schemaFailures={schemaFailures}";
+        string summary = $"tracked sweep: pairs={pairs} first={first} build={on} failures={failures} crashes={crashes} filteredAsNotCarried={allowed} schemaFailures={schemaFailures} paragraphMarkEntries={markEntries}";
         lines.Insert(0, summary);
         if (Environment.GetEnvironmentVariable("ONEDIFF_TRACKED_OUT") is { Length: > 0 } path)
         {
