@@ -6,6 +6,7 @@ using OneDiff.Documents.Model;
 using RecursiveAI.OneOffice;
 using RecursiveAI.OneOffice.Documents;
 using RecursiveAI.OneOffice.Documents.Numbering;
+using RecursiveAI.OneOffice.IO;
 
 namespace OneDiff.Word.Internal;
 
@@ -46,10 +47,12 @@ internal static class Reconstruction
     /// <param name="settings">The settings of the comparison: they decide which folds are written as the original characters.</param>
     /// <param name="sourceFormat">What it was reconstructed from, for the labels (for example <c>application/pdf</c>).</param>
     /// <param name="note">Whether to write the visible note into the header.</param>
+    /// <param name="template">A Word file to build on: its styles, numbering definitions, theme, page setup and document defaults are kept and
+    /// its body is emptied, so that content copied between the two packages looks the same in both. Null builds on a blank package.</param>
     /// <param name="cancellationToken">Observed per block.</param>
     /// <exception cref="NotSupportedException">The model holds nodes a reconstruction cannot write (children of paragraphs such as fields or pictures, notes, comments, text boxes, properties).</exception>
     /// <exception cref="InvalidOperationException">The package read back does not match the model (a defect, reported with the first mismatch).</exception>
-    public static ReconstructedDocx Build(CompareDocument model, CompareSettings settings, string sourceFormat, bool note, CancellationToken cancellationToken = default)
+    public static ReconstructedDocx Build(CompareDocument model, CompareSettings settings, string sourceFormat, bool note, WordOrigin? template = null, CancellationToken cancellationToken = default)
     {
         if (model.Kind != DocumentKind.Flowing)
         {
@@ -92,7 +95,7 @@ internal static class Reconstruction
             }
         }
 
-        using Document doc = Document.Create();
+        using Document doc = template is { } t ? OpenTemplate(t) : Document.Create();
         var labels = new SortedDictionary<string, long>(StringComparer.Ordinal);
         foreach (Node n in model.Nodes)
         {
@@ -117,7 +120,7 @@ internal static class Reconstruction
 
         RecursiveAI.OneOffice.Markup.MarkupNode bodyNode = doc.Body.Container.Node;
         RecursiveAI.OneOffice.Markup.MarkupNode sect = doc.Body.SectionProperties!.Value.Node;
-        for (RecursiveAI.OneOffice.Markup.MarkupNode c = bodyNode.FirstChild; !c.IsNull; c = c.NextSibling)
+        for (RecursiveAI.OneOffice.Markup.MarkupNode c = bodyNode.FirstChild; !c.IsNull && template is null; c = c.NextSibling)
         {
             if (c.Kind == RecursiveAI.OneOffice.Markup.MarkupNodeKind.Element && c.LocalNameString == "p")
             {
@@ -199,6 +202,59 @@ internal static class Reconstruction
     }
 
     // ------------------------------------------------------------------------------------------------------------------ writing
+
+    /// <summary>
+    /// Opens a Word file as the skeleton of a reconstruction: its revisions are resolved the way the Word source reads it, everything in
+    /// the body goes (the final section's properties stay, with its default header and footer), and header and footer references of the
+    /// other kinds (first page, even pages) are dropped, because the reconstruction has one header and one footer.
+    /// </summary>
+    private static Document OpenTemplate(WordOrigin template)
+    {
+        Document doc = Document.Open(ByteSource.FromMemory(template.Bytes));
+        if (doc.Revisions.Revisions.Count > 0)
+        {
+            if (template.Revisions == WordRevisionMode.AsOriginal)
+            {
+                doc.Revisions.RejectAll();
+            }
+            else
+            {
+                doc.Revisions.AcceptAll();
+            }
+        }
+
+        RecursiveAI.OneOffice.Markup.MarkupNode body = doc.Body.Container.Node;
+        var drop = new List<RecursiveAI.OneOffice.Markup.MarkupNode>();
+        for (RecursiveAI.OneOffice.Markup.MarkupNode c = body.FirstChild; !c.IsNull; c = c.NextSibling)
+        {
+            if (c.Kind == RecursiveAI.OneOffice.Markup.MarkupNodeKind.Element && !Wx.Is(c, "sectPr"))
+            {
+                drop.Add(c);
+            }
+        }
+
+        foreach (RecursiveAI.OneOffice.Markup.MarkupNode c in drop)
+        {
+            c.Remove();
+        }
+
+        RecursiveAI.OneOffice.Markup.MarkupNode sect = doc.Body.SectionProperties!.Value.Node;
+        var refs = new List<RecursiveAI.OneOffice.Markup.MarkupNode>();
+        foreach (RecursiveAI.OneOffice.Markup.MarkupNode c in Wx.ChildElements(sect))
+        {
+            if ((Wx.Is(c, "headerReference") || Wx.Is(c, "footerReference")) && Wx.Attr(c, "type") is not (null or "default"))
+            {
+                refs.Add(c);
+            }
+        }
+
+        foreach (RecursiveAI.OneOffice.Markup.MarkupNode c in refs)
+        {
+            c.Remove();
+        }
+
+        return doc;
+    }
 
     private static void Story(Document doc, HeaderFooterKind kind, int node, CompareDocument model, SortedDictionary<string, long> labels, CompareSettings settings, string? note, CancellationToken ct)
     {
@@ -510,10 +566,18 @@ internal static class Reconstruction
             switch (read[c].Kind)
             {
                 case NodeKind.Header:
-                    rHeader = c;
+                    if (read[c].Attributes.Get("hf.type") is null or "default")
+                    {
+                        rHeader = c;
+                    }
+
                     break;
                 case NodeKind.Footer:
-                    rFooter = c;
+                    if (read[c].Attributes.Get("hf.type") is null or "default")
+                    {
+                        rFooter = c;
+                    }
+
                     break;
                 default:
                     rBody.Add(c);

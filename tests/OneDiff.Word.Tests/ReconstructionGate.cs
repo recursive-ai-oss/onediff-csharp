@@ -18,14 +18,14 @@ internal static class ReconstructionGate
     public sealed record Side(CompareDocument Document, byte[] Bytes, bool Reconstructed);
 
     /// <summary>The side as the writer sees it: a Word document as is, anything else rebuilt (the same rebuild the writer makes).</summary>
-    public static Side Prepare(CompareDocument model, CompareSettings settings, bool note = true)
+    public static Side Prepare(CompareDocument model, CompareSettings settings, CompareDocument other, bool note = true)
     {
         if (WordOrigins.TryGet(model, out WordOrigin o))
         {
             return new Side(model, o.Bytes.ToArray(), false);
         }
 
-        ReconstructedDocx r = Reconstruction.Build(model, settings, model.SourceFormat, note);
+        ReconstructedDocx r = Reconstruction.Build(model, settings, model.SourceFormat, note, WordOrigins.TryGet(other, out WordOrigin t) ? t : null);
         return new Side(Harness.Read(r.Bytes, model.Name + ".docx"), r.Bytes, true);
     }
 
@@ -131,7 +131,7 @@ internal static class ReconstructionGate
         using var ms = new MemoryStream();
         result = new DocxRedline { BuildOn = on }.Create(cmp, ms);
         output = ms.ToArray();
-        Side o = Prepare(cmp.Old, cmp.Settings), n = Prepare(cmp.New, cmp.Settings);
+        Side o = Prepare(cmp.Old, cmp.Settings, cmp.New), n = Prepare(cmp.New, cmp.Settings, cmp.Old);
         var problems = new List<string>();
         foreach (Side s in new[] { o, n })
         {

@@ -90,8 +90,10 @@ public sealed class DocxRedline : RedlineForm
         ArgumentException.ThrowIfNullOrEmpty(Author);
         bool onNew = BuildOn == WordBuildOn.New;
         CancellationToken ct = cancellationToken;
-        (CompareDocument newModel, ReadOnlyMemory<byte> newBytes, WordRevisionMode newMode) = Prepare(comparison.New, comparison.Settings, ct);
-        (CompareDocument oldModel, ReadOnlyMemory<byte> oldBytes, WordRevisionMode oldMode) = Prepare(comparison.Old, comparison.Settings, ct);
+        // A side that is not a Word file is rebuilt on the other side's package when that one is a Word file, so that the two share styles.
+        WordOrigin? newOrigin = WordOrigins.TryGet(comparison.New, out WordOrigin no) ? no : null, oldOrigin = WordOrigins.TryGet(comparison.Old, out WordOrigin oo) ? oo : null;
+        (CompareDocument newModel, ReadOnlyMemory<byte> newBytes, WordRevisionMode newMode) = Prepare(comparison.New, comparison.Settings, oldOrigin, ct);
+        (CompareDocument oldModel, ReadOnlyMemory<byte> oldBytes, WordRevisionMode oldMode) = Prepare(comparison.Old, comparison.Settings, newOrigin, ct);
         using var writer = new TrackedWriter(
             comparison.Alignment,
             comparison.Changes,
@@ -108,14 +110,14 @@ public sealed class DocxRedline : RedlineForm
     /// The document and package a side is written on: a Word document as read, any other flowing document (a PDF, a scan, plain text)
     /// reconstructed as a DOCX and re-anchored (see docs/word.md).
     /// </summary>
-    private (CompareDocument Model, ReadOnlyMemory<byte> Bytes, WordRevisionMode Mode) Prepare(CompareDocument document, CompareSettings settings, CancellationToken cancellationToken)
+    private (CompareDocument Model, ReadOnlyMemory<byte> Bytes, WordRevisionMode Mode) Prepare(CompareDocument document, CompareSettings settings, WordOrigin? template, CancellationToken cancellationToken)
     {
         if (WordOrigins.TryGet(document, out WordOrigin origin))
         {
             return (document, origin.Bytes, origin.Revisions);
         }
 
-        ReconstructedDocx rebuilt = Reconstruction.Build(document, settings, document.SourceFormat.Length > 0 ? document.SourceFormat : "a non-Word document", ReconstructionNote, cancellationToken);
+        ReconstructedDocx rebuilt = Reconstruction.Build(document, settings, document.SourceFormat.Length > 0 ? document.SourceFormat : "a non-Word document", ReconstructionNote, template, cancellationToken);
         return (rebuilt.Model, rebuilt.Bytes, WordRevisionMode.Accepted);
     }
 

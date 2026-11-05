@@ -113,4 +113,36 @@ public class ReconstructedDocxTests
         string all = string.Join("\n", back.Nodes.Where(x => x.Kind == NodeKind.Paragraph).Select(x => x.Text));
         Assert.Contains("Reconstructed by OneDiff", all, StringComparison.Ordinal);
     }
+
+    private static DocSpec DocxOld() => new(
+        Para.Of("Services Agreement") with { Style = "Heading1" },
+        Para.Of("The supplier shall deliver the goods within thirty days of the order."),
+        Para.Of("Payment is due within sixty days of the invoice.") with { List = 0 },
+        Para.Of("Either party may terminate on written notice.") with { List = 0 },
+        Para.Of("This paragraph is removed in the new version of the agreement entirely."),
+        Para.Of("Final provisions apply to every schedule attached to this agreement."))
+    {
+        Lists = 1,
+        Header = "Services Agreement draft",
+        Footer = "Page footer",
+    };
+
+    [Fact]
+    public void AWordFileAndAPdfWriteATrackedDocxEitherWayRound()
+    {
+        PdfRedline.Register();
+        CompareDocument word = Harness.Read(DocFactory.Build(DocxOld()), "old.docx");
+        CompareDocument pdf = Read(Pdf(NewText), "new.pdf");
+        foreach (bool wordIsOld in new[] { true, false })
+        {
+            Comparison cmp = wordIsOld ? Comparison.Of(word, pdf, CompareSettings.Legal) : Comparison.Of(pdf, word, CompareSettings.Legal);
+            Assert.True(cmp.Verification.Passed);
+            foreach (WordBuildOn on in new[] { WordBuildOn.New, WordBuildOn.Old })
+            {
+                List<string> problems = ReconstructionGate.Run(cmp, on, out byte[] bytes, out DocxRedlineResult result, detail: true);
+                Assert.True(problems.Count == 0, $"wordIsOld={wordIsOld} {on}: " + string.Join("\n", problems.Take(6)) + "\nnotcarried: " + string.Join(",", ReconstructionGate.Describe(result)));
+                Assert.True(bytes.Length > 1000);
+            }
+        }
+    }
 }
