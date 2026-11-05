@@ -285,18 +285,9 @@ internal static class BlockAligner
                 }
 
                 BuildContext(mo, mn);
-                var posOld = new Dictionary<int, int>(oldIds.Count);
-                var posNew = new Dictionary<int, int>(newIds.Count);
-                for (int i = 0; i < oldIds.Count; i++)
-                {
-                    posOld[oldIds[i]] = i;
-                }
-
-                for (int i = 0; i < newIds.Count; i++)
-                {
-                    posNew[newIds[i]] = i;
-                }
-
+                // Position of each free node in its list (-1 when pinned).
+                int[] posOld = PositionsOf(oldIds, oldDoc.Count);
+                int[] posNew = PositionsOf(newIds, newDoc.Count);
                 bool banned = false;
                 for (int i = 0; i < partner.Length; i++)
                 {
@@ -313,7 +304,7 @@ internal static class BlockAligner
 
                     for (int k = a; k < a + o.Size[a]; k++)
                     {
-                        if (posOld.TryGetValue(k, out int at) && oldKeys[at] < firstBanned)
+                        if (posOld[k] is int at and >= 0 && oldKeys[at] < firstBanned)
                         {
                             oldKeys[at] = unique++;
                             banned = true;
@@ -322,7 +313,7 @@ internal static class BlockAligner
 
                     for (int k = b; k < b + n.Size[b]; k++)
                     {
-                        if (posNew.TryGetValue(k, out int at) && newKeys[at] < firstBanned)
+                        if (posNew[k] is int at and >= 0 && newKeys[at] < firstBanned)
                         {
                             newKeys[at] = unique++;
                             banned = true;
@@ -503,6 +494,18 @@ internal static class BlockAligner
                     y++;
                 }
             }
+        }
+
+        private static int[] PositionsOf(List<int> ids, int count)
+        {
+            var pos = new int[count];
+            Array.Fill(pos, -1);
+            for (int i = 0; i < ids.Count; i++)
+            {
+                pos[ids[i]] = i;
+            }
+
+            return pos;
         }
 
         private static int[] PartnersOf(EditScript script, int oldCount)
