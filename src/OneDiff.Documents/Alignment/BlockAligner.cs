@@ -1480,6 +1480,7 @@ internal static class BlockAligner
                 return;
             }
 
+            bool inCell = parentOld >= 0 && parentNew >= 0 && oldDoc[parentOld].Kind == NodeKind.TableCell && newDoc[parentNew].Kind == NodeKind.TableCell;
             var anchorOld = new List<int>();
             var anchorNew = new List<int>();
             for (int ia = 0; ia < a.Length; ia++)
@@ -1503,13 +1504,13 @@ internal static class BlockAligner
 
                 int toOld = k < anchorOld.Count ? anchorOld[k] : a.Length;
                 int toNew = k < anchorOld.Count ? anchorNew[k] : b.Length;
-                PairSegment(a, fromOld, toOld, b, fromNew, toNew);
+                PairSegment(a, fromOld, toOld, b, fromNew, toNew, inCell);
                 fromOld = toOld + 1;
                 fromNew = toNew + 1;
             }
         }
 
-        private void PairSegment(ImmutableArray<int> a, int fromA, int toA, ImmutableArray<int> b, int fromB, int toB)
+        private void PairSegment(ImmutableArray<int> a, int fromA, int toA, ImmutableArray<int> b, int fromB, int toB, bool inCell)
         {
             var oldFree = new List<int>();
             var newFree = new List<int>();
@@ -1529,6 +1530,11 @@ internal static class BlockAligner
                 }
             }
 
+            if (inCell)
+            {
+                PairCellText(a, fromA, toA, b, fromB, toB);
+            }
+
             if (oldFree.Count == 0 || newFree.Count == 0)
             {
                 return;
@@ -1545,6 +1551,45 @@ internal static class BlockAligner
                 for (int i = 0; i < ok.Count; i++)
                 {
                     AddLink(LinkKind.Match, [ok[i]], [nk[i]], 0.5, LinkOrigin.Similar);
+                }
+            }
+        }
+
+        // A cell whose text was rewritten past recognition still holds the same entry: when a paired cell has one unmatched text block
+        // of a kind on each side, between the same two matched siblings, the two are the cell's old and new text.
+        private void PairCellText(ImmutableArray<int> a, int fromA, int toA, ImmutableArray<int> b, int fromB, int toB)
+        {
+            for (int i = fromA; i < toA; i++)
+            {
+                int x = a[i];
+                if (usedOld[x] || o.IsContainer[x] || o.Words[x].Length == 0)
+                {
+                    continue;
+                }
+
+                int match = -1, count = 0;
+                for (int j = fromB; j < toB; j++)
+                {
+                    int y = b[j];
+                    if (!usedNew[y] && !n.IsContainer[y] && n.Words[y].Length > 0 && newDoc[y].Kind == oldDoc[x].Kind)
+                    {
+                        match = y;
+                        count++;
+                    }
+                }
+
+                int others = 0;
+                for (int k = fromA; k < toA; k++)
+                {
+                    if (k != i && !usedOld[a[k]] && !o.IsContainer[a[k]] && o.Words[a[k]].Length > 0 && oldDoc[a[k]].Kind == oldDoc[x].Kind)
+                    {
+                        others++;
+                    }
+                }
+
+                if (count == 1 && others == 0)
+                {
+                    AddLink(LinkKind.Match, [x], [match], 0.5, LinkOrigin.Similar);
                 }
             }
         }

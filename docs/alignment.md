@@ -44,6 +44,7 @@ A container is an unmatched node with no text of its own that groups others (tab
 
 1. **By content.** For every matched pair of text blocks or images, each pair of their ancestors of equal kind gets a vote. A pair of containers scores twice its votes over the sum of their content counts (capped at 1); pairs under 0.25 are dropped; the rest are weighed (+0.05 when their parents are paired, +0.02 × nearness) and chosen by the same global matcher. So a table whose rows were reordered and edited is still the same table, and a row with a new column cell is still the same row.
 2. **By position.** Walking the paired containers from the roots down: among the children of a pair, the matched children that keep their order are anchors; between two anchors, if the old side and the new side hold the same number (at least one) of unmatched containers of a kind, they are paired in order (score 0.5, origin `Similar`). This pairs empty cells, rows whose text was all rewritten, and the only section or table of a rewritten document.
+3. **Text in a paired cell.** In a pair of table cells, between two matched siblings, a single unmatched text block of a kind on each side is paired (score 0.5, origin `Similar`): a cell whose text was rewritten past recognition is one replace, not a delete beside an insert.
 
 ## 5. The cost cap
 

@@ -211,6 +211,20 @@ public class AlignmentEdgeCaseTests
     }
 
     [Fact]
+    public void CellWhoseTextWasRewrittenKeepsItsEntryAsOneReplace()
+    {
+        // "3 years" became "Net monthly": nothing in common, but it is the same cell of the same row, so it is one replace and not a
+        // delete beside an insert.
+        string[] l1 = ["Support", "3 years", "USD 25,000"];
+        string[] l2 = ["Hosting", "14 days", "USD 18,000"];
+        string[] n1 = ["Support", "Net monthly", "USD 25,000"];
+        CompareDocument a = Fx.TableDoc([l1, l2], Fx.Para(1)), b = Fx.TableDoc([n1, l2], Fx.Para(1));
+        Comparison c = Helpers.Compare(a, b);
+        Assert.Contains(c.Changes, ch => ch.Kind == ChangeKind.Replace && ch.Old.Text == "3 years" && ch.New.Text == "Net monthly");
+        Assert.DoesNotContain(c.Changes, ch => ch.Kind is ChangeKind.Insert or ChangeKind.Delete);
+    }
+
+    [Fact]
     public void CostCapGivesACoarserCompleteAlignmentWithADiagnostic()
     {
         string[] paras = Enumerable.Range(0, 200).Select(i => Fx.Para(i)).ToArray();

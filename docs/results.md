@@ -70,7 +70,7 @@ Every pair is compared with the Legal and the Strict settings.
 | `scan-v1`: determinism (two runs, same bytes) | 100 pairs, 0 failures | pass |
 | Rendered redline PDF (OneRender 1.3.3) read back equals the change list, inline and side by side each: text corpus | 638 pairs, 0 failures | pass |
 | The same, text-corpus pairs over 300 kB | 24 pairs, 0 failures | pass |
-| The same, `pdf-v1` | 1,110 pairs: **85 pairs fail (48 de, 14 en, 17 es, 3 fr, 3 zh), all in the inline layout (161 messages); side-by-side reads back clean for every pair** | **FAIL** |
+| The same, `pdf-v1` | 1,110 pairs, 0 failures (the first run of the release gate failed 85 pairs, inline layout only; fixed, see below) | pass |
 | HTML redlines parsed back: every mark carries its change, text equals the change list | 96,000 generated pages (12,000 comparisons × 8 styles and layouts) and 1,324 corpus pages, 0 mismatches | pass |
 | HTML pages against the W3C Nu Html Checker 26.11.4 | 370 pages, 0 errors, 0 warnings | pass |
 | Seeded invertibility sweep (random edit sequences) | 60,000 cases, 0 failures | pass |
@@ -80,7 +80,9 @@ Every pair is compared with the Legal and the Strict settings.
 | Combine sweep, 1 to 4 reviewers | 60,000 cases, 0 failures | pass |
 | Chain sweep, 3 to 5 steps | 20,000 cases, 0 failures | pass |
 
-**The rendered `pdf-v1` failure.** A table cell whose text wraps over two lines in the source PDF (for example "6" and "months", or a hyphenated word) keeps the line break in its node text; in the inline rendered page, the cell's text is not found at the place the change list gives (the reader finds the following cell's text there). The affected pairs are mostly German (48 of 85). Every other check on the same pairs passes (Verify, marks on the original pages, side-by-side rendering). The failure is not present when the same gate runs on the code before the PDF source began reading wrapped cells as table cells; the smallest failing pair is kept as a test (`RenderedReadbackTests`), skipped until it is fixed.
+**The rendered `pdf-v1` failure, fixed.** A table cell whose text wraps over two lines in the source PDF (for example "6" and "months") kept the line break in its node text; the inline page drew the cell as a stack of short lines, and the re-extraction read the neighbouring cell's text between the cell's lines. The grid reading now joins the lines of a cell with a space (a word broken by a hyphen keeps its break so the hyphenation fold still joins it). The smallest failing pair is a test (`RenderedReadbackTests`). Re-run on the fixed code: `pdf-v1` Verify, fallback 0, `Check`, marks re-read and determinism on 1,110 pairs × Legal/Strict, the rendered read-back inline and side by side on 1,110 pairs, and the text corpus (638 pairs and 24 over 300 kB): 0 failures. The PDF digest slice (20 pairs) is identical on x64 and arm64.
+
+**After the cell-text pairing rule** (a paired table cell with one unmatched text block on each side pairs them), the rows it can touch were scored again on the final code: `synth-v1` eval (above: edited, unrelated and changes per gold unit improved, every other row identical), change semantics (every row identical), `combine-v1` (every row identical, digest unchanged), `scan-v1` (every row identical, 600 pairs), the `scan-v1` exact gates on 100 pairs (every 6th; 5,322 changes, 8,921 marks, 20 determinism re-checks, 0 failures), and the alignment, invertibility and grouping sweeps at 60,000 cases each (seeds 1–60,000 in two chunks), 0 failures.
 
 ### Same bytes on both machines
 
@@ -95,6 +97,7 @@ A fixed slice of `pdf-v1` (20 pairs, every 56th) and of `scan-v1` (20 pairs, eve
 | `scan-v1` slice: JSON and marked PDFs (OCR source) | `1a421327…` | yes |
 | HTML pages (random documents in every style and layout, corpus pairs) | `2f32fe58…` | yes |
 | `combine-v1` first 20 cases: combination JSON and report pages, two runs each | `2c58a823…` | yes |
+| `synth-v1` slice: comparison JSON of 20 evaluation pairs (4 documents × 5 variants: en, de, zh, ar) | `ab579d71…` | yes (also equal to the digest before the cell-text pairing rule) |
 
 ## Gold sets
 
@@ -107,16 +110,16 @@ Gold documents as input; 210 documents, 1,050 pairs.
 | Row | Score [95% CI] | Floor | Verdict |
 |---|---|---|---|
 | align F1, same | 0.9999 [0.9998, 1.0000] | 0.9999 | floor held |
-| align F1, edited | 0.9793 [0.9737, 0.9844] | 0.979 | floor held |
+| align F1, edited | 0.9881 [0.9834, 0.9924] | 0.979 | above floor (was 0.9793) |
 | align F1, moved | 0.9880 [0.9749, 0.9979] | 0.988 | floor held |
 | align F1, split | 0.9960 [0.9862, 1.0000] | 0.996 | floor held |
 | align F1, merged | 1.0000 [1.0000, 1.0000] | 1.000 | floor held |
-| align F1, unrelated | 0.9278 [0.9113, 0.9434] | 0.928 | floor held |
+| align F1, unrelated | 0.9552 [0.9360, 0.9717] | 0.928 | above floor (was 0.9278) |
 | boundary F1 | 0.9144 [0.9036, 0.9246] | 0.914 | floor held |
 | boundary precision / recall | 0.9135 / 0.9152 | .912 / .911 | floor held |
 | fragmentation: changes per changed sentence | 1.0047 [1.0028, 1.0070] | 1.005 | floor held |
-| fragmentation: changes per gold unit | 1.1712 [1.1423, 1.2027] | 1.171 | floor held |
-| display regions per changed sentence / per unit | 1.0047 / 1.0273 | — | information |
+| fragmentation: changes per gold unit | 1.1553 [1.1286, 1.1847] | 1.171 | better than floor (a lower count is better; was 1.1712) |
+| display regions per changed sentence / per unit | 1.0047 / 1.0164 | — | information |
 | missed changed sentences | 0.0018 [0.0003, 0.0038] | 0.0018 | floor held |
 | Verify passes / fallback rate | 1.0 / 0 | 1.0 / 0 | pass |
 
@@ -154,14 +157,14 @@ The PDF source run on 210 synthetic pairs (222 compared, 0 failures), its nodes 
 
 | Row | Score [95% CI] | Floor | Verdict |
 |---|---|---|---|
-| align F1, edited | .9304 [.9098, .9489] | .909 | above floor |
+| align F1, edited | .9361 [.9171, .9542] | .909 | above floor |
 | align F1, moved | .8429 [.7460, .9241] | .843 | equal at three decimals (the interval's centre is unchanged; moved precision .756, recall .952) |
 | align F1, split | 1.0000 | .781 | above floor |
 | align F1, merged | .9706 [.9206, 1.0000] | .846 | above floor |
-| align F1, unrelated | .4902 [.4292, .5495] | .263 | above floor (low because page furniture has no gold block) |
-| boundary F1 | .8009 [.7668, .8335] | .792 | above floor |
+| align F1, unrelated | .5386 [.4756, .5966] | .263 | above floor (low because page furniture has no gold block) |
+| boundary F1 | .8297 [.7994, .8580] | .792 | above floor |
 | fragmentation: changes per changed sentence | 1.0057 [1.0012, 1.0109] | 1.006 | floor held |
-| fragmentation: changes per gold unit | 1.1880 [1.1456, 1.2350] | 1.135 | **below its floor (a higher count is worse; .053 above the recorded value, whose interval [1.097, 1.179] the new point lies outside of; boundary F1 and precision rose over the same pairs)** |
+| fragmentation: changes per gold unit | 1.1735 [1.1325, 1.2185] | 1.135 | **above its floor value (a higher count is worse): the interval overlaps the recorded [1.097, 1.179]. Down from 1.188; the remainder is table rows, one change per cell, see below** |
 | missed changed sentences | .0423 [.0269, .0598] | .108 | above floor |
 | Verify passes / fallback | 1.0 / 0 | 1.0 / 0 | pass |
 
@@ -299,8 +302,7 @@ Rows where OneDiff's DOCX output and the free tools are compared (strictly bette
 
 ## Failures, rows below their floor, and gaps
 
-- **Failing gate: rendered redline read-back on `pdf-v1`, inline layout:** 85 of 1,110 pairs (details above). The smallest failing pair is kept as a skipped test.
-- **Below its floor: PDF source, changes per gold unit** (1.188 against the recorded 1.135). Boundary F1 and precision are higher than at the floor.
+- **Below its floor: PDF source, changes per gold unit** (1.174 [1.133, 1.219] against the recorded 1.135 [1.097, 1.179]; the intervals overlap). Every other `pdf-v1` row is at or above its floor. What remains is the table rows: an inserted or deleted table row is one change per cell (three for the generated tables), where before cell-per-block grids were read as paragraphs and equal short cells were matched to equal cells of other rows, so such rows cost 2.5 changes on average. A row costs three changes now because its cells are no longer matched to another row's equal cells; the changes per changed sentence and the display regions per gold unit (1.029) are unchanged by it.
 - **At the floor within rounding:** PDF/PDF moved align F1 (.8429 against .843).
 - **Scan limits:** scan boundary F1 (.237), split and merge recovery (F1 .055 and .109) and moved precision are limited by recognition errors and by paragraphs the recognition engine merges; the flags (precision .93, recall .62) mark rather than hide them. Latin-script scans only.
 - **Known limit:** one 29.7 MB pair exceeds the renderer's display-list limit; the rendered redline gives a clear error for it. It is a limit, not a failure of the gates above.

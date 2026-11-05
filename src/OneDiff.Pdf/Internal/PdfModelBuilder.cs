@@ -42,6 +42,15 @@ internal sealed class Piece(NodeKind kind, string? label)
     public bool IsEmpty => Raw.Length == 0;
 }
 
+/// <summary>A text block as the grid reading sees it: the lines of the block less a leading line that is a running header's.</summary>
+internal sealed record GridBlock(PdfTextBlock Source, IReadOnlyList<PdfTextLine> Lines)
+{
+    public bool IsTable => Source.IsTable;
+
+    public static GridBlock Of(PdfTextBlock block, HashSet<string> headerLines) =>
+        block.Lines.Count > 1 && headerLines.Contains(block.Lines[0].Text) ? new GridBlock(block, [.. block.Lines.Skip(1)]) : new GridBlock(block, block.Lines);
+}
+
 /// <summary>
 /// Turns OnePDF's text extraction into the flowing compare model. Blocks become paragraphs, list items and tables in reading order;
 /// a paragraph that runs on at the end of a column or page is joined to its continuation; running headers and footers go into a
@@ -70,25 +79,44 @@ internal sealed class PdfModelBuilder
     public void Build(IReadOnlyList<PdfPageText> pages, IReadOnlyList<string?> labels)
     {
         builder.Begin(NodeKind.Section);
+        // Lines of running headers, and lines alone at the top of a page: a header that sits right above a table's repeated heading
+        // can be read as the first line of the heading's block, and the grid reading leaves such a line to the header.
+        var headerLines = new HashSet<string>(StringComparer.Ordinal);
+        foreach (PdfPageText p in pages)
+        {
+            foreach (PdfTextBlock b in p.Blocks)
+            {
+                if (b.Role == PdfTextRole.Header || (b.Role == PdfTextRole.Body && b.Lines.Count == 1 && b.Lines[0].Bounds.Top > p.Height - 100))
+                {
+                    foreach (PdfTextLine l in b.Lines)
+                    {
+                        headerLines.Add(l.Text);
+                    }
+                }
+            }
+        }
+
         foreach (PdfPageText page in pages)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            PdfTextBlock[] body = [.. page.Blocks.Where(static b => b.Role == PdfTextRole.Body)];
+            GridBlock[] body = [.. page.Blocks.Where(static b => b.Role == PdfTextRole.Body).Select(b => GridBlock.Of(b, headerLines))];
             for (int i = 0; i < body.Length; i++)
             {
-                if (options.ReadTables && TryGrid(body, i, out List<List<List<PdfTextBlock>>>? rows))
+                if (options.ReadTables && TryGrid(body, i, out List<List<List<GridBlock>>>? rows))
                 {
                     FlushMarker();
                     Flush();
-                    AddGrid(page, rows);
+                    AddGrid(page, rows, continuing: i == 0);
                     i += rows.Sum(static r => r.Sum(static c => c.Count)) - 1;
                     continue;
                 }
 
-                AddBodyBlock(page, body[i]);
+                CloseGrid();
+                AddBodyBlock(page, body[i].Source);
             }
         }
 
+        CloseGrid();
         FlushMarker();
         Flush();
         builder.End();
@@ -268,15 +296,15 @@ internal sealed class PdfModelBuilder
     // overlaps it is that cell's next line (a narrow cell wraps "1 200 EUR" into two blocks). A Word source has the table, so
     // reading the grid back as a table keeps the two models alike; a block that is longer than a cell or a row that breaks the
     // pattern ends the grid. A cell is its blocks, a row its cells.
-    private static bool TryGrid(PdfTextBlock[] body, int start, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out List<List<List<PdfTextBlock>>>? rows)
+    private static bool TryGrid(GridBlock[] body, int start, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out List<List<List<GridBlock>>>? rows)
     {
         rows = null;
-        var done = new List<List<List<PdfTextBlock>>>();
-        var row = new List<List<PdfTextBlock>>();
+        var done = new List<List<List<GridBlock>>>();
+        var row = new List<List<GridBlock>>();
         int columns = -1;
         for (int j = start; j < body.Length; j++)
         {
-            PdfTextBlock b = body[j];
+            GridBlock b = body[j];
             if (!IsCell(b))
             {
                 break;
@@ -318,10 +346,10 @@ internal sealed class PdfModelBuilder
         return true;
     }
 
-    private static bool ContinuesCell(List<List<PdfTextBlock>> row, PdfTextBlock b)
+    private static bool ContinuesCell(List<List<GridBlock>> row, GridBlock b)
     {
         PdfRectangle next = b.Lines[0].Bounds;
-        foreach (List<PdfTextBlock> cell in row)
+        foreach (List<GridBlock> cell in row)
         {
             PdfRectangle last = cell[^1].Lines[^1].Bounds;
             bool overlaps = Math.Min(last.Right, next.Right) > Math.Max(last.Left, next.Left);
@@ -335,7 +363,7 @@ internal sealed class PdfModelBuilder
         return false;
     }
 
-    private static bool IsCell(PdfTextBlock b)
+    private static bool IsCell(GridBlock b)
     {
         if (b.IsTable || b.Lines.Count is 0 or > 3 || b.Lines.Any(static l => l.Words.Count == 0))
         {
@@ -345,7 +373,7 @@ internal sealed class PdfModelBuilder
         return b.Lines.Sum(static l => l.Words.Count) <= 8 && !PdfText.IsListMarker(b.Lines[0].Words[0].Text);
     }
 
-    private static bool Stacks(List<List<PdfTextBlock>> above, List<List<PdfTextBlock>> below)
+    private static bool Stacks(List<List<GridBlock>> above, List<List<GridBlock>> below)
     {
         for (int c = 0; c < above.Count; c++)
         {
@@ -359,29 +387,71 @@ internal sealed class PdfModelBuilder
         return true;
     }
 
-    private void AddGrid(PdfPageText page, List<List<List<PdfTextBlock>>> rows)
+    // The table of the last grid stays open, so that a table the page break cut in two is one table: the next page's grid goes on
+    // in it when it has as many columns, and a heading row it repeats (the same cells as the table's first row) is not a row.
+    private bool gridOpen;
+    private int gridColumns, gridPage;
+    private string[] gridHeading = [];
+
+    private void CloseGrid()
     {
-        builder.Begin(NodeKind.Table);
-        foreach (List<List<PdfTextBlock>> row in rows)
+        if (gridOpen)
         {
-            builder.Begin(NodeKind.TableRow);
-            foreach (List<PdfTextBlock> cell in row)
+            builder.End();
+            gridOpen = false;
+        }
+    }
+
+    private void AddGrid(PdfPageText page, List<List<List<GridBlock>>> rows, bool continuing)
+    {
+        bool goesOn = continuing && gridOpen && gridPage < page.PageIndex && rows[0].Count == gridColumns;
+        if (!goesOn)
+        {
+            CloseGrid();
+            builder.Begin(NodeKind.Table);
+            gridOpen = true;
+            gridColumns = rows[0].Count;
+            gridHeading = [];
+        }
+
+        gridPage = page.PageIndex;
+        bool first = true;
+        foreach (List<List<GridBlock>> row in rows)
+        {
+            var cells = new List<(Piece Piece, NormalizedText Text)>(row.Count);
+            foreach (List<GridBlock> cell in row)
             {
-                builder.Begin(NodeKind.TableCell);
                 var piece = new Piece(NodeKind.Paragraph, null);
                 foreach (PdfTextLine line in cell.SelectMany(static b => b.Lines))
                 {
-                    AddLine(piece, page, line, 0, line.Words.Count);
+                    AddLine(piece, page, line, 0, line.Words.Count, wrapIsSpace: true);
                 }
 
-                EmitParagraph(piece, TextNormalization.Normalize(piece.Raw.ToString(), BodyNormalizers));
+                cells.Add((piece, TextNormalization.Normalize(piece.Raw.ToString(), BodyNormalizers)));
+            }
+
+            string[] texts = [.. cells.Select(static c => c.Text.Text)];
+            if (gridHeading.Length == 0)
+            {
+                gridHeading = texts;
+            }
+            else if (goesOn && first && texts.AsSpan().SequenceEqual(gridHeading))
+            {
+                first = false;
+                continue;
+            }
+
+            first = false;
+            builder.Begin(NodeKind.TableRow);
+            foreach ((Piece piece, NormalizedText text) in cells)
+            {
+                builder.Begin(NodeKind.TableCell);
+                EmitParagraph(piece, text);
                 builder.End();
             }
 
             builder.End();
         }
-
-        builder.End();
     }
 
     private void AddTable(PdfPageText page, PdfTextBlock block)
@@ -448,7 +518,7 @@ internal sealed class PdfModelBuilder
         }
     }
 
-    private void AddLine(Piece p, PdfPageText page, PdfTextLine line, int fromWord, int toWord)
+    private void AddLine(Piece p, PdfPageText page, PdfTextLine line, int fromWord, int toWord, bool wrapIsSpace = false)
     {
         if (toWord <= fromWord)
         {
@@ -457,7 +527,11 @@ internal sealed class PdfModelBuilder
 
         if (!p.IsEmpty)
         {
-            p.Raw.Append('\n');
+            // The lines of a grid cell are blocks the text analysis cut apart where a narrow cell wrapped; the break between them
+            // is layout, and a page that showed it as a hard break would stack the cell's words in a column narrower than the
+            // cell. A word broken by a hyphen keeps its break, so the hyphenation fold still joins it.
+            char last = p.Raw.Length > 0 ? p.Raw[^1] : ' ';
+            p.Raw.Append(wrapIsSpace && last is not ('-' or '\u2010' or '\u00AD') ? ' ' : '\n');
         }
 
         for (int w = fromWord; w < toWord; w++)
