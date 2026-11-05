@@ -109,22 +109,22 @@ Memory at the largest sizes is within about 15–45% of the comparators' in the 
 
 ## Gold sets: document engine
 
-Set: `synth-v1`, evaluation split, manifest sha256 `e11b5614d5cd967d4a3feac46e636156fb0beb0e741f96a28bfe7236c3d402a8`: 210 documents, 1,050 labelled synthetic pairs, 7 languages. Paired bootstrap over documents, 10,000 resamples, seed 20261104, 95% percentile intervals. Full tables with per-language and per-edit-type scores: [`results/synth-v1-eval-rule-grouper.md`](results/synth-v1-eval-rule-grouper.md) (current floors) and [`results/synth-v1-eval-block-aligner.md`](results/synth-v1-eval-block-aligner.md) (the aligner against the earlier reference pipeline). Grouping thresholds are tuned on a separate development split; the evaluation split is scored once per change.
+Set: `synth-v1`, evaluation split, manifest sha256 `e11b5614d5cd967d4a3feac46e636156fb0beb0e741f96a28bfe7236c3d402a8`: 210 documents, 1,050 labelled synthetic pairs, 7 languages. Paired bootstrap over documents, 10,000 resamples, seed 20261104, 95% percentile intervals. Full tables with per-language and per-edit-type scores: [`results/synth-v1-eval-aligner-ties.md`](results/synth-v1-eval-aligner-ties.md) (current floors), [`results/synth-v1-eval-rule-grouper.md`](results/synth-v1-eval-rule-grouper.md) and [`results/synth-v1-eval-block-aligner.md`](results/synth-v1-eval-block-aligner.md) (the aligner against the earlier reference pipeline). Grouping thresholds are tuned on a separate development split; the evaluation split is scored once per change.
 
 | Row | Score [95% CI] | Reference / floor | Verdict |
 |---|---|---|---|
-| align F1, same | 0.9996 [0.9994, 0.9998] | reference pipeline 0.9983 | better than reference; floor set |
-| align F1, edited | 0.9733 [0.9659, 0.9798] | 0.9544 | better; floor set |
-| align F1, moved | 0.9900 [0.9797, 0.9980] | 0.7391 | better; floor set |
-| align F1, split | 0.9880 [0.9720, 1.0000] | 0.9880 | tie; floor set |
+| align F1, same | 0.9999 [0.9998, 1.0000] | reference pipeline 0.9983 | better than reference; floor set |
+| align F1, edited | 0.9793 [0.9737, 0.9844] | 0.9544 | better; floor set |
+| align F1, moved | 0.9880 [0.9749, 0.9979] | 0.7391 | better; floor set |
+| align F1, split | 0.9960 [0.9862, 1.0000] | 0.9880 | tie; floor set |
 | align F1, merged | 1.0000 [1.0000, 1.0000] | 1.0000 | tie; floor set |
-| align F1, unrelated | 0.9279 [0.9121, 0.9426] | 0.8351 | better; floor set |
-| boundary F1 | 0.9115 [0.9007, 0.9218] | block-aligner baseline 0.6729 [0.6446, 0.7003] | improved by the grouping step; floor set |
+| align F1, unrelated | 0.9278 [0.9113, 0.9434] | 0.8351 | better; floor set |
+| boundary F1 | 0.9144 [0.9036, 0.9246] | block-aligner baseline 0.6729 [0.6446, 0.7003] | improved by the grouping step; floor set |
 | boundary precision / recall | 0.9118 / 0.9112 | — | floor set |
 | fragmentation: changes per changed sentence | 1.0047 [1.0028, 1.0070] | ideal 1.0 | floor set |
-| fragmentation: changes per gold unit | 1.1665 [1.1387, 1.1972] | ideal 1.0 | floor set |
+| fragmentation: changes per gold unit | 1.1712 [1.1423, 1.2027] | ideal 1.0 | floor set |
 | display regions per changed sentence / per unit | 1.0037 / 1.0259 | — | reported beside fragmentation |
-| missed changed sentences | 0.0068 [0.0038, 0.0102] | ideal 0 | floor set |
+| missed changed sentences | 0.0018 [0.0003, 0.0038] | ideal 0 | floor set |
 | verification pass / fallback rate | all pairs verified, fallback 0 | target 0 | pass |
 
 Fragmentation counts changes, not display regions, so grouping a whole paragraph into one region cannot improve it; the definition is in [measurement.md](measurement.md#scoring). These are gold-set rows with floors, not comparator rows: no comparison against another comparison tool has been run yet, so no statement is made about any.
