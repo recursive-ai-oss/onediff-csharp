@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- `RecursiveAI.OneDiff.Word`: `WordDocumentSource` reads DOCX, DOCM, DOTX and DOTM through the OneOffice document hub into the compare model: sections with page setup, headers and footers, paragraphs and list items with resolved numbering labels, tables with merges, footnotes and endnotes, comments, fields (code and result), pictures (content hash, and a perceptual hash for PNG), text boxes, content controls, hyperlinks, resolved run and paragraph formatting, document properties and opaque parts. Anchors name the element and the run of every node and text segment, in the offset space of OneOffice's revision authoring. Tracked changes already in an input are accepted by default, or rejected, or refused (`WordRevisionMode`). Register with `WordRedline.Register()`. See `docs/word.md`.
+
 ## [0.1.0-preview.1]
 
 The first preview. Public API may change before 1.0.

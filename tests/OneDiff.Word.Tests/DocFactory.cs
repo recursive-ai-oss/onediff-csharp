@@ -81,6 +81,7 @@ internal sealed record DocSpec(params Blk[] Blocks)
     public string? Footer { get; init; }
     public string? Title { get; init; }
     public string? Author { get; init; }
+    public string? CustomXml { get; init; }
 }
 
 internal static class DocFactory
@@ -111,6 +112,56 @@ internal static class DocFactory
         ms.Write([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
         Chunk(ms, "IHDR", ihdr);
         Chunk(ms, "IDAT", z);
+        Chunk(ms, "IEND", []);
+        return ms.ToArray();
+    }
+
+    /// <summary>A greyscale PNG of <paramref name="width"/> x <paramref name="height"/> whose pixel at (x, y) is <paramref name="pixel"/>(x, y), with filter type <paramref name="filter"/> (0 none, 1 sub, 2 up) on every row.</summary>
+    public static byte[] PngGray(int width, int height, Func<int, int, byte> pixel, byte filter = 0)
+    {
+        var raw = new byte[(width + 1) * height];
+        var plain = new byte[width * height];
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                plain[(y * width) + x] = pixel(x, y);
+            }
+        }
+
+        for (int y = 0; y < height; y++)
+        {
+            raw[y * (width + 1)] = filter;
+            for (int x = 0; x < width; x++)
+            {
+                byte v = plain[(y * width) + x];
+                int left = x > 0 ? plain[(y * width) + x - 1] : 0, up = y > 0 ? plain[((y - 1) * width) + x] : 0;
+                raw[(y * (width + 1)) + 1 + x] = (byte)(v - (filter == 1 ? left : filter == 2 ? up : 0));
+            }
+        }
+
+        using var z = new MemoryStream();
+        z.Write([0x78, 0x01]);
+        for (int at = 0; at < raw.Length || at == 0; at += 65535)
+        {
+            int n = Math.Min(65535, raw.Length - at);
+            bool last = at + n >= raw.Length;
+            z.WriteByte((byte)(last ? 1 : 0));
+            z.Write([(byte)n, (byte)(n >> 8), (byte)~n, (byte)(~n >> 8)]);
+            z.Write(raw, at, n);
+            if (last)
+            {
+                break;
+            }
+        }
+
+        uint adler = Adler(raw);
+        z.Write([(byte)(adler >> 24), (byte)(adler >> 16), (byte)(adler >> 8), (byte)adler]);
+        byte[] ihdr = [0, 0, (byte)(width >> 8), (byte)width, 0, 0, (byte)(height >> 8), (byte)height, 8, 0, 0, 0, 0];
+        using var ms = new MemoryStream();
+        ms.Write([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+        Chunk(ms, "IHDR", ihdr);
+        Chunk(ms, "IDAT", z.ToArray());
         Chunk(ms, "IEND", []);
         return ms.ToArray();
     }
@@ -244,6 +295,12 @@ internal static class DocFactory
         foreach ((string name, byte[] bytes) in cx.Media)
         {
             doc.Package.AddPart(name, "image/png", bytes);
+        }
+
+        if (spec.CustomXml is not null)
+        {
+            doc.Package.AddPart("/customXml/item1.xml", "application/xml", Encoding.UTF8.GetBytes(spec.CustomXml));
+            cx.NewRelationships.Add(new Relationship("rIdCustom1", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml", "../customXml/item1.xml"));
         }
 
         rels.AddRange(cx.NewRelationships);

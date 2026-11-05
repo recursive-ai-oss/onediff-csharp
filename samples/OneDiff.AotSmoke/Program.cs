@@ -2,6 +2,7 @@ using OneDiff.Documents;
 using OneDiff.Documents.Model;
 using OneDiff.Documents.Serialization;
 using OneDiff.Pdf;
+using OneDiff.Word;
 using OnePdf;
 using OneDiff.Tokenization;
 
@@ -40,6 +41,7 @@ internal static class Program
 
         failures += CheckDocuments();
         failures += CheckPdf();
+        failures += CheckWord();
         failures += CheckRedline();
 
         Console.Out.WriteLine(failures == 0 ? "ok" : "FAILED");
@@ -82,6 +84,57 @@ internal static class Program
         }
 
         return failures;
+    }
+
+    /// <summary>Writes two small DOCX files with OneOffice, reads them through the Word source, compares them and writes the redline through the registered happy path.</summary>
+    private static int CheckWord()
+    {
+        int failures = 0;
+        byte[] oldDocx = MakeDocx(["The supplier shall deliver within thirty days.", "Payment is due in sixty days."]);
+        byte[] newDocx = MakeDocx(["The supplier shall deliver within forty days.", "Payment is due in sixty days.", "Notices must be written."]);
+        var source = new WordDocumentSource();
+        CompareDocument a = source.Read(DocumentInput.FromBytes(oldDocx, "old.docx")), b = source.Read(DocumentInput.FromBytes(newDocx, "new.docx"));
+        Comparison c = Comparison.Of(a, b);
+        if (c.Verification.FallbackLevel != 0 || !c.Verification.Passed || !c.Check().IsEmpty || c.Changes.IsEmpty)
+        {
+            Console.Error.WriteLine("word: comparison failed verification");
+            failures++;
+        }
+
+        string dir = Path.Combine(Path.GetTempPath(), "onediff-aot-word-" + Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            WordRedline.Register();
+            string x = Path.Combine(dir, "a.docx"), y = Path.Combine(dir, "b.docx"), html = Path.Combine(dir, "out.html");
+            File.WriteAllBytes(x, oldDocx);
+            File.WriteAllBytes(y, newDocx);
+            Redline.Create(x, y, html);
+            if (!File.ReadAllText(html).Contains("<ins", StringComparison.Ordinal))
+            {
+                Console.Error.WriteLine("word: HTML output missing marks");
+                failures++;
+            }
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+
+        return failures;
+    }
+
+    private static byte[] MakeDocx(string[] paragraphs)
+    {
+        using RecursiveAI.OneOffice.Documents.Document doc = RecursiveAI.OneOffice.Documents.Document.Create();
+        foreach (string p in paragraphs)
+        {
+            doc.Body.AddParagraph(p);
+        }
+
+        using var ms = new MemoryStream();
+        doc.SaveAs(ms, RecursiveAI.OneOffice.OfficeFormat.Docx);
+        return ms.ToArray();
     }
 
     /// <summary>Compares two plain-text documents through every stage and round-trips the result through JSON.</summary>
