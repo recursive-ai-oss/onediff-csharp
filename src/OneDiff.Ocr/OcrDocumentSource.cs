@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using OneDiff.Documents;
 using OneDiff.Documents.Model;
 using OneDiff.Ocr.Internal;
@@ -41,7 +40,7 @@ namespace OneDiff.Ocr;
 /// <see cref="Change.PossibleOcrError"/>. The recognized words are not hidden or corrected. What the OCR engine does not read (pictures,
 /// pages it finds empty) is not in the model.
 /// </para>
-/// <para>Register the PDF source before this one, because a source registered later is asked first (see <see cref="OcrRedline.Register"/>).</para>
+/// <para><see cref="OcrRedline.Register"/> registers this source with a priority above the PDF source's, so the order of registration does not matter.</para>
 /// </remarks>
 public sealed class OcrDocumentSource : IDocumentSource
 {
@@ -106,12 +105,12 @@ public sealed class OcrDocumentSource : IDocumentSource
         InputKind kind = InputKinds.Of(input.Content.Span);
         if (kind == InputKind.Unknown)
         {
-            throw PdfSourceErrors.Make(PdfSourceFailure.Malformed, "the input is neither a PDF nor a PNG, JPEG or TIFF image");
+            throw PdfSourceErrors.Make(PdfSourceFailure.Malformed, "The input is neither a PDF nor a PNG, JPEG or TIFF image.");
         }
 
         if (input.Content.Length > options.MaxInputBytes)
         {
-            throw PdfSourceErrors.Make(PdfSourceFailure.TooLarge, $"the input is {input.Content.Length} bytes; the limit is {options.MaxInputBytes}");
+            throw PdfSourceErrors.Make(PdfSourceFailure.TooLarge, $"The input is {input.Content.Length} bytes; the limit is {options.MaxInputBytes}");
         }
 
         try
@@ -139,7 +138,7 @@ public sealed class OcrDocumentSource : IDocumentSource
                 Image image = Image.Load(input.Content, cancellationToken: cancellationToken);
                 if (image.Frames.Count > options.MaxPages)
                 {
-                    throw PdfSourceErrors.Make(PdfSourceFailure.TooLarge, $"the image has {image.Frames.Count} frames; the limit is {options.MaxPages}");
+                    throw PdfSourceErrors.Make(PdfSourceFailure.TooLarge, $"The image has {image.Frames.Count} frames; the limit is {options.MaxPages}");
                 }
 
                 pages = engine.OcrPages(image, new OcrOptions { Dpi = options.ImageDpi, IncludeChars = false, MaxDegreeOfParallelism = options.MaxDegreeOfParallelism }, cancellationToken);
@@ -148,7 +147,7 @@ public sealed class OcrDocumentSource : IDocumentSource
 
             if (pages.Count > options.MaxPages)
             {
-                throw PdfSourceErrors.Make(PdfSourceFailure.TooLarge, $"the document has {pages.Count} pages; the limit is {options.MaxPages}");
+                throw PdfSourceErrors.Make(PdfSourceFailure.TooLarge, $"The document has {pages.Count} pages; the limit is {options.MaxPages}");
             }
 
             cancellationToken.ThrowIfCancellationRequested();
@@ -160,17 +159,9 @@ public sealed class OcrDocumentSource : IDocumentSource
 
             var builder = new CompareDocumentBuilder(DocumentKind.Flowing).WithMetadata(input.Name, input.Sha256Hex(), MediaTypeOf(kind));
             new OcrModelBuilder(options, builder, cancellationToken).Build(PageFurniture.Detect(data));
-            CompareDocument result = builder.Build();
-            if (wrapped is null)
-            {
-                PdfOrigins.Remember(result, input.Content, options.Password);
-            }
-            else
-            {
-                PdfOrigins.Remember(result, wrapped, null, Convert.ToHexStringLower(SHA256.HashData(wrapped)));
-            }
-
-            return result;
+            return builder
+                .WithOrigin(wrapped is null ? new DocumentOrigin(input.Content, options.Password, input.Sha256Hex()) : new DocumentOrigin(wrapped))
+                .Build();
         }
         catch (Exception ex) when (ex is OcrFormatException or OcrLimitException or ImageException)
         {

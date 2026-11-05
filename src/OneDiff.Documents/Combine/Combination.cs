@@ -69,7 +69,7 @@ public sealed class Combination
         ArgumentNullException.ThrowIfNull(copies);
         if (copies.Count == 0)
         {
-            throw new ArgumentException("at least one copy is required", nameof(copies));
+            throw new ArgumentException("At least one copy is required.", nameof(copies));
         }
 
         var comparisons = new List<Comparison>(copies.Count);
@@ -92,7 +92,7 @@ public sealed class Combination
         ArgumentNullException.ThrowIfNull(comparisons);
         if (comparisons.Count == 0)
         {
-            throw new ArgumentException("at least one comparison is required", nameof(comparisons));
+            throw new ArgumentException("At least one comparison is required.", nameof(comparisons));
         }
 
         CompareDocument original = comparisons[0].Old;
@@ -100,7 +100,7 @@ public sealed class Combination
         {
             if (!ReferenceEquals(c.Old, original))
             {
-                throw new ArgumentException("every comparison must be made from the same original document object", nameof(comparisons));
+                throw new ArgumentException("Every comparison must be made from the same original document object.", nameof(comparisons));
             }
         }
 
@@ -190,7 +190,7 @@ public sealed class Combination
             return System.Text.Encoding.UTF8.GetBytes(ChangeReport.From(this).ToHtml());
         }
 
-        throw new NotSupportedException($"no combined output form for '{ext}'; .html and .json are built in");
+        throw new NotSupportedException($"No combined output form for '{ext}'; .html and .json are built in.");
     }
 }
 

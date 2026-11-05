@@ -1,5 +1,7 @@
 using System.Globalization;
 using OneDiff.Documents;
+using OneDiff.Documents.Verification;
+using OneDiff.Pdf;
 
 namespace OneDiff.Cli;
 
@@ -16,13 +18,16 @@ internal static class CompareCommand
         usage: onediff compare <old> <new> <output> [options]
                onediff compare <old> <new> -o <output> [options]
 
-        Compares two documents (text or PDF, recognized by content) and writes the redline. The output form follows the
+        Compares two documents (text, PDF or a scan, recognized by content) and writes the redline. The output form follows the
         extension of <output>: .html (inline), .json (the change list), .pdf (the new PDF with the changes marked on its
-        own pages when the new document is a PDF, otherwise a rendered redline).
+        own pages when the new document is a PDF or a scan, otherwise a rendered redline). A PDF without a text layer is read
+        by OCR. The exit status is 0 on success (1 when --exit-code is given and the documents differ) and 2 on error.
 
         options:
           -o, --output <file>                    the output file (instead of the third argument)
-          --form <html|html-side-by-side|json>   choose the output form instead of using the extension
+          --form <html|html-side-by-side|json|pdf-markup|pdf-rendered|pdf-rendered-side-by-side>
+                                                 choose the output form instead of using the extension
+          --exit-code                            exit 1 when the documents differ, as diff does
           --settings <legal|strict|text>         what to show and hide (default legal)
           --style <blackline|sidebyside|word|developer>
                                                  the look (default: the form's own)
@@ -31,6 +36,7 @@ internal static class CompareCommand
           --timestamp <ISO 8601>                 print this time in the footer (the clock is never read)
           --no-cover  --no-footer  --no-bars     leave out the cover page, the footer, the change bars
           --type-tags                            tag each change with its type
+          --whole-words                          mark a changed word whole (30 → 60) instead of its changed characters
           -h, --help                             show this text
         """;
 
@@ -39,7 +45,7 @@ internal static class CompareCommand
         var positional = new List<string>();
         string? output = null;
         string? form = null, settingsName = null, styleName = null, title = null, language = null, timestamp = null;
-        bool noCover = false, noFooter = false, noBars = false, typeTags = false;
+        bool noCover = false, noFooter = false, noBars = false, typeTags = false, exitCode = false, wholeWords = false;
         for (int i = 0; i < args.Length; i++)
         {
             string a = args[i];
@@ -59,6 +65,12 @@ internal static class CompareCommand
                     break;
                 case "--type-tags":
                     typeTags = true;
+                    break;
+                case "--whole-words":
+                    wholeWords = true;
+                    break;
+                case "--exit-code":
+                    exitCode = true;
                     break;
                 case "-o" or "--output":
                     if (i + 1 >= args.Length)
@@ -139,11 +151,14 @@ internal static class CompareCommand
                 "html" => RedlineForm.Html,
                 "html-side-by-side" or "side-by-side" => RedlineForm.HtmlSideBySide,
                 "json" => RedlineForm.Json,
+                "pdf-markup" or "pdf-on-pages" => PdfRedline.OnPages,
+                "pdf-rendered" or "pdf-inline" => PdfRedline.Rendered,
+                "pdf-rendered-side-by-side" => PdfRedline.RenderedSideBySide,
                 _ => null,
             };
             if (chosen is null)
             {
-                return Fail(io, $"unknown form '{form}' (html, html-side-by-side, json)");
+                return Fail(io, $"unknown form '{form}' (html, html-side-by-side, json, pdf-markup, pdf-rendered, pdf-rendered-side-by-side)");
             }
         }
 
@@ -172,7 +187,7 @@ internal static class CompareCommand
             when = parsed;
         }
 
-        if (style is not null || title is not null || language is not null || when is not null || noCover || noFooter || noBars || typeTags)
+        if (style is not null || title is not null || language is not null || when is not null || noCover || noFooter || noBars || typeTags || wholeWords)
         {
             RedlineStyle s = style ?? (ReferenceEquals(chosen, RedlineForm.HtmlSideBySide) ? RedlineStyle.SideBySide : settings.Style);
             s = s with
@@ -184,27 +199,27 @@ internal static class CompareCommand
                 Footer = s.Footer && !noFooter,
                 ChangeBars = s.ChangeBars && !noBars,
                 TypeTags = s.TypeTags || typeTags,
+                MarkWholeWords = s.MarkWholeWords || wholeWords,
             };
             settings = settings with { Style = s };
         }
 
         try
         {
-            if (chosen is null)
+            RedlineForm outForm = chosen ?? Redline.FormFor(positional[2]);
+            Comparison comparison = Comparison.Of(positional[0], positional[1], settings);
+            foreach (Diagnostic d in comparison.Diagnostics.Where(static d => d.Severity >= DiagnosticSeverity.Warning))
             {
-                Redline.Create(positional[0], positional[1], positional[2], settings);
+                io.Info("onediff compare: warning: " + d.Message);
             }
-            else
-            {
-                Redline.Create(positional[0], positional[1], positional[2], chosen, settings);
-            }
+
+            comparison.SaveAs(positional[2], outForm);
+            return exitCode && !comparison.Changes.IsEmpty ? 1 : 0;
         }
-        catch (Exception ex) when (ex is NotSupportedException or IOException or UnauthorizedAccessException or InvalidDataException)
+        catch (Exception ex) when (ex is NotSupportedException or IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException or ComparisonVerificationException)
         {
             return Fail(io, ex.Message);
         }
-
-        return 0;
     }
 
     private static int Fail(CliIo io, string message)

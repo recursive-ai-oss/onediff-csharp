@@ -35,7 +35,7 @@ public sealed class FormatSet
         {
             if (string.IsNullOrEmpty(kv.Key) || kv.Value is null)
             {
-                throw new ArgumentException("attribute keys cannot be empty and values cannot be null", nameof(items));
+                throw new ArgumentException("Attribute keys cannot be empty and values cannot be null.", nameof(items));
             }
 
             WellFormed.Check(kv.Key, "an attribute key");
@@ -53,7 +53,7 @@ public sealed class FormatSet
     {
         if ((keysAndValues.Length & 1) != 0)
         {
-            throw new ArgumentException("keys and values must come in pairs", nameof(keysAndValues));
+            throw new ArgumentException("Keys and values must come in pairs.", nameof(keysAndValues));
         }
 
         var list = new List<KeyValuePair<string, string>>(keysAndValues.Length / 2);
@@ -297,12 +297,12 @@ internal static class FormatRuns
         {
             if (r.Format is null)
             {
-                throw new ArgumentException("a format run has no format");
+                throw new ArgumentException("A format run has no format.");
             }
 
             if (r.Length <= 0 || r.Start < pos || r.Start > textLength || r.Length > textLength - r.Start)
             {
-                throw new ArgumentException($"format run [{r.Start}, +{r.Length}) is empty, overlaps another or lies outside the text of {textLength} characters");
+                throw new ArgumentException($"Format run [{r.Start}, +{r.Length}) is empty, overlaps another or lies outside the text of {textLength} characters.");
             }
 
             pos = r.End;

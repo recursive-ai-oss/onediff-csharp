@@ -11,7 +11,7 @@ How `RecursiveAI.OneDiff.Ocr` reads a scanned PDF or an image into the compare m
 - An unreadable or encrypted PDF is not a scan; the PDF source reports why.
 - Each image frame is one page. An image is wrapped in a one-page-per-frame PDF so that markings can be written on it. The marked file is checked against the wrapper's hash (`PdfOrigin.Sha256`), the compare model's `SourceHash` is the image's own hash.
 
-The source is registered after the PDF source (`OcrRedline.Register()` does both), because the source registered last is asked first. A later `PdfRedline.Register()` demotes it, so call `OcrRedline.Register()` again.
+`OcrRedline.Register()` registers the PDF source and the scan source, the scan source with a higher priority (`DocumentSources.Register(source, priority)`), so a scanned PDF goes to OCR whichever of `PdfRedline.Register()` and `OcrRedline.Register()` was called last. Without it, the PDF source refuses a PDF that has no text layer and says to reference this package. The `onediff` tool registers it.
 
 ## 2. Reading the text
 

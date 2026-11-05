@@ -52,7 +52,37 @@ public sealed class DocumentInput
         {
             if (ms.Length + n > maxBytes)
             {
-                throw new InvalidDataException($"the input is larger than {maxBytes} bytes");
+                throw new InvalidDataException($"The input is larger than {maxBytes} bytes.");
+            }
+
+            ms.Write(buffer, 0, n);
+        }
+
+        return new DocumentInput(ms.ToArray(), name);
+    }
+
+    /// <summary>
+    /// Reads a stream to its end asynchronously, so that it works on streams that refuse synchronous reads (an ASP.NET Core request
+    /// body under its default settings). Same limits and result as <see cref="FromStream"/>.
+    /// </summary>
+    /// <param name="stream">The stream; read from its current position, not closed.</param>
+    /// <param name="name">A display name.</param>
+    /// <param name="maxBytes">The most to read; default 1 GiB.</param>
+    /// <param name="cancellationToken">Observed while reading.</param>
+    /// <exception cref="InvalidDataException">The stream holds more than <paramref name="maxBytes"/>.</exception>
+    /// <exception cref="OperationCanceledException">The token was cancelled.</exception>
+    public static async Task<DocumentInput> FromStreamAsync(Stream stream, string name = "", long maxBytes = 1L << 30, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        ArgumentNullException.ThrowIfNull(name);
+        using var ms = new MemoryStream();
+        byte[] buffer = new byte[81920];
+        int n;
+        while ((n = await stream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
+        {
+            if (ms.Length + n > maxBytes)
+            {
+                throw new InvalidDataException($"The input is larger than {maxBytes} bytes.");
             }
 
             ms.Write(buffer, 0, n);
@@ -90,25 +120,33 @@ public interface IDocumentSource
 public static class DocumentSources
 {
     private static readonly object Gate = new();
-    private static ImmutableArray<IDocumentSource> registered = [];
+    private static ImmutableArray<(IDocumentSource Source, int Priority)> registered = [];
 
     /// <summary>The sources in this package, in the order they are tried: just plain text.</summary>
     public static IReadOnlyList<IDocumentSource> BuiltIn { get; } = [PlainTextSource.Instance];
 
-    /// <summary>The sources added with <see cref="Register"/>, newest first.</summary>
-    public static IReadOnlyList<IDocumentSource> Registered => registered;
+    /// <summary>The sources added with <see cref="Register"/>, in the order they are asked: higher priority first, and among equal priorities the most recently registered first.</summary>
+    public static IReadOnlyList<IDocumentSource> Registered => [.. registered.Select(static r => r.Source)];
 
     /// <summary>
     /// Adds a source to the process-wide list that <see cref="Sniff"/> consults before the built-in ones. A source with the same
     /// <see cref="IDocumentSource.Name"/> is replaced, so calling a package's registration twice is harmless. Thread-safe.
     /// </summary>
-    public static void Register(IDocumentSource source)
+    /// <param name="source">The source.</param>
+    /// <param name="priority">Which sources are asked first: the highest priority wins whatever the order of registration; among equal priorities the newest is asked first. Default 0. A source that is a specialist for inputs another source would also accept (the scan source for PDFs without text) registers above it, so that the order in which packages are registered does not matter.</param>
+    public static void Register(IDocumentSource source, int priority = 0)
     {
         ArgumentNullException.ThrowIfNull(source);
         lock (Gate)
         {
-            ImmutableArray<IDocumentSource> kept = [.. registered.Where(s => !string.Equals(s.Name, source.Name, StringComparison.Ordinal))];
-            registered = kept.Insert(0, source);
+            ImmutableArray<(IDocumentSource Source, int Priority)> kept = [.. registered.Where(r => !string.Equals(r.Source.Name, source.Name, StringComparison.Ordinal))];
+            int at = 0;
+            while (at < kept.Length && kept[at].Priority > priority)
+            {
+                at++;
+            }
+
+            registered = kept.Insert(at, (source, priority));
         }
     }
 
@@ -131,7 +169,7 @@ public static class DocumentSources
             }
         }
 
-        foreach (IDocumentSource s in registered)
+        foreach ((IDocumentSource s, _) in registered)
         {
             if (s.CanRead(input))
             {
@@ -155,7 +193,8 @@ public static class DocumentSources
             }
         }
 
-        throw new NotSupportedException("no document source recognizes this input");
+        string tried = string.Join(", ", registered.Select(static r => r.Source.Name).Concat(BuiltIn.Select(static b => b.Name)));
+        throw new NotSupportedException($"No document source recognizes this input (tried: {tried}). Input is recognized by its content, never by its file name.");
     }
 }
 
@@ -164,7 +203,8 @@ public static class DocumentSources
 /// whitespace); the lines of a paragraph are kept, joined by LF. The document is one section holding the paragraphs. Text is
 /// normalized with <see cref="ControlCharacterNormalizer"/> and <see cref="TypographicNormalizer"/>, so quote, dash and
 /// whitespace differences are recorded as folds. Anchors are text spans of the decoded input: the paragraph's span on the
-/// paragraph, one span per line as segments. A UTF-8 or UTF-16 byte order mark selects the encoding; otherwise UTF-8
+/// paragraph, one span per line as segments. A paragraph that opens with a list marker and goes on (<see cref="ListMarkers"/>: <c>4.2 Payment</c>, <c>(a) the Buyer</c>) is a
+/// <see cref="NodeKind.ListItem"/> whose <c>list.label</c> is the marker and whose text starts after it, exactly as the PDF source reads it. A UTF-8 or UTF-16 byte order mark selects the encoding; otherwise UTF-8
 /// (invalid bytes become U+FFFD). Input containing a zero byte (and no UTF-16 mark) is not text.
 /// </summary>
 public sealed class PlainTextSource : IDocumentSource
@@ -253,18 +293,49 @@ public sealed class PlainTextSource : IDocumentSource
 
     private static void AddParagraph(CompareDocumentBuilder builder, string raw, int start, int end, List<(int Start, int End)> lines)
     {
-        NormalizedText norm = TextNormalization.Normalize(raw.Substring(start, end - start), Normalizers);
-        var segments = new List<AnchoredSpan>(lines.Count);
-        foreach ((int ls, int le) in lines)
+        // A paragraph that opens with a list marker and goes on ("4.2 Payment", "(a) the Buyer") is a list item with its label, as in
+        // every other built-in source, so a renumbering is the same kind of change whichever kind of file it was read from. The
+        // marker leaves the text; the anchors still cover it.
+        int textStart = start;
+        string? label = null;
+        (int firstStart, int firstEnd) = lines[0];
+        int m = firstStart;
+        while (m < firstEnd && !char.IsWhiteSpace(raw[m]))
         {
-            int a = norm.MapRawIndex(ls - start), b = norm.MapRawIndex(le - start);
+            m++;
+        }
+
+        int after = m;
+        while (after < firstEnd && char.IsWhiteSpace(raw[after]))
+        {
+            after++;
+        }
+
+        if (m > firstStart && after < firstEnd && ListMarkers.IsMarker(raw.Substring(firstStart, m - firstStart)))
+        {
+            label = raw.Substring(firstStart, m - firstStart);
+            textStart = after;
+        }
+
+        NormalizedText norm = TextNormalization.Normalize(raw.Substring(textStart, end - textStart), Normalizers);
+        var segments = new List<AnchoredSpan>(lines.Count);
+        for (int i = 0; i < lines.Count; i++)
+        {
+            (int ls, int le) = lines[i];
+            if (i == 0)
+            {
+                ls = textStart;
+            }
+
+            int a = norm.MapRawIndex(ls - textStart), b = norm.MapRawIndex(le - textStart);
             segments.Add(new AnchoredSpan(a, b - a, Anchor.ForTextSpan(PartName, ls, le - ls)));
         }
 
-        builder.Add(NodeKind.Paragraph, new NodeContent
+        builder.Add(label is null ? NodeKind.Paragraph : NodeKind.ListItem, new NodeContent
         {
             Text = norm.Text,
             Folds = norm.Folds,
+            Attributes = label is null ? null : FormatSet.Of(FormatKeys.ListLabel, label),
             Anchor = Anchor.ForTextSpan(PartName, start, end - start),
             Segments = [.. segments],
         });

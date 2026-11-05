@@ -36,12 +36,12 @@ public sealed record PdfSourceOptions
     {
         if (MaxPages <= 0 || MaxCharacters <= 0)
         {
-            throw new ArgumentException("the page and character limits must be positive");
+            throw new ArgumentException("The page and character limits must be positive.");
         }
     }
 }
 
-/// <summary>Why <see cref="PdfDocumentSource"/> rejected an input.</summary>
+/// <summary>Why <see cref="PdfDocumentSource"/> (or the scan source) rejected an input.</summary>
 public enum PdfSourceFailure
 {
     /// <summary>The bytes are not a readable PDF (damaged beyond repair, or the extraction failed).</summary>
@@ -52,6 +52,9 @@ public enum PdfSourceFailure
 
     /// <summary>The document exceeds a limit of <see cref="PdfSourceOptions"/> or of the PDF reader.</summary>
     TooLarge = 2,
+
+    /// <summary>The file is a readable PDF with pages but no text layer, so it is a scan (or a drawing): reading it as text would compare an empty document. The OCR package reads it.</summary>
+    NoTextLayer = 3,
 }
 
 /// <summary>

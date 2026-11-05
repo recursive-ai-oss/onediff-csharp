@@ -65,13 +65,17 @@ Redline.Create("v1.pdf", "v2.pdf", "changes.json");
 Comparison again = ComparisonJson.Read(File.ReadAllBytes("changes.json"));
 ```
 
-Inputs are recognized by their content, and the output form follows the extension of the output path. The same from a shell: `onediff compare v1.pdf v2.pdf -o markup.pdf`.
+Inputs are recognized by their content, and the output form follows the extension of the output path. The same from a shell: `onediff compare v1.pdf v2.pdf -o markup.pdf`. A PDF that has no text layer is refused with a message that names `RecursiveAI.OneDiff.Ocr` (call `OcrRedline.Register()` to read scans); it is never compared as an empty document. For streams that refuse synchronous I/O, such as an ASP.NET Core request body, use `Redline.CreateAsync`, `Comparison.OfAsync`, `SaveAsync` and `ComparisonJson.ReadAsync`.
 
 ## The low level
 
 Every layer is public: the comparison is five stages over immutable values, and the alignment between the two documents is a value you can correct and run again.
 
 ```csharp
+using OneDiff.Documents;
+using OneDiff.Documents.Model;      // CompareDocument
+using OneDiff.Documents.Pipeline;   // Alignment
+
 CompareDocument a = CompareDocument.FromText(oldText, "old");
 CompareDocument b = CompareDocument.FromText(newText, "new");
 

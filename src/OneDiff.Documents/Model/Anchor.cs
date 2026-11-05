@@ -276,7 +276,7 @@ public sealed class Anchor
             case AnchorKind.PdfQuads:
                 return ForPdfQuads(quads);
             case AnchorKind.OcrWords:
-                return ForOcrWords(quads, confidence ?? throw new ArgumentException("an OCR anchor needs a confidence"));
+                return ForOcrWords(quads, confidence ?? throw new ArgumentException("An OCR anchor needs a confidence."));
             default:
                 throw new ArgumentOutOfRangeException(nameof(kind));
         }
@@ -288,14 +288,14 @@ public sealed class Anchor
         ImmutableArray<Quad> q = [.. quads];
         if (q.Length == 0)
         {
-            throw new ArgumentException("an anchor needs at least one quad", nameof(quads));
+            throw new ArgumentException("An anchor needs at least one quad.", nameof(quads));
         }
 
         foreach (Quad quad in q)
         {
             if (!quad.IsValid)
             {
-                throw new ArgumentException("a quad has a negative page or a coordinate that is not a finite number", nameof(quads));
+                throw new ArgumentException("A quad has a negative page or a coordinate that is not a finite number.", nameof(quads));
             }
         }
 

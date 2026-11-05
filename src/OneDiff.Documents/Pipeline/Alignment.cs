@@ -219,7 +219,7 @@ public sealed class Alignment
         AlignmentLink link = Links[CheckIndex(linkId, Links.Length)];
         if (!link.Pinned)
         {
-            throw new InvalidOperationException($"link {linkId} is not pinned");
+            throw new InvalidOperationException($"Link {linkId} is not pinned.");
         }
 
         return Create(Old, New, Settings, Links.Where(l => l.Id != linkId), Diagnostics).Normalize();
@@ -385,7 +385,7 @@ public sealed class Alignment
     {
         if (l.OldNodes.IsDefaultOrEmpty || l.NewNodes.IsDefaultOrEmpty)
         {
-            throw new ArgumentException("a link needs old and new nodes");
+            throw new ArgumentException("A link needs old and new nodes.");
         }
 
         bool shapeOk = l.Kind switch
@@ -397,7 +397,7 @@ public sealed class Alignment
         };
         if (!shapeOk)
         {
-            throw new ArgumentException($"a {l.Kind} link cannot join {l.OldNodes.Length} old and {l.NewNodes.Length} new nodes");
+            throw new ArgumentException($"A {l.Kind} link cannot join {l.OldNodes.Length} old and {l.NewNodes.Length} new nodes.");
         }
 
         NodeKind kind = oldDocument[l.OldNodes[0]].Kind;
@@ -406,7 +406,7 @@ public sealed class Alignment
         {
             if (o < 0 || o >= oldDocument.Count || o <= last || seenOld[o] || oldDocument[o].Kind != kind)
             {
-                throw new ArgumentException($"old node {o} is missing, repeated, out of order, in another link or of another kind");
+                throw new ArgumentException($"Old node {o} is missing, repeated, out of order, in another link or of another kind.");
             }
 
             seenOld[o] = true;
@@ -418,7 +418,7 @@ public sealed class Alignment
         {
             if (n < 0 || n >= newDocument.Count || n <= last || seenNew[n] || newDocument[n].Kind != kind)
             {
-                throw new ArgumentException($"new node {n} is missing, repeated, out of order, in another link or of another kind");
+                throw new ArgumentException($"New node {n} is missing, repeated, out of order, in another link or of another kind.");
             }
 
             seenNew[n] = true;

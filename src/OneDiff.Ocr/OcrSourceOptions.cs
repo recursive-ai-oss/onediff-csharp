@@ -66,12 +66,12 @@ public sealed record OcrSourceOptions
     {
         if (MaxPages <= 0 || MaxCharacters <= 0 || MaxInputBytes <= 0 || MinTextLayerCharacters < 0 || MaxDegreeOfParallelism < 0)
         {
-            throw new ArgumentException("the page, character and byte limits must be positive");
+            throw new ArgumentException("The page, character and byte limits must be positive.");
         }
 
         if (!(RenderDpi >= 72 && RenderDpi <= 600) || (ImageDpi is double d && !(d >= 10 && d <= 4800)))
         {
-            throw new ArgumentException("a resolution is out of range");
+            throw new ArgumentException("A resolution is out of range.");
         }
     }
 }

@@ -1,6 +1,6 @@
 # Migrating from DiffPlex
 
-This page maps the calls in DiffPlex's README to the `RecursiveAI.OneDiff` calls that do the same job. It is a mapping only: OneDiff does not copy DiffPlex's types or shapes, and there is no compatibility layer. Where the README does not say exactly what a DiffPlex option does, the row says "closest" and you should check the result on your own data. Rows marked *not provided* have no equivalent in the text core.
+This page maps the calls in the README of DiffPlex 1.9.0 (the NuGet package page) to the `RecursiveAI.OneDiff` calls that do the same job. It is a mapping only: OneDiff does not copy DiffPlex's types or shapes, and there is no compatibility layer. Where the README does not say exactly what a DiffPlex option does, the row says "closest" and you should check the result on your own data. Rows marked *not provided* have no equivalent in the text core.
 
 Everything below is in namespace `OneDiff` (and `OneDiff.Tokenization`, `OneDiff.Merge` where noted). All calls are static and take plain strings.
 
@@ -12,8 +12,8 @@ Everything below is in namespace `OneDiff` (and `OneDiff.Tokenization`, `OneDiff
 
 | DiffPlex | OneDiff | Notes |
 |---|---|---|
-| `CreateLineDiffs(old, new, ignoreWhiteSpace: false)` | `Diff.Lines(old, new)` | Line tokens keep their line terminator, so `a\r\n` and `a\n` are different lines. |
-| `CreateLineDiffs(old, new, ignoreWhiteSpace: true)` | `Diff.LinesUsing(old, new, TokenComparer.IgnoreWhiteSpaceChanges)` or `TokenComparer.IgnoreAllWhiteSpace` | Closest. `IgnoreWhiteSpaceChanges` treats runs of white space as equal (and ignores a different line ending); `IgnoreAllWhiteSpace` drops white space altogether. |
+| `CreateLineDiffs(old, new, false)` | `Diff.Lines(old, new)` | Line tokens keep their line terminator, so `a\r\n` and `a\n` are different lines. |
+| `CreateLineDiffs(old, new, true)` | `Diff.LinesUsing(old, new, TokenComparer.IgnoreWhiteSpaceChanges)` or `TokenComparer.IgnoreAllWhiteSpace` | Closest. `IgnoreWhiteSpaceChanges` treats runs of white space as equal (and ignores a different line ending); `IgnoreAllWhiteSpace` drops white space altogether. |
 | `CreateCharacterDiffs(old, new, ignoreWhitespace)` | `Diff.Characters(old, new)`; with a comparer, `Diff.TextUsing(old, new, comparer, TokenKind.Character)` | Characters are Unicode scalar values, so surrogate pairs stay whole. `Diff.Graphemes` compares user-perceived characters. |
 | `CreateWordDiffs(old, new, ignoreWhitespace, separators)` | `Diff.Words(old, new)`; with a comparer, `Diff.WordsUsing(old, new, comparer)` | Word boundaries are fixed rules (see `TokenKind.Word`), not a separator list, so token boundaries differ from DiffPlex's. For your own separators, cut the text yourself and use `Diff.Sequences` (below). |
 | `CreateCustomDiffs(old, new, ignoreWhiteSpace, chunker)` | `Diff.Sequences<string>(oldChunks, newChunks, comparer: …)` | You split the text; the script indexes your chunks. |
@@ -76,9 +76,8 @@ The README calls the two modified versions "old text" and "new text"; they map t
 | DiffPlex | OneDiff |
 |---|---|
 | `CreateMerge(baseText, oldText, newText, …)` | `Diff.Merge(baseText, ours: oldText, theirs: newText)` returns a `TextMerge` |
-| `mergeResult.HasConflicts` | `merge.HasConflicts` |
-| `mergeResult.ConflictBlocks.Count` | `merge.ConflictCount` |
-| `mergeResult.MergedText` | `merge.Text`, with conflicts marked in git's `merge`, `diff3` or `zdiff3` layout (`new MergeSettings { Style = … }`), or settled with `Resolution = ConflictResolution.Ours/Theirs/Union` |
+| `mergeResult.ConflictBlocks.Count` | `merge.ConflictCount`; `merge.HasConflicts` says whether there is any |
+| the merged text (the README writes `mergeResult.HasConflicts` and `mergeResult.MergedText`, which did not compile against the 1.9.0 package) | `merge.Text`, with conflicts marked in git's `merge`, `diff3` or `zdiff3` layout (`new MergeSettings { Style = … }`), or settled with `Resolution = ConflictResolution.Ours/Theirs/Union` |
 | `CreateDiffs(…)` (three-way diff) | `merge.Regions`: the stretches of the merge, each with its base, ours and theirs line range |
 | `ignoreWhiteSpace`, `ignoreCase`, `chunker` | `Diff.Merge<T>(baseItems, ours, theirs, settings, comparer)` over items you cut yourself (for example lines) with the comparer you want |
 
@@ -94,4 +93,4 @@ Changes on adjacent lines are a conflict, as in git; changes separated by an unc
 
 The text core also has semantic and efficiency cleanup (`Diff.Semantic`, `Diff.Efficient`), diff-match-patch patch text (`Diff.PatchText`, `Diff.ApplyPatchText`) and unified patch apply with fuzz (`Diff.ApplyUnified`), and the `onediff diff | patch | merge` command line over the same calls. Document comparison lives in `RecursiveAI.OneDiff.Documents` and the adapter packages.
 
-The snippets and mappings above that show behaviour are covered by tests in the repository (`MigrationPageTests`).
+Names on the DiffPlex side are the ones the 1.9.0 README uses and that compile against the 1.9.0 package, except where a row says otherwise (the README's `ignoreWhiteSpace:` argument name and the `HasConflicts` / `MergedText` members did not compile, so this page passes the flag positionally and does not rely on them). The snippets and mappings that show OneDiff behaviour are covered by tests in the repository (`MigrationPageTests`).

@@ -24,14 +24,14 @@ public sealed class PairDiffs
         ArgumentNullException.ThrowIfNull(ledger);
         if (links.IsDefault || links.Length != alignment.Links.Length)
         {
-            throw new ArgumentException("there must be one LinkDiff per alignment link", nameof(links));
+            throw new ArgumentException("There must be one LinkDiff per alignment link.", nameof(links));
         }
 
         for (int i = 0; i < links.Length; i++)
         {
             if (links[i].LinkId != i)
             {
-                throw new ArgumentException("link diffs must be indexed by link id", nameof(links));
+                throw new ArgumentException("Link diffs must be indexed by link id.", nameof(links));
             }
         }
 

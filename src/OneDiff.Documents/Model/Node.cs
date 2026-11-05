@@ -203,8 +203,10 @@ public sealed class CompareDocument
 {
     private readonly ImmutableArray<int>[] children;
 
-    internal CompareDocument(DocumentKind kind, string name, string sourceHash, string sourceFormat, ImmutableArray<Node> nodes, ImmutableArray<OpaquePart> opaque)
+    internal CompareDocument(DocumentKind kind, string name, string sourceHash, string sourceFormat, ImmutableArray<Node> nodes, ImmutableArray<OpaquePart> opaque, DocumentOrigin? origin = null, ImmutableArray<SourceWarning> warnings = default)
     {
+        Origin = origin;
+        Warnings = warnings.IsDefault ? [] : warnings;
         Kind = kind;
         Name = name;
         SourceHash = sourceHash;
@@ -245,6 +247,12 @@ public sealed class CompareDocument
 
     /// <summary>A media type or short format name the source reported, such as <c>text/plain</c>.</summary>
     public string SourceFormat { get; }
+
+    /// <summary>The file this document was read from, when its source kept it for output forms (a PDF's own pages); null for documents built by hand or read back from JSON. In memory only.</summary>
+    public DocumentOrigin? Origin { get; }
+
+    /// <summary>What the source found wrong with its input and carried on: a comparison reports each as a diagnostic (see <see cref="Stages.Align"/>). Empty for a clean read.</summary>
+    public ImmutableArray<SourceWarning> Warnings { get; }
 
     /// <summary>All nodes in document order; <c>Nodes[i].Id == i</c>.</summary>
     public ImmutableArray<Node> Nodes { get; }
@@ -317,6 +325,8 @@ public sealed class CompareDocumentBuilder
     private string name = "";
     private string sourceHash = "";
     private string sourceFormat = "";
+    private DocumentOrigin? origin;
+    private readonly List<SourceWarning> warnings = [];
 
     /// <summary>Starts a document of the given kind.</summary>
     public CompareDocumentBuilder(DocumentKind kind = DocumentKind.Flowing)
@@ -341,6 +351,26 @@ public sealed class CompareDocumentBuilder
         return this;
     }
 
+    /// <summary>Keeps the file the document was read from, for output forms that mark the original (see <see cref="CompareDocument.Origin"/>).</summary>
+    public CompareDocumentBuilder WithOrigin(DocumentOrigin origin)
+    {
+        ArgumentNullException.ThrowIfNull(origin);
+        this.origin = origin;
+        return this;
+    }
+
+    /// <summary>Records that the source read its input but found it damaged or incomplete (see <see cref="CompareDocument.Warnings"/>).</summary>
+    /// <param name="severity">How serious it is.</param>
+    /// <param name="code">A stable code such as <c>pdf.repaired</c>.</param>
+    /// <param name="message">A sentence for a person.</param>
+    public CompareDocumentBuilder AddWarning(DiagnosticSeverity severity, string code, string message)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(code);
+        ArgumentNullException.ThrowIfNull(message);
+        warnings.Add(new SourceWarning(severity, WellFormed.Check(code, "the warning code"), WellFormed.Check(message, "the warning message")));
+        return this;
+    }
+
     /// <summary>Adds a node that has children; close it with <see cref="End"/>.</summary>
     /// <returns>The node's id.</returns>
     /// <exception cref="ArgumentException">The content is invalid (see <see cref="NodeContent"/>).</exception>
@@ -349,7 +379,7 @@ public sealed class CompareDocumentBuilder
     {
         if (open.Count >= MaxDepth)
         {
-            throw new InvalidOperationException("documents nest at most " + MaxDepth.ToString(System.Globalization.CultureInfo.InvariantCulture) + " containers deep");
+            throw new InvalidOperationException("Documents nest at most " + MaxDepth.ToString(System.Globalization.CultureInfo.InvariantCulture) + " containers deep.");
         }
 
         int id = Append(open.Count > 0 ? open.Peek() : -1, kind, content ?? NodeContent.Empty);
@@ -363,7 +393,7 @@ public sealed class CompareDocumentBuilder
     {
         if (open.Count == 0)
         {
-            throw new InvalidOperationException("no container is open");
+            throw new InvalidOperationException("No container is open.");
         }
 
         open.Pop();
@@ -380,7 +410,7 @@ public sealed class CompareDocumentBuilder
     {
         if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(hash))
         {
-            throw new ArgumentException("an opaque part needs a name and a hash");
+            throw new ArgumentException("An opaque part needs a name and a hash.");
         }
 
         opaque.Add(new OpaquePart(WellFormed.Check(name, "an opaque part name"), WellFormed.Check(hash, "an opaque part hash"), anchor ?? Anchor.None));
@@ -392,10 +422,10 @@ public sealed class CompareDocumentBuilder
     {
         if (open.Count != 0)
         {
-            throw new InvalidOperationException("a container is still open");
+            throw new InvalidOperationException("A container is still open.");
         }
 
-        return new CompareDocument(kind, name, sourceHash, sourceFormat, [.. nodes], [.. opaque]);
+        return new CompareDocument(kind, name, sourceHash, sourceFormat, [.. nodes], [.. opaque], origin, [.. warnings]);
     }
 
     /// <summary>Appends a node under <paramref name="parent"/>, which must be the last node or one of its ancestors (or -1).</summary>
@@ -413,14 +443,14 @@ public sealed class CompareDocumentBuilder
 
         if (parent >= 0 && path.Count == 0)
         {
-            throw new ArgumentException($"parent {parent} is not the previous node or one of its ancestors");
+            throw new ArgumentException($"Parent {parent} is not the previous node or one of its ancestors.");
         }
 
-        string text = content.Text ?? throw new ArgumentException("node text cannot be null");
+        string text = content.Text ?? throw new ArgumentException("Node text cannot be null.");
         WellFormed.Check(text, "node text");
         if (text.Contains('\u001E', StringComparison.Ordinal))
         {
-            throw new ArgumentException("node text cannot contain U+001E; normalize it away (see ControlCharacterNormalizer)");
+            throw new ArgumentException("Node text cannot contain U+001E; normalize it away (see ControlCharacterNormalizer).");
         }
 
         ImmutableArray<FormatRun> runs = FormatRuns.Canonicalize(content.Runs.IsDefault ? null : content.Runs, text.Length);
@@ -456,7 +486,7 @@ public sealed class CompareDocumentBuilder
             if (f.Original is null || f.Original.Length == 0 || f.Start < pos || f.Length < 0 || f.Start > textLength || f.Length > textLength - f.Start
                 || (int)f.Category < 0 || (int)f.Category >= LedgerCategoryNames.Count || !WellFormed.IsValid(f.Original))
             {
-                throw new ArgumentException("normalization folds must be sorted, non-overlapping, inside the text and have an original");
+                throw new ArgumentException("Normalization folds must be sorted, non-overlapping, inside the text and have an original.");
             }
 
             pos = f.Start + f.Length;
@@ -475,7 +505,7 @@ public sealed class CompareDocumentBuilder
         {
             if (s.Anchor is null || s.Start < last || s.Length < 0 || s.Start > textLength || s.Length > textLength - s.Start)
             {
-                throw new ArgumentException("anchored spans must be sorted by start, inside the text and carry an anchor");
+                throw new ArgumentException("Anchored spans must be sorted by start, inside the text and carry an anchor.");
             }
 
             last = s.Start;
