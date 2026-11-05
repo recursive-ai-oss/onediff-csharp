@@ -383,8 +383,11 @@ internal static class ChangeClassifier
             ct.ThrowIfCancellationRequested();
             groupKind.TryGetValue(c.Id, out GroupKind kind);
             Verdict v = Analyze(c, kind, typed, recognizer, texts, set.Alignment, ref oldTerms, ref newTerms);
+            double? ocr = OcrFlags.LowestConfidence(c, set.Alignment);
             b.Add(c with
             {
+                OcrConfidence = ocr,
+                PossibleOcrError = ocr is double oc && oc < set.Settings.OcrConfidenceThreshold,
                 Decision = new Decision(DecidedBy.Rule, v.Source, v.Score),
                 Type = typed ? v.Type : ChangeType.None,
                 OldValue = typed ? v.Old : null,

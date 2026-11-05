@@ -16,7 +16,7 @@ internal static class Program
 {
     private const string Usage = """
         OneDiff.GoldSets generate --out DIR [--role eval|dev|train] [--seed N] [--docs-per-lang N] [--langs en,de,...] [--verify]
-        OneDiff.GoldSets score --data DIR --out FILE [--settings legal] [--oracle-alignment] [--cmp DIR | --changes DIR] [--blocks DIR] [--save-cmp DIR] [--pipeline NAME] [--jobs N] [--limit N] [--ids FILE] [--resamples N]
+        OneDiff.GoldSets score --data DIR --out FILE [--settings legal] [--oracle-alignment] [--cmp DIR | --changes DIR] [--blocks DIR [--fuzzy-blocks]] [--save-cmp DIR] [--pipeline NAME] [--jobs N] [--limit N] [--ids FILE] [--resamples N]
         OneDiff.GoldSets check-split --a DIR --b DIR
         OneDiff.GoldSets generate-combine --out DIR [--seed N] [--docs-per-lang N] [--langs en,de,...]
         OneDiff.GoldSets score-combine --data DIR --out FILE [--jobs N] [--limit N] [--resamples N]
@@ -25,7 +25,9 @@ internal static class Program
                       document and its role), manifest.json and manifest.sha256 (the set hash). Same seed, same bytes.
           score       compares every pair with the reference pipeline (or reads DIR/<id>.cmp.json from --cmp, or the tracked-changes
                       readings DIR/<id>.changes.json from --changes) and writes the rows. Comparisons made from rendered files (PDF, DOCX)
-                      and other tools' output are mapped to the gold nodes through DIR/<id>.blocks.json (--blocks); --changes needs it.
+                      and other tools' output are mapped to the gold nodes through DIR/<id>.blocks.json (--blocks); --changes needs it. Text recognized
+                      from pixels differs from the gold's by recognition errors, so --fuzzy-blocks matches nodes to blocks by similarity and
+                      carries offsets over by a character alignment.
           generate-combine writes the combine set: for each eval document 2, 3 and 4 reviewers' copies of it with exact labels (cases/<id>.json).
           score-combine runs the combination over a combine set and reports invertibility, attribution, sharing and conflict rows.
           digest-combine hashes the combination outputs of the first N cases (--data DIR --count N); time-combine times a 100-page combine.
@@ -285,6 +287,7 @@ internal static class Program
         string? saveCmp = opt.GetValueOrDefault("save-cmp");
         string? changesDir = opt.GetValueOrDefault("changes");
         string? blocksDir = opt.GetValueOrDefault("blocks");
+        bool fuzzyBlocks = opt.ContainsKey("fuzzy-blocks");
         if (changesDir is not null && blocksDir is null)
         {
             throw new ArgumentException("--changes needs --blocks");
@@ -384,7 +387,7 @@ internal static class Program
                 {
                     lock (mapStats)
                     {
-                        input = ScoreInput.From(cmp, blocks, mapStats);
+                        input = ScoreInput.From(cmp, blocks, mapStats, fuzzyBlocks);
                     }
                 }
             }

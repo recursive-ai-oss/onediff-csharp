@@ -19,6 +19,9 @@ internal sealed class Counts
     public long UnitChanges, UnitRegions, UnitCounted, UnitMissed;
     public long Pairs, Passed, Fallbacks, NoDiff;
 
+    // Changes that no gold unit explains ("spurious", for text read from pixels: recognition noise) and the ones flagged as possible OCR errors.
+    public long ChangesTotal, ChangesSpurious, ChangesFlagged, FlaggedSpurious, OldChars;
+
     // Semantic rows (SemanticScorer): per gold typed kind, the units, the units matched to a change, the right types and the exact values.
     public readonly long[] TyUnits = new long[7];
     public readonly long[] TyMatched = new long[7];
@@ -60,6 +63,11 @@ internal sealed class Counts
         Passed += o.Passed;
         Fallbacks += o.Fallbacks;
         NoDiff += o.NoDiff;
+        ChangesTotal += o.ChangesTotal;
+        ChangesSpurious += o.ChangesSpurious;
+        ChangesFlagged += o.ChangesFlagged;
+        FlaggedSpurious += o.FlaggedSpurious;
+        OldChars += o.OldChars;
         for (int i = 0; i < 7; i++)
         {
             TyUnits[i] += o.TyUnits[i];
@@ -256,6 +264,33 @@ internal static class PairScorer
 
             perChange[ch.Id] = ivs;
         }
+
+        // Spurious changes: a text change that overlaps no gold unit, a move of a block no gold link moves. Attribute, split and merge
+        // changes have no text and are left out. Pairs whose documents are identical have no gold units, so every change there is spurious.
+        var movedGold = new HashSet<(bool, int)>();
+        foreach (GoldLink l in labels.Links.Where(l => l.Kind == "move"))
+        {
+            l.Old.ToList().ForEach(i => movedGold.Add((false, i)));
+            l.New.ToList().ForEach(i => movedGold.Add((true, i)));
+        }
+
+        foreach (SChange ch in input.Changes)
+        {
+            if (ch.Kind == SKind.NoExtent)
+            {
+                continue;
+            }
+
+            bool explained = ch.Kind == SKind.Move
+                ? ch.Extent.Any(v => movedGold.Contains((v.IsNew, v.Node)))
+                : perChange.TryGetValue(ch.Id, out List<Iv>? mine) && mine.Any(v => goldUnitIvs.Values.Any(u => u.Any(g => g.IsNew == v.IsNew && g.Node == v.Node && v.Start < g.End && v.End > g.Start)));
+            c.ChangesTotal++;
+            c.ChangesSpurious += explained ? 0 : 1;
+            c.ChangesFlagged += ch.Flagged ? 1 : 0;
+            c.FlaggedSpurious += ch.Flagged && !explained ? 1 : 0;
+        }
+
+        c.OldChars = oldText.Sum(static t => (long)t.Length);
 
         var predBoundaries = new HashSet<(bool, int, int)>();
         foreach (List<Iv> ivs in perChange.Values)
@@ -475,6 +510,11 @@ internal static class Report
         defs.Add(("rename.R", c => Bootstrap.Recall(c.RenFoundN, c.RenGoldN - c.RenFoundN)));
         defs.Add(("substantive.P", c => Bootstrap.Precision(c.SubTp, c.SubFp)));
         defs.Add(("substantive.R", c => Bootstrap.Recall(c.SubTp, c.SubFn)));
+        defs.Add(("noise.changes.share", c => c.ChangesTotal == 0 ? double.NaN : (double)c.ChangesSpurious / c.ChangesTotal));
+        defs.Add(("noise.changes.per10kchars", c => c.OldChars == 0 ? double.NaN : 10_000.0 * c.ChangesSpurious / c.OldChars));
+        defs.Add(("ocr.flag.P", c => c.ChangesFlagged == 0 ? double.NaN : (double)c.FlaggedSpurious / c.ChangesFlagged));
+        defs.Add(("ocr.flag.R", c => c.ChangesSpurious == 0 ? double.NaN : (double)c.FlaggedSpurious / c.ChangesSpurious));
+        defs.Add(("ocr.flag.share", c => c.ChangesTotal == 0 ? double.NaN : (double)c.ChangesFlagged / c.ChangesTotal));
         defs.Add(("pairs.nodiff", c => c.NoDiff));
         defs.Add(("pairs.renamechain", c => c.RenChain));
         defs.Add(("verify.pass", c => c.Pairs == 0 ? double.NaN : (double)c.Passed / c.Pairs));

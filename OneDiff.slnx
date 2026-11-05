@@ -18,6 +18,7 @@
     <Project Path="tests/OneDiff.Cli.Tests/OneDiff.Cli.Tests.csproj" />
     <Project Path="tests/OneDiff.Documents.Tests/OneDiff.Documents.Tests.csproj" />
     <Project Path="tests/OneDiff.GoldSets.Tests/OneDiff.GoldSets.Tests.csproj" />
+    <Project Path="tests/OneDiff.Ocr.Tests/OneDiff.Ocr.Tests.csproj" />
     <Project Path="tests/OneDiff.Pdf.Tests/OneDiff.Pdf.Tests.csproj" />
     <Project Path="tests/OneDiff.Word.Tests/OneDiff.Word.Tests.csproj" />
   </Folder>
@@ -27,6 +28,7 @@
   <Folder Name="/tools/">
     <Project Path="tools/OneDiff.GoldSets/OneDiff.GoldSets.csproj" />
     <Project Path="tools/OneDiff.GoldSets.Pdf/OneDiff.GoldSets.Pdf.csproj" />
+    <Project Path="tools/OneDiff.GoldSets.Scan/OneDiff.GoldSets.Scan.csproj" />
     <Project Path="tools/OneDiff.GoldSets.Docx/OneDiff.GoldSets.Docx.csproj" />
     <Project Path="tools/OneDiff.Comparators/OneDiff.Comparators.csproj" />
     <Project Path="tools/OneDiff.MergeGate/OneDiff.MergeGate.csproj" />

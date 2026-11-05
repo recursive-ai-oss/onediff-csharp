@@ -8,6 +8,8 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="OneDiff.Pdf.Tests" />
+    <InternalsVisibleTo Include="OneDiff.Ocr" />
+    <InternalsVisibleTo Include="OneDiff.Ocr.Tests" />
   </ItemGroup>
 
   <ItemGroup>

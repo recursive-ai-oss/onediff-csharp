@@ -151,6 +151,11 @@ public static partial class ComparisonJson
         w.WriteBoolean("collapseCascades", s.CollapseCascades);
         w.WriteBoolean("typedChanges", s.TypedChanges);
         w.WriteNumber("seed", s.Seed);
+        if (s.OcrConfidenceThreshold != CompareSettings.DefaultOcrConfidenceThreshold)
+        {
+            w.WriteNumber("ocrConfidenceThreshold", s.OcrConfidenceThreshold);
+        }
+
         w.WriteStartObject("style");
         RedlineStyle st = s.Style;
         w.WriteString("name", st.Name);
@@ -343,6 +348,16 @@ public static partial class ComparisonJson
         if (!c.IsSubstantive)
         {
             w.WriteBoolean("substantive", false);
+        }
+
+        if (c.OcrConfidence is double ocr)
+        {
+            w.WriteNumber("ocrConfidence", ocr);
+        }
+
+        if (c.PossibleOcrError)
+        {
+            w.WriteBoolean("possibleOcrError", true);
         }
 
         if (!c.Properties.IsEmpty)

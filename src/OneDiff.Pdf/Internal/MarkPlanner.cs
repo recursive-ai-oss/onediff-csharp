@@ -89,6 +89,9 @@ internal sealed class MarkPlanner
         }
     }
 
+    /// <summary>Whether an anchor is a place on a page: glyph quadrilaterals of a digital PDF or recognized words of a scan.</summary>
+    private static bool IsPageAnchor(Anchor a) => a.Kind is AnchorKind.PdfQuads or AnchorKind.OcrWords;
+
     private static string Label(MarkStyle style, string text) => style.Glyph.Length > 0 ? style.Glyph + " " + text : text;
 
     private static string Contents(string label, string body) => body.Length == 0 ? label : label + "\n" + body;
@@ -102,7 +105,7 @@ internal sealed class MarkPlanner
             return null;
         }
 
-        if (side.Anchor.Kind != AnchorKind.PdfQuads || side.Anchor.Quads.IsDefaultOrEmpty)
+        if (!IsPageAnchor(side.Anchor) || side.Anchor.Quads.IsDefaultOrEmpty)
         {
             why = side.Anchor.Kind == AnchorKind.None ? "a container with no text of its own: its content carries its own changes" : "the anchor is not a PDF location";
             return null;
@@ -177,7 +180,7 @@ internal sealed class MarkPlanner
     private static MarkPlan? CaretAt(ChangeSide side, string label, MarkStyle mark, string body, out string? why)
     {
         why = null;
-        if (side.Anchor.Kind != AnchorKind.PdfQuads || side.Anchor.Quads.IsDefaultOrEmpty)
+        if (!IsPageAnchor(side.Anchor) || side.Anchor.Quads.IsDefaultOrEmpty)
         {
             why = "the anchor is not a PDF location";
             return null;
@@ -225,7 +228,7 @@ internal sealed class MarkPlanner
     {
         foreach (Node n in doc.Nodes)
         {
-            if (n.Anchor.Kind == AnchorKind.PdfQuads)
+            if (IsPageAnchor(n.Anchor))
             {
                 return n.Anchor.Quads[0];
             }
@@ -253,7 +256,7 @@ internal sealed class MarkPlanner
             for (int i = link.NewNodes.Length - 1; i >= 0; i--)
             {
                 Node target = newDoc[link.NewNodes[i]];
-                if (target.Anchor.Kind == AnchorKind.PdfQuads)
+                if (IsPageAnchor(target.Anchor))
                 {
                     last = target.Id;
                     break;

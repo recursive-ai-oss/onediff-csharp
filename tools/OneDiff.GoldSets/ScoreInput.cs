@@ -20,7 +20,11 @@ internal enum SKind
 }
 
 /// <summary>A change in the gold documents' coordinates: the intervals of node text it covers on either side.</summary>
-internal sealed record SChange(int Id, SKind Kind, List<Iv> Extent);
+/// <param name="Id">The change's id in its comparison.</param>
+/// <param name="Kind">How it takes part in the rows.</param>
+/// <param name="Extent">The intervals it covers.</param>
+/// <param name="Flagged">Whether the comparison marked it as a possible OCR error.</param>
+internal sealed record SChange(int Id, SKind Kind, List<Iv> Extent, bool Flagged = false);
 
 /// <summary>A correspondence of content blocks by gold node id. Kind is match, move, split or merge.</summary>
 internal sealed record SLink(string Kind, int[] Old, int[] New);
@@ -83,7 +87,7 @@ internal sealed class ScoreInput
                 Sides(ch.New, true, nd, ivs);
             }
 
-            changes.Add(new SChange(ch.Id, kind, ivs));
+            changes.Add(new SChange(ch.Id, kind, ivs, ch.PossibleOcrError));
         }
 
         return new ScoreInput
@@ -108,10 +112,11 @@ internal sealed class ScoreInput
     /// <param name="cmp">The comparison; its node ids are the source's own.</param>
     /// <param name="gold">The pair's block map (both sides).</param>
     /// <param name="stats">Receives how many content nodes were matched.</param>
-    public static ScoreInput From(Comparison cmp, BlockMap gold, MapStats? stats = null)
+    /// <param name="fuzzy">True for text that was recognized from pixels: nodes are matched to gold blocks by similarity and offsets are carried over by a character alignment (see <see cref="NodeMap"/>).</param>
+    public static ScoreInput From(Comparison cmp, BlockMap gold, MapStats? stats = null, bool fuzzy = false)
     {
-        NodeMap om = NodeMap.Build(cmp.Old.Nodes.Where(n => IsContent(n.Kind)).Select(n => (n.Id, n.Text)).ToList(), gold.Old, cmp.Old.Nodes.Length);
-        NodeMap nm = NodeMap.Build(cmp.New.Nodes.Where(n => IsContent(n.Kind)).Select(n => (n.Id, n.Text)).ToList(), gold.New, cmp.New.Nodes.Length);
+        NodeMap om = NodeMap.Build(cmp.Old.Nodes.Where(n => IsContent(n.Kind)).Select(n => (n.Id, n.Text)).ToList(), gold.Old, cmp.Old.Nodes.Length, fuzzy);
+        NodeMap nm = NodeMap.Build(cmp.New.Nodes.Where(n => IsContent(n.Kind)).Select(n => (n.Id, n.Text)).ToList(), gold.New, cmp.New.Nodes.Length, fuzzy);
         if (stats is not null)
         {
             stats.Matched += om.Matched + nm.Matched;
@@ -136,7 +141,7 @@ internal sealed class ScoreInput
                 ivs.Add(new Iv(v.IsNew, map.Id(v.Node), map.Position(v.Node, v.Start, atEnd: false), map.Position(v.Node, v.End, atEnd: true)));
             }
 
-            changes.Add(new SChange(ch.Id, ch.Kind, ivs));
+            changes.Add(new SChange(ch.Id, ch.Kind, ivs, ch.Flagged));
         }
 
         return new ScoreInput
@@ -278,9 +283,11 @@ internal sealed class NodeMap
     private readonly int[] prefix;
     private readonly string[] sourceText;
     private readonly string[] goldTextByNode;
+    private readonly int[]?[] alignment;
 
-    private NodeMap(int[] gold, int[] prefix, string[] sourceText, string[] goldTextByNode, string[] goldText, bool[] goldContent, int matched, int total)
+    private NodeMap(int[] gold, int[] prefix, string[] sourceText, string[] goldTextByNode, string[] goldText, bool[] goldContent, int matched, int total, int[]?[] alignment)
     {
+        this.alignment = alignment;
         this.gold = gold;
         this.prefix = prefix;
         this.sourceText = sourceText;
@@ -317,14 +324,30 @@ internal sealed class NodeMap
             return 0;
         }
 
+        // Recognized text: the k-th kept character of the source stands where the alignment puts it among the gold's.
+        if (alignment[sourceNode] is int[] map)
+        {
+            k = map[Math.Min(k, map.Length - 1)];
+            if (k <= 0)
+            {
+                return 0;
+            }
+        }
+
         return atEnd ? Math.Min(g.Length, Squash.IndexOfKept(g, k - 1) + 1) : Math.Min(g.Length, Squash.IndexOfKept(g, k));
     }
 
     /// <param name="source">The source's content nodes: id and text, in document order.</param>
     /// <param name="side">The gold blocks of that side.</param>
     /// <param name="sourceNodeCount">Number of nodes in the source document (ids are below this).</param>
-    public static NodeMap Build(IReadOnlyList<(int Id, string Text)> source, BlockSide side, int sourceNodeCount)
+    /// <param name="fuzzy">Match by similarity instead of equality and carry offsets over by a character alignment.</param>
+    public static NodeMap Build(IReadOnlyList<(int Id, string Text)> source, BlockSide side, int sourceNodeCount, bool fuzzy = false)
     {
+        if (fuzzy)
+        {
+            return BuildFuzzy(source, side, sourceNodeCount);
+        }
+
         List<GoldBlock> blocks = side.Blocks;
         int goldCount = blocks.Count == 0 ? 0 : blocks.Max(b => b.Node) + 1;
         string[] s = [.. source.Select(x => Squash.Of(x.Text))];
@@ -402,7 +425,212 @@ internal sealed class NodeMap
             }
         }
 
-        return new NodeMap(assigned, pref, srcText, goldByNode, [.. text], [.. content], matched, n);
+        return new NodeMap(assigned, pref, srcText, goldByNode, [.. text], [.. content], matched, n, new int[]?[sourceNodeCount]);
+    }
+
+    /// <summary>
+    /// The least similarity (Dice coefficient over the character pairs of the squashed texts) at which a recognized node is taken
+    /// for a gold block. Recognition changes a few percent of the characters; a different block shares far fewer pairs.
+    /// </summary>
+    public const double MinSimilarity = 0.6;
+
+    private static NodeMap BuildFuzzy(IReadOnlyList<(int Id, string Text)> source, BlockSide side, int sourceNodeCount)
+    {
+        List<GoldBlock> blocks = side.Blocks;
+        int goldCount = blocks.Count == 0 ? 0 : blocks.Max(b => b.Node) + 1;
+        string[] s = [.. source.Select(x => Squash.Of(x.Text))];
+        string[] plain = [.. blocks.Select(b => Squash.Of(b.Text))];
+        string[] labelled = [.. blocks.Select(b => Squash.Of(b.Label + b.Text))];
+        int n = s.Length, m = blocks.Count;
+        Dictionary<int, int>[] sp = [.. s.Select(Pairs)], pp = [.. plain.Select(Pairs)], lp = [.. labelled.Select(Pairs)];
+
+        // sim[i, j]: the better of the plain and the labelled gold text; labelled[i, j] says which one.
+        var sim = new double[n, m];
+        var useLabel = new bool[n, m];
+        for (int i = 0; i < n; i++)
+        {
+            for (int j = 0; j < m; j++)
+            {
+                if (s[i].Length == 0)
+                {
+                    continue;
+                }
+
+                double a = Dice(sp[i], s[i].Length, pp[j], plain[j].Length);
+                double b = blocks[j].Label.Length > 0 ? Dice(sp[i], s[i].Length, lp[j], labelled[j].Length) : 0;
+                sim[i, j] = Math.Max(a, b);
+                useLabel[i, j] = b > a;
+            }
+        }
+
+        // The order-preserving assignment of the greatest total similarity (each pair at least MinSimilarity).
+        var best = new double[n + 1, m + 1];
+        for (int i = n - 1; i >= 0; i--)
+        {
+            for (int j = m - 1; j >= 0; j--)
+            {
+                double v = Math.Max(best[i + 1, j], best[i, j + 1]);
+                if (sim[i, j] >= MinSimilarity)
+                {
+                    v = Math.Max(v, best[i + 1, j + 1] + sim[i, j]);
+                }
+
+                best[i, j] = v;
+            }
+        }
+
+        var assigned = new int[sourceNodeCount];
+        var pref = new int[sourceNodeCount];
+        var srcText = new string[sourceNodeCount];
+        var goldByNode = new string[sourceNodeCount];
+        var alignment = new int[]?[sourceNodeCount];
+        Array.Fill(assigned, -1);
+        Array.Fill(srcText, string.Empty);
+        Array.Fill(goldByNode, string.Empty);
+        int matched = 0;
+        for (int i = 0, j = 0; i < n && j < m;)
+        {
+            if (sim[i, j] >= MinSimilarity && Math.Abs(best[i, j] - (best[i + 1, j + 1] + sim[i, j])) < 1e-12)
+            {
+                int id = source[i].Id;
+                assigned[id] = blocks[j].Node;
+                int label = useLabel[i, j] ? Squash.Of(blocks[j].Label).Length : 0;
+                pref[id] = label;
+                goldByNode[id] = blocks[j].Text;
+                alignment[id] = s[i] == (useLabel[i, j] ? labelled[j] : plain[j]) ? null : CharMap(s[i][Math.Min(label, s[i].Length)..], plain[j]);
+                matched++;
+                i++;
+                j++;
+            }
+            else if (best[i + 1, j] >= best[i, j + 1])
+            {
+                i++;
+            }
+            else
+            {
+                j++;
+            }
+        }
+
+        var text = new List<string>(Enumerable.Repeat(string.Empty, goldCount));
+        var content = new List<bool>(Enumerable.Repeat(false, goldCount));
+        foreach (GoldBlock b in blocks)
+        {
+            text[b.Node] = b.Text;
+            content[b.Node] = true;
+        }
+
+        foreach ((int id, string t) in source)
+        {
+            srcText[id] = t;
+            if (assigned[id] < 0)
+            {
+                assigned[id] = text.Count;
+                text.Add(t);
+                content.Add(true);
+                goldByNode[id] = t;
+            }
+        }
+
+        for (int id = 0; id < sourceNodeCount; id++)
+        {
+            if (assigned[id] < 0)
+            {
+                assigned[id] = text.Count;
+                text.Add(string.Empty);
+                content.Add(false);
+            }
+        }
+
+        return new NodeMap(assigned, pref, srcText, goldByNode, [.. text], [.. content], matched, n, alignment);
+    }
+
+    private static Dictionary<int, int> Pairs(string t)
+    {
+        var d = new Dictionary<int, int>();
+        for (int i = 0; i + 1 < t.Length; i++)
+        {
+            int key = (t[i] << 16) | t[i + 1];
+            d[key] = d.GetValueOrDefault(key) + 1;
+        }
+
+        return d;
+    }
+
+    private static double Dice(Dictionary<int, int> a, int la, Dictionary<int, int> b, int lb)
+    {
+        if (la < 2 || lb < 2)
+        {
+            return 0;
+        }
+
+        // Texts whose lengths differ by more than a recognition error can are not the same block.
+        if (Math.Min(la, lb) < 0.5 * Math.Max(la, lb))
+        {
+            return 0;
+        }
+
+        int shared = 0;
+        foreach (KeyValuePair<int, int> kv in a)
+        {
+            if (b.TryGetValue(kv.Key, out int c))
+            {
+                shared += Math.Min(kv.Value, c);
+            }
+        }
+
+        return 2.0 * shared / ((la - 1) + (lb - 1));
+    }
+
+    /// <summary>
+    /// For each boundary k (0..n) of the recognized text, the boundary of the gold text it stands for: the minimal edit script
+    /// between the two squashed texts is followed, so equal characters map to each other, characters the recognizer got wrong collapse
+    /// onto the gold characters they replace, and characters it added or lost shift nothing.
+    /// </summary>
+    private static int[] CharMap(string recognized, string gold)
+    {
+        var ids = new Dictionary<char, int>();
+        int Id(char c) => ids.TryGetValue(c, out int v) ? v : ids[c] = ids.Count;
+        int[] a = [.. recognized.Select(Id)], b = [.. gold.Select(Id)];
+        OneDiff.EditScript script = OneDiff.Algorithms.MyersDiff.Compute(a, b);
+        var map = new int[recognized.Length + 1];
+        foreach (OneDiff.Edit e in script)
+        {
+            switch (e.Kind)
+            {
+                case OneDiff.EditKind.Equal:
+                    for (int t = 0; t < e.OldLength; t++)
+                    {
+                        map[e.OldStart + t] = e.NewStart + t;
+                    }
+
+                    break;
+                case OneDiff.EditKind.Delete:
+                    // Recognized characters with no gold counterpart: they all sit at the gold boundary where they were put.
+                    for (int t = 0; t < e.OldLength; t++)
+                    {
+                        map[e.OldStart + t] = e.NewStart;
+                    }
+
+                    break;
+                case OneDiff.EditKind.Insert:
+                    // Gold characters the recognizer lost: the boundary stays before them until a matched character follows.
+                    map[e.OldStart] = e.NewStart;
+                    break;
+            }
+        }
+
+        map[recognized.Length] = gold.Length;
+        // A boundary that falls just before a run of gold characters the recognizer lost is placed after the last matched character.
+        for (int k = recognized.Length - 1; k >= 0; k--)
+        {
+            if (map[k] > map[k + 1])
+            {
+                map[k] = map[k + 1];
+            }
+        }
+
+        return map;
     }
 }
 

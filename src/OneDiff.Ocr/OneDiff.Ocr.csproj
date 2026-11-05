@@ -2,8 +2,20 @@
 
   <PropertyGroup>
     <AssemblyName>OneDiff.Ocr</AssemblyName>
-    <!-- Not packed yet: this package arrives with its own content and references. -->
-    <IsPackable>false</IsPackable>
+    <Description>Text diff and document comparison for .NET. Scan comparison: a document source that reads scanned PDFs and images through a local OCR engine into the compare model, with every word anchored by its page quadrilateral and recognition confidence, so differences that may be recognition errors are flagged and the changes are marked on the original pages.</Description>
+    <EnablePackageValidation>true</EnablePackageValidation>
   </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="OneDiff.Ocr.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../OneDiff.Pdf/OneDiff.Pdf.csproj" />
+    <PackageReference Include="RecursiveAI.OneOcr" />
+    <PackageReference Include="RecursiveAI.OneOcr.Pdf" />
+    <!-- Pins the fonts package of the PDF renderer to the same OnePDF build as the rest (a transitive dependency of the OCR package's PDF reader). -->
+    <PackageReference Include="RecursiveAI.OnePdf.Fonts" />
+  </ItemGroup>
 
 </Project>

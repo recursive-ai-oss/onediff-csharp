@@ -162,7 +162,8 @@ public sealed class PdfRedline : RedlineForm
         ArgumentNullException.ThrowIfNull(Author);
         CompareDocument doc = markNew ? comparison.New : comparison.Old;
         string hash = Convert.ToHexStringLower(SHA256.HashData(pdfBytes.Span));
-        if (!string.Equals(hash, doc.SourceHash, StringComparison.OrdinalIgnoreCase))
+        string expected = PdfOrigins.TryGet(doc, out PdfOrigin known) && known.Sha256 is not null ? known.Sha256 : doc.SourceHash;
+        if (!string.Equals(hash, expected, StringComparison.OrdinalIgnoreCase))
         {
             throw new ArgumentException($"the PDF is not the {(markNew ? "new" : "old")} input of the comparison (the hashes differ)", nameof(pdfBytes));
         }

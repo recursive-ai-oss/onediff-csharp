@@ -176,6 +176,15 @@ public sealed record CompareSettings
     /// <summary>The look writers use unless told otherwise.</summary>
     public RedlineStyle Style { get; init; } = RedlineStyle.Blackline;
 
+    /// <summary>
+    /// The confidence, in (0, 1], below which a differing word read by an OCR source marks its change as a possible recognition error
+    /// (<see cref="Change.PossibleOcrError"/>). Default 0.8. Changes are never hidden or dropped because of it.
+    /// </summary>
+    public double OcrConfidenceThreshold { get; init; } = DefaultOcrConfidenceThreshold;
+
+    /// <summary>The default of <see cref="OcrConfidenceThreshold"/>.</summary>
+    public const double DefaultOcrConfidenceThreshold = 0.8;
+
     /// <summary>The seed from which writers derive identifiers (never the clock), so output is reproducible.</summary>
     public ulong Seed { get; init; }
 
@@ -213,6 +222,11 @@ public sealed record CompareSettings
         if (CostCap <= 0)
         {
             throw new ArgumentException("the cost cap must be positive");
+        }
+
+        if (!(OcrConfidenceThreshold > 0 && OcrConfidenceThreshold <= 1))
+        {
+            throw new ArgumentException("the OCR confidence threshold must lie in (0, 1]");
         }
 
         if (!Enum.IsDefined(Algorithm) || Style is null || Name is null)
