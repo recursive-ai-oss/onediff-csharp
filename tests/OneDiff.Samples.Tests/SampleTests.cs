@@ -51,6 +51,26 @@ public sealed class SampleTests : IDisposable
     }
 
     [Fact]
+    public void TheLinesOfALineDiffReadWithPrefixes()
+    {
+        Assert.Equal(["  a", "- b", "+ B", "  c"], Samples.ReadTheLines("a\nb\nc\n", "a\nB\nc\n"));
+    }
+
+    [Fact]
+    public void TwoColumnsAlignChangedLines()
+    {
+        var rows = Samples.TwoColumns("a\nb\nc\n", "a\nB\nc\n").Rows;
+        Assert.Equal(3, rows.Count);
+        Assert.Equal(OneDiff.Output.SideBySideKind.Modified, rows[1].Kind);
+    }
+
+    [Fact]
+    public void ACappedLineDiffReportsTheCap()
+    {
+        Assert.False(Samples.CappedLineDiff("a\nb\n", "a\nc\n"));
+    }
+
+    [Fact]
     public void AUnifiedPatchTurnsTheOldTextIntoTheNew()
     {
         string oldText = "one\ntwo\nthree\nfour\n", newText = "one\n2\nthree\nfour\nfive\n";

@@ -620,10 +620,26 @@ public sealed partial class DmpPatcher
     /// <param name="text">The text to search.</param>
     /// <param name="pattern">The text to look for; at most <see cref="MatchMaxBits"/> characters.</param>
     /// <param name="loc">The offset where the pattern is expected; clamped into the text.</param>
-    /// <returns>The offset of the best match, or -1 when none is good enough.</returns>
+    /// <param name="location">The offset of the best match; zero when there is none.</param>
+    /// <returns>True when a match good enough was found. False when none was, and also when the pattern is longer than <see cref="MatchMaxBits"/>.</returns>
     /// <exception cref="ArgumentNullException">A text is null.</exception>
-    /// <exception cref="ArgumentException">The pattern is longer than <see cref="MatchMaxBits"/>.</exception>
-    public int Match(string text, string pattern, int loc)
+    public bool TryMatch(string text, string pattern, int loc, out int location)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(pattern);
+        if (pattern.Length > matchMaxBits)
+        {
+            location = 0;
+            return false;
+        }
+
+        int found = MatchIndex(text, pattern, loc);
+        location = found < 0 ? 0 : found;
+        return found >= 0;
+    }
+
+    // -1 when nothing fits well enough; internal so the sentinel never reaches callers.
+    private int MatchIndex(string text, string pattern, int loc)
     {
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(pattern);

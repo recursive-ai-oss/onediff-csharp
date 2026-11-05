@@ -160,15 +160,16 @@ public class DmpPatchTests
     public void MatchBehavesAsDocumented()
     {
         var m = new DmpPatcher();
-        Assert.Equal(0, m.Match("abcdef", "abcdef", 1000));
-        Assert.Equal(-1, m.Match(string.Empty, "abcdef", 1));
-        Assert.Equal(3, m.Match("abcdef", string.Empty, 3));
-        Assert.Equal(3, m.Match("abcdef", "de", 3));
-        Assert.Equal(4, m.Match("abcdefghijk", "efxhi", 5));
-        Assert.Equal(-1, new DmpPatcher { MatchThreshold = 0.0 }.Match("abcdefghijk", "efxyhi", 5));
-        Assert.Throws<ArgumentException>(() => m.Match("a", new string('a', 33), 0));
+        static int? At(DmpPatcher p, string text, string pattern, int loc) => p.TryMatch(text, pattern, loc, out int at) ? at : null;
+        Assert.Equal(0, At(m, "abcdef", "abcdef", 1000));
+        Assert.Null(At(m, string.Empty, "abcdef", 1));
+        Assert.Equal(3, At(m, "abcdef", string.Empty, 3));
+        Assert.Equal(3, At(m, "abcdef", "de", 3));
+        Assert.Equal(4, At(m, "abcdefghijk", "efxhi", 5));
+        Assert.Null(At(new DmpPatcher { MatchThreshold = 0.0 }, "abcdefghijk", "efxyhi", 5));
+        Assert.Null(At(m, "a", new string('a', 33), 0));
         // Distance: the same pattern twice, the near one wins.
-        Assert.Equal(0, new DmpPatcher { MatchDistance = 10 }.Match("abc" + new string('-', 50) + "abc", "abc", 5));
+        Assert.Equal(0, At(new DmpPatcher { MatchDistance = 10 }, "abc" + new string('-', 50) + "abc", "abc", 5));
     }
 
     [Theory]

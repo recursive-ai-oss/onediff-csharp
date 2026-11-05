@@ -7,10 +7,13 @@ The text core: Myers (linear space), patience and histogram diff over any sequen
 ```csharp
 using OneDiff;
 using OneDiff.Merge;
+using OneDiff.Output;
 
 string patch = Diff.Unified(oldText, newText);              // a unified diff
 string text  = Diff.ApplyUnified(oldText, patch).Text;     // and back to the new text
-TextMerge m  = Diff.Merge(baseText, ours, theirs);         // m.Text, m.HasConflicts
+TextMerge m  = Diff.Merge(baseText, ours, theirs);         // m.Text, m.HasConflicts, m.Conflicts
+TextDiff d   = Diff.Lines(oldText, newText, new DiffSettings { MaxWork = 100_000 });  // d.Lines to read it, d.Diagnostic to see if the cap was hit
+SideBySideDiff rows = Diff.SideBySide(oldText, newText);  // aligned rows for two columns
 ```
 
 Depends on nothing but the base class library.

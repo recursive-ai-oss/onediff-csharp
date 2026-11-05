@@ -4,7 +4,7 @@ using OneDiff.Algorithms;
 namespace OneDiff.Merge;
 
 /// <summary>The structured outcome of a three-way merge over any sequence of items.</summary>
-public sealed class ItemMerge
+public class ItemMerge
 {
     internal ItemMerge(MergeRegion[] regions, int conflictCount, DiffDiagnostic diagnostic)
     {
@@ -25,6 +25,94 @@ public sealed class ItemMerge
     /// <summary>Whether <see cref="MergeSettings.MaxWork"/> ran out (the merge is then coarser but complete) and how much work was spent.</summary>
     public DiffDiagnostic Diagnostic { get; }
 }
+
+/// <summary>The structured outcome of a three-way merge over items of type <typeparamref name="T"/>, with the merged items.</summary>
+/// <typeparam name="T">The item type.</typeparam>
+public sealed class ItemMerge<T> : ItemMerge
+{
+    private readonly T[] baseItems;
+    private readonly T[] oursItems;
+    private readonly T[] theirsItems;
+    private readonly ConflictResolution resolution;
+    private IReadOnlyList<T>? items;
+    private bool itemsBuilt;
+
+    internal ItemMerge(MergeRegion[] regions, int conflictCount, DiffDiagnostic diagnostic, T[] baseItems, T[] oursItems, T[] theirsItems, ConflictResolution resolution)
+        : base(regions, conflictCount, diagnostic)
+    {
+        this.baseItems = baseItems;
+        this.oursItems = oursItems;
+        this.theirsItems = theirsItems;
+        this.resolution = resolution;
+    }
+
+    /// <summary>
+    /// The merged items, with conflicts settled as <see cref="MergeSettings.Resolution"/> says; null when that is
+    /// <see cref="ConflictResolution.None"/> and the merge has conflicts, because there is no single merged sequence then.
+    /// </summary>
+    public IReadOnlyList<T>? Items
+    {
+        get
+        {
+            if (!itemsBuilt)
+            {
+                items = Resolve(resolution);
+                itemsBuilt = true;
+            }
+
+            return items;
+        }
+    }
+
+    /// <summary>The merged items with every conflict settled the given way (ours first for <see cref="ConflictResolution.Union"/>).</summary>
+    /// <param name="how">How to settle conflicts.</param>
+    /// <returns>The merged items; null when <paramref name="how"/> is <see cref="ConflictResolution.None"/> and the merge has conflict regions.</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="how"/> is not a defined value.</exception>
+    public IReadOnlyList<T>? Resolve(ConflictResolution how)
+    {
+        if (how is < ConflictResolution.None or > ConflictResolution.Union)
+        {
+            throw new ArgumentOutOfRangeException(nameof(how));
+        }
+
+        var result = new List<T>();
+        foreach (MergeRegion r in Regions)
+        {
+            switch (r.Kind)
+            {
+                case MergeRegionKind.Unchanged: result.AddRange(new ArraySegment<T>(baseItems, r.Base.Start, r.Base.Length)); break;
+                case MergeRegionKind.TheirsOnly: result.AddRange(new ArraySegment<T>(theirsItems, r.Theirs.Start, r.Theirs.Length)); break;
+                case MergeRegionKind.Conflict:
+                    switch (how)
+                    {
+                        case ConflictResolution.None: return null;
+                        case ConflictResolution.Theirs: result.AddRange(new ArraySegment<T>(theirsItems, r.Theirs.Start, r.Theirs.Length)); break;
+                        case ConflictResolution.Union:
+                            result.AddRange(new ArraySegment<T>(oursItems, r.Ours.Start, r.Ours.Length));
+                            result.AddRange(new ArraySegment<T>(theirsItems, r.Theirs.Start, r.Theirs.Length));
+                            break;
+                        default: result.AddRange(new ArraySegment<T>(oursItems, r.Ours.Start, r.Ours.Length)); break;
+                    }
+
+                    break;
+                default: result.AddRange(new ArraySegment<T>(oursItems, r.Ours.Start, r.Ours.Length)); break; // OursOnly, BothSame
+            }
+        }
+
+        return result;
+    }
+}
+
+/// <summary>One place where both sides changed the same lines differently, with the three versions of those lines.</summary>
+/// <param name="Index">Position among the merge's conflicts, from 0.</param>
+/// <param name="Region">The conflict region, for the line ranges.</param>
+/// <param name="BaseLine">Line number in the base where the conflicting lines start, from 1 (the line the conflict sits before when the base range is empty).</param>
+/// <param name="OursLine">Line number in our version where they start, from 1.</param>
+/// <param name="TheirsLine">Line number in their version where they start, from 1.</param>
+/// <param name="BaseText">The base lines, line endings included; empty when the base has none there.</param>
+/// <param name="OursText">Our lines, line endings included.</param>
+/// <param name="TheirsText">Their lines, line endings included.</param>
+public sealed record MergeConflict(int Index, MergeRegion Region, int BaseLine, int OursLine, int TheirsLine, string BaseText, string OursText, string TheirsText);
 
 /// <summary>The outcome of a three-way merge of text, line by line.</summary>
 public sealed class TextMerge
@@ -70,6 +158,37 @@ public sealed class TextMerge
     /// and correct, only coarser: unsolved stretches count as changed, so conflicts can be larger.
     /// </summary>
     public DiffDiagnostic Diagnostic { get; }
+
+    /// <summary>
+    /// The places where the sides disagreed, in order, each with the three versions of its lines. These are the conflict regions
+    /// whether or not <see cref="MergeSettings.Resolution"/> settled them in <see cref="Text"/>, so with a resolution
+    /// <see cref="ConflictCount"/> is zero while this still lists what was settled.
+    /// </summary>
+    public IReadOnlyList<MergeConflict> Conflicts => conflicts ??= BuildConflicts();
+
+    private MergeConflict[]? conflicts;
+
+    private MergeConflict[] BuildConflicts()
+    {
+        var list = new List<MergeConflict>();
+        foreach (MergeRegion r in Regions)
+        {
+            if (r.Kind == MergeRegionKind.Conflict)
+            {
+                list.Add(new MergeConflict(
+                    list.Count,
+                    r,
+                    r.Base.Start + 1,
+                    r.Ours.Start + 1,
+                    r.Theirs.Start + 1,
+                    Slice(MergeSide.Base, r.Base).ToString(),
+                    Slice(MergeSide.Ours, r.Ours).ToString(),
+                    Slice(MergeSide.Theirs, r.Theirs).ToString()));
+            }
+        }
+
+        return list.ToArray();
+    }
 
     /// <summary>Number of lines in one of the inputs. Lines end at <c>\n</c> (a <c>\r</c> before it stays part of the line); the last one may have no ending.</summary>
     /// <param name="side">Which input.</param>
@@ -126,7 +245,7 @@ public static class ThreeWayMerge
     /// <param name="comparer">Decides which items are equal. The default comparer when null.</param>
     /// <param name="cancellationToken">Observed while aligning; throws <see cref="OperationCanceledException"/> when cancelled.</param>
     /// <returns>The regions in order. Narrowing a <see cref="ConflictStyle.Merge"/> conflict joins conflicts that are at most three items apart.</returns>
-    public static ItemMerge Items<T>(
+    public static ItemMerge<T> Items<T>(
         ReadOnlySpan<T> baseItems,
         ReadOnlySpan<T> ours,
         ReadOnlySpan<T> theirs,
@@ -143,7 +262,7 @@ public static class ThreeWayMerge
         int[] theirsIds = interner.Intern(theirs);
         var budget = new Budget(settings.MaxWork);
         List<Segment> segments = Diff3Core.Merge(baseIds, oursIds, theirsIds, settings, null, cancellationToken, null, budget);
-        return new ItemMerge(ToRegions(segments), CountOpen(segments, settings), budget.ToDiagnostic());
+        return new ItemMerge<T>(ToRegions(segments), CountOpen(segments, settings), budget.ToDiagnostic(), baseItems.ToArray(), ours.ToArray(), theirs.ToArray(), settings.Resolution);
     }
 
     /// <summary>

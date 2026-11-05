@@ -113,7 +113,7 @@ public static class DiffCleanup
     private static TextDiff With(TextDiff diff, EditScript script) =>
         ReferenceEquals(script, diff.Script)
             ? diff
-            : new TextDiff(diff.OldText, diff.NewText, diff.Kind, diff.OldTokenRanges, diff.NewTokenRanges, script, diff.Comparer);
+            : new TextDiff(diff.OldText, diff.NewText, diff.Kind, diff.OldTokenRanges, diff.NewTokenRanges, script, diff.Comparer, diff.Diagnostic);
 
     // Anything that alters the script goes through With, so a pass that changes nothing returns the diff it was given.
 }

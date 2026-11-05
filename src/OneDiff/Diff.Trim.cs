@@ -1,3 +1,4 @@
+using OneDiff.Algorithms;
 using OneDiff.Tokenization;
 
 namespace OneDiff;
@@ -7,7 +8,7 @@ public static partial class Diff
     // The text diff proper. The algorithms already take a common prefix and suffix of the id sequences first (and so give the same
     // script with or without it); doing it here too, on the tokens, means the shared part is never given ids or put in a dictionary,
     // and for characters it is found on the raw text before any token exists.
-    private static TextDiff TextTrimmed(string oldText, string newText, TokenKind tokens, DiffAlgorithm algorithm, CancellationToken cancellationToken)
+    private static TextDiff TextTrimmed(string oldText, string newText, TokenKind tokens, DiffAlgorithm algorithm, long maxWork, CancellationToken cancellationToken)
     {
         if (tokens == TokenKind.Character
             && !oldText.AsSpan().ContainsAnyInRange('\uD800', '\uDFFF')
@@ -21,8 +22,8 @@ public static partial class Diff
             int suffix = CommonSuffixLength(a.Slice(prefix), b.Slice(prefix));
             int[] oldCodes = Widen(a.Slice(prefix, a.Length - prefix - suffix));
             int[] newCodes = Widen(b.Slice(prefix, b.Length - prefix - suffix));
-            EditScript middle = Run(oldCodes, newCodes, algorithm, cancellationToken);
-            return new TextDiff(oldText, newText, tokens, null, null, Frame(middle, prefix, suffix, oldText.Length, newText.Length));
+            EditScript middle = Run(oldCodes, newCodes, algorithm, maxWork, out DiffDiagnostic diagnostic, cancellationToken);
+            return new TextDiff(oldText, newText, tokens, null, null, Frame(middle, prefix, suffix, oldText.Length, newText.Length), null, diagnostic);
         }
 
         TokenRange[] oldRanges = Tokenizer.Tokenize(oldText, tokens);
@@ -61,8 +62,8 @@ public static partial class Diff
             InternTokens(newText, newRanges, head, newIds, ids, lookup);
         }
 
-        EditScript script = Frame(Run(oldIds, newIds, algorithm, cancellationToken), head, tail, oldRanges.Length, newRanges.Length);
-        return new TextDiff(oldText, newText, tokens, oldRanges, newRanges, script);
+        EditScript script = Frame(Run(oldIds, newIds, algorithm, maxWork, out DiffDiagnostic tokenDiagnostic, cancellationToken), head, tail, oldRanges.Length, newRanges.Length);
+        return new TextDiff(oldText, newText, tokens, oldRanges, newRanges, script, null, tokenDiagnostic);
     }
 
     private static bool SameToken(string oldText, TokenRange o, string newText, TokenRange n)

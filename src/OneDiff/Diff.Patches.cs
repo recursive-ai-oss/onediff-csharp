@@ -35,43 +35,83 @@ public static partial class Diff
     }
 
     /// <summary>
+    /// Makes a unified diff like <see cref="Unified(string, string, string, string, int, DiffAlgorithm, CancellationToken)"/>, with the algorithm
+    /// and work cap of <paramref name="settings"/>. A capped diff is still a correct patch, only longer than the minimum.
+    /// </summary>
+    /// <param name="oldText">The old text.</param>
+    /// <param name="newText">The new text.</param>
+    /// <param name="settings">Algorithm and work cap.</param>
+    /// <param name="oldName">Name on the <c>---</c> line. <c>a</c> by default.</param>
+    /// <param name="newName">Name on the <c>+++</c> line. <c>b</c> by default.</param>
+    /// <param name="contextLines">Unchanged lines kept around each change. Three by default.</param>
+    /// <param name="cancellationToken">Observed while searching.</param>
+    /// <exception cref="ArgumentNullException">A text, name or the settings are null.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="contextLines"/> is negative or the settings are out of range.</exception>
+    public static string Unified(
+        string oldText,
+        string newText,
+        DiffSettings settings,
+        string oldName = "a",
+        string newName = "b",
+        int contextLines = 3,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(oldText);
+        ArgumentNullException.ThrowIfNull(newText);
+        ArgumentNullException.ThrowIfNull(settings);
+        List<string> oldLines = PatchLines.Split(oldText);
+        List<string> newLines = PatchLines.Split(newText);
+        EditScript script = Sequences<string>(oldLines.ToArray(), newLines.ToArray(), settings, out _, StringComparer.Ordinal, cancellationToken);
+        return UnifiedFilePatch.Create(oldLines, newLines, script, oldName, newName, contextLines).ToString();
+    }
+
+    /// <summary>
     /// Applies a single-file unified diff to <paramref name="text"/>, with offset and up to two lines of fuzz as the GNU patch manual
     /// describes. Hunks that do not fit are reported in the result and leave the text unchanged there.
     /// </summary>
     /// <param name="text">The text to patch.</param>
     /// <param name="patchText">A unified diff for one file. An empty diff leaves the text unchanged.</param>
+    /// <param name="options">Fuzz, offset limit and direction; two lines of fuzz, no offset limit and forward when null.</param>
     /// <exception cref="ArgumentNullException">An argument is null.</exception>
     /// <exception cref="PatchFormatException"><paramref name="patchText"/> is malformed.</exception>
     /// <exception cref="ArgumentException"><paramref name="patchText"/> holds more than one file.</exception>
-    public static UnifiedApplyResult ApplyUnified(string text, string patchText)
+    public static UnifiedApplyResult ApplyUnified(string text, string patchText, UnifiedApplyOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(text);
         UnifiedPatch patch = UnifiedPatch.Parse(patchText);
         return patch.Files.Count switch
         {
             0 => new UnifiedApplyResult(text, [], null),
-            1 => patch.Files[0].Apply(text),
+            1 => patch.Files[0].Apply(text, options),
             _ => throw new ArgumentException("The patch holds more than one file.", nameof(patchText)),
         };
     }
 
     /// <summary>
-    /// Makes diff-match-patch patch text that turns <paramref name="oldText"/> into <paramref name="newText"/>, using the default
-    /// <see cref="DmpPatcher"/> settings. Identical texts give the empty string.
+    /// Makes diff-match-patch patch text that turns <paramref name="oldText"/> into <paramref name="newText"/>. Identical texts give the
+    /// empty string.
     /// </summary>
+    /// <param name="oldText">The old text.</param>
+    /// <param name="newText">The new text.</param>
+    /// <param name="patcher">The patcher whose settings (margin, offset unit, ...) shape the patches; default settings when null.</param>
+    /// <param name="cancellationToken">Observed while diffing.</param>
     /// <exception cref="ArgumentNullException">A text is null.</exception>
-    public static string PatchText(string oldText, string newText, CancellationToken cancellationToken = default)
-        => DmpPatcher.ToText(new DmpPatcher().Make(oldText, newText, cancellationToken));
+    public static string PatchText(string oldText, string newText, DmpPatcher? patcher = null, CancellationToken cancellationToken = default)
+        => DmpPatcher.ToText((patcher ?? new DmpPatcher()).Make(oldText, newText, cancellationToken));
 
     /// <summary>
-    /// Applies diff-match-patch patch text to <paramref name="text"/> with fuzzy placement (default <see cref="DmpPatcher"/> settings).
-    /// Patches that cannot be placed are reported in the result and skipped.
+    /// Applies diff-match-patch patch text to <paramref name="text"/> with fuzzy placement. Patches that cannot be placed are reported
+    /// in the result and skipped.
     /// </summary>
+    /// <param name="text">The text to patch.</param>
+    /// <param name="patchText">Patch text in diff-match-patch's format.</param>
+    /// <param name="patcher">The patcher whose match thresholds and distance govern placement; default settings when null.</param>
+    /// <param name="cancellationToken">Observed while applying; throws <see cref="OperationCanceledException"/> when cancelled.</param>
     /// <exception cref="ArgumentNullException">An argument is null.</exception>
     /// <exception cref="PatchFormatException"><paramref name="patchText"/> is malformed.</exception>
-    public static DmpApplyResult ApplyPatchText(string text, string patchText)
+    public static DmpApplyResult ApplyPatchText(string text, string patchText, DmpPatcher? patcher = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(text);
-        return new DmpPatcher().Apply(DmpPatcher.FromText(patchText), text);
+        return (patcher ?? new DmpPatcher()).Apply(DmpPatcher.FromText(patchText), text, cancellationToken);
     }
 }

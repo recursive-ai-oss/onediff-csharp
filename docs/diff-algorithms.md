@@ -44,3 +44,7 @@ The limit of 64 is a fixed constant of this implementation.
 ## Lines and the final newline
 
 Line tokens keep their terminator, so a last line with and without a newline are different items. Tokenizers decide where a line ends; the corpus comparison against GNU `diff` used `\n` only as the line end, as GNU does.
+
+## Settings on the one-liners
+
+`DiffSettings` (`Algorithm`, `MaxWork`) is taken by `Diff.Text`, `Lines`, `Words`, `Characters`, `Graphemes`, `Unified` and `Sequences` (which also reports the `DiffDiagnostic`). `TextDiff.Diagnostic` says whether the cap ended the search early (`CostCapReached`) and the work spent; it is all zero for a diff built with `TextDiff.Create`, and cleanup keeps it. A capped line diff is `Diff.Lines(a, b, new DiffSettings { MaxWork = 100_000 })`. Merges take the same two knobs in `MergeSettings`.

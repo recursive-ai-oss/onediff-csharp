@@ -1,3 +1,4 @@
+using OneDiff.Algorithms;
 using OneDiff.Tokenization;
 
 namespace OneDiff;
@@ -13,9 +14,10 @@ public sealed class TextDiff
     private TokenRange[]? oldTokens;
     private TokenRange[]? newTokens;
 
-    internal TextDiff(string oldText, string newText, TokenKind kind, TokenRange[]? oldTokens, TokenRange[]? newTokens, EditScript script, IEqualityComparer<string>? comparer = null)
+    internal TextDiff(string oldText, string newText, TokenKind kind, TokenRange[]? oldTokens, TokenRange[]? newTokens, EditScript script, IEqualityComparer<string>? comparer = null, DiffDiagnostic diagnostic = default)
     {
         Comparer = comparer;
+        Diagnostic = diagnostic;
         OldText = oldText;
         NewText = newText;
         Kind = kind;
@@ -96,11 +98,101 @@ public sealed class TextDiff
     /// <summary>The alignment of the two token sequences.</summary>
     public EditScript Script { get; }
 
+    /// <summary>
+    /// Whether the work cap ended the search early (the script is then valid but coarser than the algorithm would give) and how much work
+    /// was spent. All zero for a diff you built yourself with <see cref="Create"/>.
+    /// </summary>
+    public DiffDiagnostic Diagnostic { get; }
+
     /// <summary>The old text a run covers (empty for an insertion). Tokens partition the text, so the span is contiguous.</summary>
     public ReadOnlySpan<char> OldSpan(Edit edit) => Slice(OldText, oldTokens, edit.OldStart, edit.OldLength);
 
     /// <summary>The new text a run covers (empty for a deletion).</summary>
     public ReadOnlySpan<char> NewSpan(Edit edit) => Slice(NewText, newTokens, edit.NewStart, edit.NewLength);
+
+    private DiffPiece[]? pieces;
+    private DiffPiece[]? lines;
+
+    /// <summary>
+    /// The diff as typed runs of text, in order: one piece per edit, with the line each run starts on in each text. Works for every
+    /// token kind; for a line diff each piece is a block of whole lines, for a word diff a run of words.
+    /// </summary>
+    public IReadOnlyList<DiffPiece> Pieces => pieces ??= BuildPieces(split: false);
+
+    /// <summary>
+    /// The diff cut into lines for reading: every piece of <see cref="Pieces"/> is split at line breaks (which are dropped from the
+    /// text), so each entry lies on one line of one or both texts. For a line diff that is exactly one entry per line, like the
+    /// lines of an inline diff view; for a word diff a changed line shows as several entries sharing a line number.
+    /// </summary>
+    public IReadOnlyList<DiffPiece> Lines => lines ??= BuildPieces(split: true);
+
+    private DiffPiece[] BuildPieces(bool split)
+    {
+        var result = new List<DiffPiece>(Script.Count);
+        // A side's line is "open" when the text so far ended without a line break, so the next text continues it.
+        int oldLine = 0, newLine = 0;
+        bool oldOpen = false, newOpen = false;
+        foreach (Edit e in Script.Edits)
+        {
+            ReadOnlySpan<char> text = e.Kind == EditKind.Insert ? NewSpan(e) : OldSpan(e);
+            bool inOld = e.Kind != EditKind.Insert;
+            bool inNew = e.Kind != EditKind.Delete;
+            int firstOld = oldLine + (oldOpen ? 0 : 1);
+            int firstNew = newLine + (newOpen ? 0 : 1);
+            if (!split)
+            {
+                result.Add(new DiffPiece(e.Kind, inOld ? firstOld : null, inNew ? firstNew : null, text.ToString()));
+            }
+
+            while (text.Length > 0)
+            {
+                int len = LineLength(text, out int content);
+                bool ended = content < len;
+                if (inOld && !oldOpen)
+                {
+                    oldLine++;
+                }
+
+                if (inNew && !newOpen)
+                {
+                    newLine++;
+                }
+
+                if (inOld)
+                {
+                    oldOpen = !ended;
+                }
+
+                if (inNew)
+                {
+                    newOpen = !ended;
+                }
+
+                if (split)
+                {
+                    result.Add(new DiffPiece(e.Kind, inOld ? oldLine : null, inNew ? newLine : null, text.Slice(0, content).ToString()));
+                }
+
+                text = text.Slice(len);
+            }
+        }
+
+        return result.ToArray();
+    }
+
+    // Length of the first line of text including its break, and the length without the break.
+    private static int LineLength(ReadOnlySpan<char> text, out int content)
+    {
+        int i = text.IndexOfAny('\r', '\n');
+        if (i < 0)
+        {
+            content = text.Length;
+            return text.Length;
+        }
+
+        content = i;
+        return text[i] == '\r' && i + 1 < text.Length && text[i + 1] == '\n' ? i + 2 : i + 1;
+    }
 
     private static TokenRange[] OneCharTokens(int length)
     {
