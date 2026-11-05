@@ -31,7 +31,7 @@ public sealed record VerificationResult(bool Passed, int FallbackLevel, int Fail
 public sealed partial class Comparison
 {
     /// <summary>The library version written into provenance.</summary>
-    public const string LibraryVersion = "0.1.0-preview.1";
+    public const string LibraryVersion = BuildVersion.Value;
 
     internal Comparison(
         Alignment alignment,

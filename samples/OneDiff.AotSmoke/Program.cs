@@ -2,6 +2,7 @@ using OneDiff.Documents;
 using OneDiff.Documents.Combine;
 using OneDiff.Documents.Model;
 using OneDiff.Documents.Serialization;
+using OneDiff.Nlp;
 using OneDiff.Ocr;
 using OneDiff.Pdf;
 using OneDiff.Word;
@@ -43,14 +44,40 @@ internal static class Program
 
         failures += CheckDocuments();
         failures += CheckSemantics();
+        failures += CheckNlp();
+        failures += CheckScan();
         failures += CheckPdf();
         failures += CheckWord();
-        failures += CheckScan();
         failures += CheckRedline();
         failures += CheckCombine();
 
         Console.Out.WriteLine(failures == 0 ? "ok" : "FAILED");
         return failures == 0 ? 0 : 1;
+    }
+
+    /// <summary>The OneNLP value recognizer under NativeAOT: written-out values typed in a comparison, the built-in fallback, and a stable result.</summary>
+    private static int CheckNlp()
+    {
+        int failures = 0;
+        CompareSettings settings = CompareSettings.Legal.UseOneNlp();
+        CompareDocument a = CompareDocument.FromText("Payment is due within thirty days of the invoice.\nThe cap on its liability is forty-two thousand dollars.\nThe fee is 18.000 EUR.", "old");
+        CompareDocument b = CompareDocument.FromText("Payment is due within two months of the invoice.\nThe cap on its liability is $50,000.\nThe fee is 20.000 EUR.", "new");
+        Comparison c = Comparison.Of(a, b, settings);
+        string[] values = [.. c.Changes.Select(x => x.Type + " " + x.OldValue?.Canonical + ">" + x.NewValue?.Canonical)];
+        string[] want = ["Duration 30 d>2 mo", "Amount USD 42000>USD 50000", "Amount EUR 18000>EUR 20000"];
+        if (!values.AsSpan().SequenceEqual(want) || !c.Verification.Passed || c.Verification.FallbackLevel != 0 || !c.Check().IsEmpty)
+        {
+            Console.Error.WriteLine("nlp: unexpected values " + string.Join("; ", values));
+            failures++;
+        }
+
+        if (!ComparisonJson.Write(c).AsSpan().SequenceEqual(ComparisonJson.Write(Comparison.Of(a, b, settings))))
+        {
+            Console.Error.WriteLine("nlp: JSON differs between runs");
+            failures++;
+        }
+
+        return failures;
     }
 
     /// <summary>
@@ -197,6 +224,38 @@ internal static class Program
             {
                 Console.Error.WriteLine("word: HTML output missing marks");
                 failures++;
+            }
+
+            // The tracked-changes DOCX: accepting every revision gives the new file, rejecting every one gives the old.
+            string tracked = Path.Combine(dir, "tracked.docx");
+            Redline.Create(x, y, tracked);
+            byte[] trackedBytes = File.ReadAllBytes(tracked);
+            foreach (bool accept in new[] { true, false })
+            {
+                using RecursiveAI.OneOffice.Documents.Document doc = RecursiveAI.OneOffice.Documents.Document.Open(RecursiveAI.OneOffice.IO.ByteSource.FromMemory(trackedBytes));
+                if (doc.Revisions.Revisions.Count == 0)
+                {
+                    Console.Error.WriteLine("word: tracked DOCX has no revisions");
+                    failures++;
+                }
+
+                if (accept)
+                {
+                    doc.Revisions.AcceptAll();
+                }
+                else
+                {
+                    doc.Revisions.RejectAll();
+                }
+
+                using var resolved = new MemoryStream();
+                doc.SaveAs(resolved, RecursiveAI.OneOffice.OfficeFormat.Docx);
+                CompareDocument got = source.Read(DocumentInput.FromBytes(resolved.ToArray(), "resolved.docx"));
+                if (!Comparison.Of(got, accept ? b : a).Changes.IsEmpty)
+                {
+                    Console.Error.WriteLine("word: tracked DOCX " + (accept ? "accept-all" : "reject-all") + " differs");
+                    failures++;
+                }
             }
         }
         finally
@@ -346,6 +405,27 @@ internal static class Program
             if (registered.Pages[0].Annotations.Count(x => x.Subtype is "Highlight" or "Caret") != result.Marks.Length)
             {
                 Console.Error.WriteLine("pdf: Register + Redline.Create did not write the markup");
+                failures++;
+            }
+
+            // The rendered redline: text files in, a tagged PDF out, by the .pdf extension; and a PDF pair rendered by naming the form.
+            string ta = Path.Combine(dir, "a.txt"), tb = Path.Combine(dir, "b.txt"), tr = Path.Combine(dir, "rendered.pdf");
+            File.WriteAllText(ta, "The supplier shall deliver within thirty days.\n\nPayment is due in sixty days.");
+            File.WriteAllText(tb, "The supplier shall deliver within forty days.\n\nPayment is due in sixty days.");
+            Redline.Create(ta, tb, tr);
+            byte[] rendered = File.ReadAllBytes(tr);
+            using PdfDocument renderedDoc = PdfDocument.Open(rendered);
+            string text = renderedDoc.ExtractText().Select(p => p.Text).Aggregate("", (x, y) => x + y);
+            if (!renderedDoc.IsTagged || renderedDoc.Language != "en" || !text.Contains("forty", StringComparison.Ordinal) || !text.Contains("thirty", StringComparison.Ordinal))
+            {
+                Console.Error.WriteLine("pdf: the rendered redline is not a tagged PDF holding both texts");
+                failures++;
+            }
+
+            Comparison pdfPair = Comparison.Of(pa, pb);
+            if (!pdfPair.ToBytes(PdfRedline.Rendered).AsSpan().StartsWith("%PDF-"u8) || !pdfPair.ToBytes(PdfRedline.RenderedSideBySide).AsSpan().StartsWith("%PDF-"u8))
+            {
+                Console.Error.WriteLine("pdf: a PDF pair did not render");
                 failures++;
             }
         }

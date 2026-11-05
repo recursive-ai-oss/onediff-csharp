@@ -199,3 +199,15 @@ The combine set is built by `OneDiff.GoldSets generate-combine --out DIR` (seed 
 ## Scan gold set
 
 scan-v1 is the digital gold set's Latin-script eval pairs scanned under seeded degradations; `tools/OneDiff.GoldSets.Scan` builds it (`build`, `manifest`), runs the exact gates (`gate`: Verify, fallback, JSON round trip, marks re-read on both sides, determinism, a digest for cross-platform comparison) and times the cost (`time`). Rows come from the digital scorer with `--fuzzy-blocks` (recognized text is matched to the gold blocks by similarity and positions carry over by a page-wide character alignment) plus `noise.changes.share`, `noise.changes.per10kchars` and `ocr.flag.P/R/share`. Method in `ocr.md`, results in `results/scan-v1-eval.md`.
+## Budgets
+
+`bench/run-budgets.sh OUT` times the document budgets with the machine record (`bench/record-run.sh`: CPU, cores, instruction-set flags, load before, during and after). Each part runs in its own process with `DOTNET_PROCESSOR_COUNT=4`, one untimed warm-up and three timed repetitions, and the table reports the median:
+
+- the PDF pair of 100 pages and about 300 changes (the test generator `BudgetTests` in `tests/OneDiff.Pdf.Tests`, seed 2026, written once to `OUT/pair` so that the peak memory of a timed part does not include writing the inputs): read both, compare, mark the new document's pages;
+- the same pair to a rendered redline, inline and side by side, with the peak working set of each process;
+- a 100-page DOCX contract with about 300 changes to a tracked-changes DOCX (`TimingTests` in `tests/OneDiff.Word.Tests`; information only);
+- bytes per page: the peak resident set of the part above that of a process that only loads the same inputs (the `baseline` part), divided by the pages.
+
+The peak is the operating system's own maximum resident set size for each process: `/usr/bin/time -l` on macOS, `/usr/bin/time -v` on Linux (or `VmHWM` where GNU time is missing). The .NET process counters are not used, because they read 0 on macOS. A run that cannot measure the peak prints `unmeasured` and exits non-zero rather than print a zero or a negative figure.
+
+`ONEDIFF_BUDGET_PAGES` and `ONEDIFF_BUDGET_REPS` shrink a run for a quick check; such runs are indicative. Budgets are proposals: PDF pair 2 s; rendered inline 2 s with a peak of at most 1 GB.

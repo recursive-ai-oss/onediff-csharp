@@ -43,7 +43,7 @@ public sealed record RedlineStyle
     public MarkStyle Insertion { get; init; } = new("#0000FF", MarkDecoration.DoubleUnderline);
 
     /// <summary>How deleted text is marked.</summary>
-    public MarkStyle Deletion { get; init; } = new("#FF0000", MarkDecoration.StrikeThrough);
+    public MarkStyle Deletion { get; init; } = new("#D00000", MarkDecoration.StrikeThrough);
 
     /// <summary>How the old place of moved text is marked.</summary>
     public MarkStyle MoveFrom { get; init; } = new("#008000", MarkDecoration.DoubleStrikeThrough);
@@ -52,7 +52,7 @@ public sealed record RedlineStyle
     public MarkStyle MoveTo { get; init; } = new("#008000", MarkDecoration.DoubleUnderline);
 
     /// <summary>How formatting-only changes are marked.</summary>
-    public MarkStyle Formatting { get; init; } = new("#7F7F7F", MarkDecoration.None);
+    public MarkStyle Formatting { get; init; } = new("#6B6B6B", MarkDecoration.None);
 
     /// <summary>Whether a bar is drawn in the margin beside changed lines.</summary>
     public bool ChangeBars { get; init; } = true;
@@ -104,8 +104,8 @@ public sealed record RedlineStyle
         Name = "Word",
         Insertion = new MarkStyle("#C00000", MarkDecoration.Underline),
         Deletion = new MarkStyle("#C00000", MarkDecoration.StrikeThrough),
-        MoveFrom = new MarkStyle("#00B050", MarkDecoration.DoubleStrikeThrough),
-        MoveTo = new MarkStyle("#00B050", MarkDecoration.DoubleUnderline),
+        MoveFrom = new MarkStyle("#00A046", MarkDecoration.DoubleStrikeThrough),
+        MoveTo = new MarkStyle("#00A046", MarkDecoration.DoubleUnderline),
         Formatting = new MarkStyle("#C00000", MarkDecoration.None),
         CoverPage = false,
         Footer = false,
@@ -172,6 +172,13 @@ public sealed record CompareSettings
 
     /// <summary>Whether changes carry resolved types and values. Read by later stages.</summary>
     public bool TypedChanges { get; init; }
+
+    /// <summary>
+    /// The recognizer that finds and resolves values (amounts, dates, durations, percentages, numbers, party names) when changes are
+    /// typed. Null (the default) uses the one registered with <see cref="ValueRecognizers.Register"/>, else <see cref="BuiltInValueRecognizer"/>.
+    /// Not written to JSON; a comparison read back from JSON has it null.
+    /// </summary>
+    public IValueRecognizer? ValueRecognizer { get; init; }
 
     /// <summary>The look writers use unless told otherwise.</summary>
     public RedlineStyle Style { get; init; } = RedlineStyle.Blackline;

@@ -1,0 +1,145 @@
+{
+ "base": {
+  "licence": "MIT",
+  "name": "jhu-clsp/mmBERT-base",
+  "paper": "arXiv:2509.06888",
+  "revision": "c5955035435e2bf121cde7f3c8863ef52ff35d82",
+  "url": "https://huggingface.co/jhu-clsp/mmBERT-base"
+ },
+ "codeCommit": "see the commit that carries this file",
+ "devData": [
+  {
+   "name": "synth-v1 dev split",
+   "role": "dev (checks only)",
+   "setSha256": "94026ec084850e98eb9ca06d9d299773f6ffa45b9583ef43e8315922a4bbe7e2"
+  }
+ ],
+ "dumps": {
+  "dump-real-eval-only.jsonl": "76da8aef8da0789e4d5cd4b85355a606d62d2b8272a68b60b2ca7759029ba718",
+  "dump-synth-s20270111-train.jsonl": "7f519944d79e211abbc5d17fdcca9153102eada60915c418dc448c3f0c6b1bc8",
+  "dump-synth-s20270112-train.jsonl": "672428c33da43aad4d28f03894fe228003809265a267e0bc48e38a9ac68e911a",
+  "dump-synth-v1-dev.jsonl": "5264becaa37af19c161cbbcc4fae50da002621968a0080875388f0559481272a",
+  "dump-synth-v1-train.jsonl": "e99c9bdd3bde9b02d5d9496e15d427dcae77653c35049145ddfe846cafa88868"
+ },
+ "excludedEvaluationSets": [
+  {
+   "name": "synth-v1 eval",
+   "sha256": "e11b5614d5cd967d4a3feac46e636156fb0beb0e741f96a28bfe7236c3d402a8"
+  },
+  {
+   "name": "docx-v1",
+   "sha256": "62b43875b9746cf41e59fafefa643e3ddf02c3301c490a6cf1eae7ce6697f91e"
+  },
+  {
+   "name": "pdf-v1",
+   "sha256": "eb10c6b3a7af57239c71482da8d1fdd9011aaf3a3bd0036db23e2e586074e88b"
+  },
+  {
+   "name": "combine-v1",
+   "sha256": "5c55ebb558a267e2264c7f84401b79d7d9208ed29bcb29157192abbb92def406"
+  },
+  {
+   "name": "real-pairs-v1",
+   "note": "60 real pairs; answered once, unlabelled, never trained on"
+  },
+  {
+   "name": "scan sets",
+   "note": "not yet built"
+  }
+ ],
+ "fineTunedWeights": {
+  "file": "best.pt",
+  "licence": "derived from MIT weights; not released",
+  "selectedStep": 3000,
+  "sha256": "5b339b743ec01a22e716ebfc62598d039f8de75c1f2fba25f4eec0d43de83ca7"
+ },
+ "hostedUse": null,
+ "labels": {
+  "generator": "OneDiff.GoldSets generate (exact labels), dump-model",
+  "hostedModels": null,
+  "humanLabels": null,
+  "judges": null,
+  "teacherLabels": null
+ },
+ "model": "pair-teacher-v1",
+ "outputs": {
+  "cand-scores.jsonl (dev)": "39b173660ef869adf84064691d0bc6b86d3ee31f58998a50b3bc372a064651cf",
+  "cand-scores.jsonl (real)": "b6fe01507e85368df878a21f454be33d4d816a27014b6aea4a2d96848aeb8ef1",
+  "clause-answers.jsonl (dev)": "7b1e0f3f4a74b98b10baf5288de1812f6f7e75d86c3cbda9fbd6fdb4bdcb9e42",
+  "clause-answers.jsonl (real)": "87c38004af6108cd33ff8e51077017c4d4ac4e9ec8b195a52479397ec3f5406c"
+ },
+ "overlapCheck": {
+  "heldOutDocuments": 1008,
+  "paragraphsOf8WordsOrMoreVerbatimInTrain": {
+   "combine-v1": 0.4658,
+   "pdf-v1": 0.3692,
+   "real-pairs-v1": 0.0,
+   "synth-v1 dev": 0.4496,
+   "synth-v1 eval": 0.4597
+  },
+  "paragraphsVerbatimInTrain": {
+   "combine-v1": 0.7446,
+   "pdf-v1": 0.6201,
+   "real-pairs-v1": 0.0016,
+   "synth-v1 dev": 0.7377,
+   "synth-v1 eval": 0.7405
+  },
+  "script": "tools/model/check_train_data.py",
+  "sharedBaseHashes": 0,
+  "sharedNormalizedDocuments": 0,
+  "trainDocuments": 3108,
+  "trainDocumentsWithHeldOutRole": 0
+ },
+ "recipe": {
+  "batch": 16,
+  "epochs": 3,
+  "gpu": "RTX 4070 12GB, driver 595.99.02",
+  "gpuChunks": 1,
+  "heads": [
+   "match",
+   "whole",
+   "join"
+  ],
+  "maxTokens": 320,
+  "optimizer": "AdamW lr 3e-5 wd 0.01 betas 0.9/0.98",
+  "peakVramGiB": 6.75,
+  "precision": "bf16 autocast",
+  "schedule": "linear warm-up 500 steps, linear decay",
+  "seed": 1,
+  "steps": 10014,
+  "torch": "2.11.0+cu128",
+  "trainWallSeconds": 1516,
+  "transformers": "5.22.1"
+ },
+ "role": "teacher for distillation (not shipped)",
+ "shareAlikeLineage": false,
+ "trainingData": [
+  {
+   "documents": 168,
+   "licence": "ours (generated)",
+   "name": "synth-v1 train split",
+   "pairs": 840,
+   "role": "train",
+   "seed": 20261104,
+   "setSha256": "0ee528554144f8277e0a705a9e38d48e1f35544001d9962a80fac7799d817941"
+  },
+  {
+   "documents": 700,
+   "licence": "ours (generated)",
+   "name": "synth-s20270111",
+   "pairs": 3500,
+   "role": "train",
+   "seed": 20270111,
+   "setSha256": "a7dad3a937403e12927c8af17b433e8918005483e8f375ca1b0a73b0257f848b"
+  },
+  {
+   "documents": 2240,
+   "licence": "ours (generated)",
+   "name": "synth-s20270112",
+   "pairs": 11200,
+   "role": "train",
+   "seed": 20270112,
+   "setSha256": "c3e98595ebfe93e10d1b591c4d5fbc7cda51bb1f6ab05f3972546b07ec8c670b"
+  }
+ ]
+}

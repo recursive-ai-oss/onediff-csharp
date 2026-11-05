@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <PackageReference Include="xunit.v3" />
+    <PackageReference Include="DocumentFormat.OpenXml" />
     <!-- The cross-format test reads a PDF written with OnePDF's layout engine; the library under test does not use it. -->
     <PackageReference Include="RecursiveAI.OnePdf.Layout" />
     <PackageReference Include="RecursiveAI.OnePdf.Fonts" />

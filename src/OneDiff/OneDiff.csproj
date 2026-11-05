@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <PublishToNuGet>true</PublishToNuGet>
     <AssemblyName>$(LibName)</AssemblyName>
     <Description>Text diff and document comparison for .NET. The core package: Myers, patience and histogram diff over any sequence, line, word, character and grapheme tokenizers, patches and three-way merge, with no dependency beyond the .NET base class library.</Description>
     <EnablePackageValidation>true</EnablePackageValidation>

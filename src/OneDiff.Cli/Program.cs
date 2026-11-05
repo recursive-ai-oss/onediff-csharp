@@ -1,4 +1,5 @@
 using OneDiff.Patching;
+using OneDiff.Pdf;
 
 namespace OneDiff.Cli;
 
@@ -10,7 +11,7 @@ internal static class Program
           diff    compare two texts (unified, terminal, Markdown or diff-match-patch output)
           patch   apply a unified or diff-match-patch patch
           merge   three-way merge with conflict markers
-          compare compare two documents and write a redline (HTML or JSON)
+          compare compare two documents (text or PDF) and write a redline (HTML, JSON or PDF)
           combine combine reviewers' copies of one original (change report in HTML, or JSON)
           chain   compare a chain of versions step by step (change report in HTML, or JSON)
         "onediff <command> --help" lists a command's options.
@@ -32,6 +33,9 @@ internal static class Program
             io.Info(Usage);
             return 2;
         }
+
+        // PDF inputs are read, and .pdf output is written, once the Pdf package's source and forms are registered (idempotent).
+        PdfRedline.Register();
 
         string command = args[0];
         if (command is "-h" or "--help" or "help")

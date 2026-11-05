@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <PublishToNuGet>true</PublishToNuGet>
     <AssemblyName>OneDiff.Pdf</AssemblyName>
     <Description>Text diff and document comparison for .NET. PDF comparison: a document source that reads digital PDFs into the compare model with glyph-quad anchors, and a writer that marks the changes on the original pages with real PDF annotations.</Description>
     <EnablePackageValidation>true</EnablePackageValidation>
@@ -15,6 +16,7 @@
   <ItemGroup>
     <ProjectReference Include="../OneDiff.Documents/OneDiff.Documents.csproj" />
     <PackageReference Include="RecursiveAI.OnePdf" />
+    <PackageReference Include="RecursiveAI.OneRender.Pdf" />
   </ItemGroup>
 
 </Project>

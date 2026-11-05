@@ -23,6 +23,7 @@
       <package pattern="RecursiveAI.OneOffice.*" />
       <package pattern="RecursiveAI.OneArchive" />
       <package pattern="RecursiveAI.OneCompress" />
+      <package pattern="RecursiveAI.OneNlp" />
     </packageSource>
   </packageSourceMapping>
 </configuration>

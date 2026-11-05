@@ -6,6 +6,9 @@
     <IsAotCompatible>true</IsAotCompatible>
     <IsTrimmable>true</IsTrimmable>
     <IsPackable>true</IsPackable>
+    <!-- Which packages go to nuget.org. A package whose dependencies are not all on nuget.org yet still packs (to a local feed)
+         but stays false here; the release workflow publishes exactly the projects that set this to true. -->
+    <PublishToNuGet>false</PublishToNuGet>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
@@ -23,7 +26,7 @@
     <RepositoryUrl>https://github.com/recursive-ai-oss/onediff-csharp</RepositoryUrl>
     <PackageProjectUrl>https://recursiveai.org/onediff/</PackageProjectUrl>
     <PackageReadmeFile>PACKAGE.md</PackageReadmeFile>
-    <PackageTags>diff;compare;redline;track-changes;DiffPlex;WmlComparer;diff-match-patch;myers;patience;histogram;unified-diff;diff3;merge;nativeaot;trimmable</PackageTags>
+    <PackageTags>diff;compare;redline;track-changes;pdf;DiffPlex;WmlComparer;diff-match-patch;myers;patience;histogram;unified-diff;diff3;merge;nativeaot;trimmable</PackageTags>
     <PackageReleaseNotes>See CHANGELOG.md in the repository.</PackageReleaseNotes>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
@@ -37,7 +40,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="../../PACKAGE.md" Pack="true" PackagePath="/" />
+    <!-- Each package carries its own readme, next to its project. -->
+    <None Include="PACKAGE.md" Pack="true" PackagePath="/" Condition="Exists('PACKAGE.md')" />
     <None Include="../../LICENSE-MIT" Pack="true" PackagePath="/" />
     <None Include="../../LICENSE-APACHE" Pack="true" PackagePath="/" />
     <None Include="../../THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" />

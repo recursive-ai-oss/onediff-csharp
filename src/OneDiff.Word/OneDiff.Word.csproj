@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <AssemblyName>OneDiff.Word</AssemblyName>
-    <Description>Text diff and document comparison for .NET. Word documents: a document source that reads DOCX, DOCM, DOTX and DOTM through the OneOffice document hub into the compare model, with anchors a tracked-changes writer can place revisions on.</Description>
+    <Description>Text diff and document comparison for .NET. Word documents: a document source that reads DOCX, DOCM, DOTX and DOTM through the OneOffice document hub into the compare model, and a writer that saves a comparison as a DOCX with real tracked changes.</Description>
     <EnablePackageValidation>true</EnablePackageValidation>
   </PropertyGroup>
 
