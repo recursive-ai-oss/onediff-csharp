@@ -185,3 +185,15 @@ All tools' outputs, ours and the comparators', are read by one tracked-changes r
 | generated pairs 0–4,999, built on new and on old, Legal and Strict (accept/reject and schema) | 2 × 10,000 | 0 |
 
 The writer lists what a revision cannot carry (`NotCarried`); the gate lets through exactly those differences (docs/word.md).
+
+## Speed (indicative)
+
+One tool per row: two files in, one tracked-changes file out, in process, one thread, BenchmarkDotNet with one warm-up and five single-invocation iterations; AMD Ryzen 9 7950X3D, 32 logical cores, load average about 15 during the run (other jobs); runtime 10.0.14; Docxodus 15.0.0, OfficeIMO.Word 3.5.3. The first iterations include JIT, and the intervals are wide, so read the order of magnitude only.
+
+| Pair | OneDiff | Docxodus | OfficeIMO | OneDiff allocated | Docxodus | OfficeIMO |
+|---|---|---|---|---|---|---|
+| n1 (about 5 pages) | 88 ms | 26 ms | 94 ms | 13 MB | 20 MB | 50 MB |
+| n8 (about 40 pages) | 194 ms | 146 ms | 339 ms | 75 MB | 94 MB | 338 MB |
+| n24 (about 120 pages) | 440 ms | 502 ms | 662 ms | 224 MB | 281 MB | 747 MB |
+
+A generated 100-page contract with about 300 changes: read both files 191 ms, compare 184 ms, write the tracked document 183 ms (about 0.56 s in all, after warm-up; the budget is 1 s).
