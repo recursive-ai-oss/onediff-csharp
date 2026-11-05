@@ -11,12 +11,12 @@ The SDK version is pinned in `global.json`. Build output goes outside the checko
 
 ## Sister-library previews
 
-Some packages depend on a prerelease of another Recursive AI library (OnePDF, OneFont, OneNLP, OneDocument with its OneArchive and OneCompress) that is not on nuget.org yet. The pins are the prerelease `RecursiveAI.*` entries in `Directory.Packages.props`.
+The released packages (`RecursiveAI.OneDiff`, `.Documents`, `.Pdf`, `.Ocr` and `.Tool`) depend only on packages published on nuget.org: OneFont 1.4.0, OnePDF 1.18.0, OneImage 1.10.5, OneRender 1.3.3 and oneocr 1.0.0. A fresh clone with nothing configured builds and tests them.
 
-**A fresh clone with nothing configured** builds the projects that need no preview (for example `dotnet build src/OneDiff`). Building or testing a project that does need one stops at restore with a single message naming the project and the packages:
+The packages that ship later in 1.x (`.Word`, `.Spreadsheets`, `.Presentations`, `.Rendering`, `.Nlp`, `.All`) and some test and tool projects depend on a prerelease of another Recursive AI library that is not on nuget.org yet (OneDocument with OneArchive and OneCompress, OneNLP). The pins are the prerelease `RecursiveAI.*` entries in `Directory.Packages.props`. Building or testing one of those projects with nothing configured stops at restore with a single message naming the project and the packages, for example:
 
 ```
-OneDiff.Pdf needs sister-library previews that are not on nuget.org yet: RecursiveAI.OnePdf 1.18.0-preview.3. Set ONEDIFF_PREVIEW_FEED to a folder or feed that holds them, then restore again (see docs/building.md).
+OneDiff.Word needs sister-library previews that are not on nuget.org yet: RecursiveAI.OneDocument 0.2.0-preview.2. Set ONEDIFF_PREVIEW_FEED to a folder or feed that holds them, then restore again (see docs/building.md).
 ```
 
 **To restore them,** set `ONEDIFF_PREVIEW_FEED` to a folder or feed that holds the `.nupkg` files; `Directory.Build.props` adds it as one more restore source, so no other setup is needed:
@@ -27,7 +27,7 @@ ONEDIFF_PREVIEW_FEED=/path/to/previews dotnet build OneDiff.slnx -c Release
 
 The other ways in: a `NuGet.Config` at the repository root (copy `docs/nuget-local.config.example`; the path is not tracked; the message above is not shown when the file exists and it maps the previews to a folder), or `-p:OneDiffPreviewsConfigured=true` when a source is configured elsewhere, such as the user-level NuGet config.
 
-Once the previews are published, the pins move to the released versions and none of this is needed. The OnePDF and OneFont pins are two properties at the top of `Directory.Packages.props`, `OnePdfVersion` and `OneFontVersion`; moving them to the released `1.18.0` and `1.4.0` is a two-line change (the CI selector reads them too).
+Once those libraries are published, the pins move to the released versions and none of this is needed (the CI selector reads the pins too).
 
 ## CI
 

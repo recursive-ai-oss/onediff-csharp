@@ -6,4 +6,9 @@
     <PackageId Condition="'$(PackageId)' == ''">$(PackagePrefix)$(AssemblyName)</PackageId>
   </PropertyGroup>
 
+  <!-- Published packages are checked against the last release, so a pack fails on an unintended breaking change. Bump after each release. -->
+  <PropertyGroup Condition="'$(PublishToNuGet)' == 'true'">
+    <PackageValidationBaselineVersion>1.0.0</PackageValidationBaselineVersion>
+  </PropertyGroup>
+
 </Project>
