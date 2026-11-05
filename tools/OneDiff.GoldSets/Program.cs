@@ -4,6 +4,7 @@ using System.Text.Json;
 using OneDiff.Documents;
 using OneDiff.Documents.Model;
 using OneDiff.Documents.Pipeline;
+using OneDiff.Documents.Scoring;
 using OneDiff.Documents.Serialization;
 
 namespace OneDiff.GoldSets;
@@ -17,7 +18,11 @@ internal static class Program
     private const string Usage = """
         OneDiff.GoldSets generate --out DIR [--role eval|dev|train] [--seed N] [--docs-per-lang N] [--langs en,de,...] [--verify]
         OneDiff.GoldSets score --data DIR --out FILE [--settings legal] [--oracle-alignment] [--cmp DIR | --changes DIR] [--blocks DIR] [--save-cmp DIR] [--pipeline NAME] [--jobs N] [--limit N] [--ids FILE] [--resamples N]
+                    [--cand-scores FILE] [--clause-answers FILE] [--oracle-judge] [--oracle-clauses] [--vs-rules]
         OneDiff.GoldSets check-split --a DIR --b DIR
+        OneDiff.GoldSets dump-model --data DIR --out FILE.jsonl [--jobs N] [--limit N]
+        OneDiff.GoldSets dump-real --real DIR --out FILE.jsonl
+        OneDiff.GoldSets compare-real --real DIR --out FILE [--cand-scores FILE] [--clause-answers FILE]
         OneDiff.GoldSets generate-combine --out DIR [--seed N] [--docs-per-lang N] [--langs en,de,...]
         OneDiff.GoldSets score-combine --data DIR --out FILE [--jobs N] [--limit N] [--resamples N]
 
@@ -58,6 +63,9 @@ internal static class Program
                 "digest-combine" => CombineSet.Digest(opt),
                 "time-combine" => CombineSet.Time(opt),
                 "explain" => Explain(opt),
+                "dump-model" => ModelData.Dump(opt),
+                "dump-real" => ModelData.DumpReal(opt),
+                "compare-real" => ModelData.CompareReal(opt),
                 "real-gate" => RealGate(opt),
                 _ => Fail("unknown command " + args[0]),
             };
@@ -275,6 +283,8 @@ internal static class Program
 
     private static readonly JsonSerializerOptions ReportOptions = new() { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
+    private sealed record PairedRow(string Scope, string Metric, double? Baseline, double? Value, double? Diff, double? Lo, double? Hi, int Docs);
+
     private sealed record ScoreOutput(string Set, string SetHash, string Pipeline, int Resamples, ulong Seed, List<MetricRow> Rows, List<string> Failures);
 
     private static int Score(Dictionary<string, string> opt)
@@ -292,6 +302,7 @@ internal static class Program
 
         var mapStats = new MapStats();
         int noOutput = 0;
+        Func<CompareDocument, PairLabels, IPairScorer?> judge = ModelData.Install(opt, out ModelData.LookupScorer? lookup);
         bool oracleAlignment = opt.ContainsKey("oracle-alignment");
         string pipeline = opt.GetValueOrDefault("pipeline") ?? (oracleAlignment ? "gold-alignment" : "reference");
         // Scored with nothing hidden and cascades and types on, unless --settings legal asks for the default preset.
@@ -332,7 +343,9 @@ internal static class Program
             Directory.CreateDirectory(saveCmp);
         }
 
+        bool paired = opt.ContainsKey("vs-rules");
         var results = new (PairLabels Labels, Counts Counts)[ids.Length];
+        var baseline = new Counts[ids.Length];
         var failures = new System.Collections.Concurrent.ConcurrentBag<string>();
         Parallel.For(0, ids.Length, new ParallelOptions { MaxDegreeOfParallelism = jobs }, i =>
         {
@@ -368,7 +381,7 @@ internal static class Program
                 {
                     CompareDocument o = GoldJson.Build(docs.Old);
                     CompareDocument n = GoldJson.Build(docs.New);
-                    cmp = oracleAlignment ? Pipeline.OracleAlignment(o, n, labels) : Comparison.Of(o, n, scoreSettings);
+                    cmp = oracleAlignment ? Pipeline.OracleAlignment(o, n, labels) : Comparison.Of(o, n, scoreSettings, judge(o, labels));
                     if (saveCmp is not null)
                     {
                         File.WriteAllBytes(Path.Combine(saveCmp, id + ".cmp.json"), ComparisonJson.Write(cmp));
@@ -402,12 +415,26 @@ internal static class Program
             }
 
             results[i] = (labels, counts);
+            if (paired)
+            {
+                // The same pair under the rules alone: its documents are not registered with the hook, so it runs the engine unchanged.
+                Comparison rulesCmp = Comparison.Of(GoldJson.Build(docs.Old), GoldJson.Build(docs.New), scoreSettings);
+                ScoreInput rulesInput = ScoreInput.From(rulesCmp);
+                Counts rulesCounts = PairScorer.Score(rulesInput, labels, noDiff);
+                if (!noDiff)
+                {
+                    SemanticScorer.Add(rulesCounts, rulesCmp, rulesInput, labels);
+                }
+
+                baseline[i] = rulesCounts;
+            }
         });
 
         File.WriteAllLines(outFile + ".missed.txt", results.Where(r => r.Counts.Missed.Count > 0).OrderBy(r => r.Labels.Id, StringComparer.Ordinal).Select(r => r.Labels.Id + " " + string.Join(" | ", r.Counts.Missed)));
         File.WriteAllLines(outFile + ".align.txt", results.Where(r => r.Counts.AlignErrors.Count > 0).OrderBy(r => r.Labels.Id, StringComparer.Ordinal).Select(r => r.Labels.Id + " " + string.Join(" ; ", r.Counts.AlignErrors.Order(StringComparer.Ordinal))));
         File.WriteAllLines(outFile + ".semantic.txt", results.Where(r => r.Counts.SemDiag.Count > 0).OrderBy(r => r.Labels.Id, StringComparer.Ordinal).SelectMany(r => r.Counts.SemDiag));
         var rows = new List<MetricRow>();
+        var pairedRows = new List<PairedRow>();
         void Scope(string name, Func<PairLabels, bool> pick)
         {
             // One entry per base document: the sum of its pairs in this scope.
@@ -426,6 +453,37 @@ internal static class Program
             {
                 rows.AddRange(Report.Rows("synth", setHash, name, [.. perDoc.OrderBy(k => k.Key.Item1, StringComparer.Ordinal).ThenBy(k => k.Key.Item2).Select(k => k.Value)], pipeline));
             }
+
+            if (paired && perDoc.Count > 0)
+            {
+                var perDocBase = new Dictionary<(string, int), Counts>();
+                for (int i = 0; i < results.Length; i++)
+                {
+                    PairLabels labels = results[i].Labels;
+                    if (!pick(labels))
+                    {
+                        continue;
+                    }
+
+                    if (!perDocBase.TryGetValue((labels.Lang, labels.BaseDoc), out Counts? sum))
+                    {
+                        perDocBase[(labels.Lang, labels.BaseDoc)] = sum = new Counts();
+                    }
+
+                    sum.Add(baseline[i]);
+                }
+
+                var keys = perDoc.Keys.OrderBy(k => k.Item1, StringComparer.Ordinal).ThenBy(k => k.Item2).ToList();
+                List<(string Name, Bootstrap.Metric M)> defs = Report.Definitions();
+                var res = Bootstrap.RunPaired([.. keys.Select(k => perDocBase[k])], [.. keys.Select(k => perDoc[k])], [.. defs.Select(d => d.M)]);
+                for (int m = 0; m < defs.Count; m++)
+                {
+                    if (!double.IsNaN(res[m].A) || !double.IsNaN(res[m].B))
+                    {
+                        pairedRows.Add(new PairedRow(name, defs[m].Name, Finite(res[m].A), Finite(res[m].B), Finite(res[m].Diff), Finite(res[m].Lo), Finite(res[m].Hi), keys.Count));
+                    }
+                }
+            }
         }
 
         Scope("all", _ => true);
@@ -438,6 +496,12 @@ internal static class Program
         foreach (string type in EditTypes.All)
         {
             Scope("edit:" + type, p => p.Id.Contains("-s", StringComparison.Ordinal) && p.Edits.Count == 1 && p.Edits[0] == type);
+        }
+
+        Console.WriteLine(ModelData.Summary(lookup));
+        if (paired)
+        {
+            File.WriteAllBytes(outFile + ".paired.json", JsonSerializer.SerializeToUtf8Bytes(new { Set = "synth", SetHash = setHash, Pipeline = pipeline, Baseline = "rules", Resamples = Bootstrap.Resamples, Seed = Bootstrap.Seed, Rows = pairedRows }, ReportOptions));
         }
 
         var output = new ScoreOutput("synth", setHash, pipeline, Bootstrap.Resamples, Bootstrap.Seed, rows, [.. failures.OrderBy(x => x, StringComparer.Ordinal)]);
@@ -462,6 +526,8 @@ internal static class Program
         Dist("regions.sentence", docVals, c => c.SentCounted == 0 ? double.NaN : (double)c.SentRegions / c.SentCounted);
         return failures.IsEmpty ? 0 : 1;
     }
+
+    private static double? Finite(double v) => double.IsFinite(v) ? v : null;
 
     private static void Dist(string name, List<Counts> docs, Func<Counts, double> f)
     {

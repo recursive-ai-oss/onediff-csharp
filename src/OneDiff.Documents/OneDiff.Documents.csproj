@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="OneDiff.Documents.Tests" />
+    <InternalsVisibleTo Include="OneDiff.GoldSets" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,0 +1,23 @@
+[project]
+name = "onediff-pair-model"
+version = "0.0.0"
+description = "Training tools for the OneDiff pair model: teacher fine-tune, prediction, data checks. Nothing here ships."
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "torch>=2.7",
+    "transformers>=4.51",
+    "numpy>=2",
+    "safetensors>=0.5",
+]
+
+[tool.uv]
+# One environment per machine, outside the checkout: UV_PROJECT_ENVIRONMENT=~/onediff/gpu/venv-pair
+package = false
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
