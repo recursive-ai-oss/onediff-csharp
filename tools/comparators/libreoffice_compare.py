@@ -53,7 +53,14 @@ def compare(ctx, old, new, out):
     smgr = ctx.ServiceManager
     desktop = smgr.createInstanceWithContext("com.sun.star.frame.Desktop", ctx)
     dispatcher = smgr.createInstanceWithContext("com.sun.star.frame.DispatchHelper", ctx)
-    doc = desktop.loadComponentFromURL(uno.systemPathToFileUrl(new), "_blank", 0, (prop("Hidden", True),))
+    doc = None
+    for _ in range(5):  # the first load after start-up can return nothing while the office finishes initialising
+        doc = desktop.loadComponentFromURL(uno.systemPathToFileUrl(new), "_blank", 0, (prop("Hidden", True),))
+        if doc is not None:
+            break
+        time.sleep(1)
+    if doc is None:
+        raise RuntimeError("document did not load")
     try:
         frame = doc.getCurrentController().getFrame()
         dispatcher.executeDispatch(frame, ".uno:CompareDocuments", "", 0,

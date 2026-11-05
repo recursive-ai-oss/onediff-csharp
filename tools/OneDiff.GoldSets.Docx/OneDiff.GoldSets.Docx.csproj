@@ -14,6 +14,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="OneDiff.GoldSets.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../OneDiff.GoldSets/OneDiff.GoldSets.csproj" />
   </ItemGroup>
 

@@ -14,4 +14,8 @@
     <PackageReference Include="RecursiveAI.OnePdf.Hyphenation" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../../src/OneDiff.Pdf/OneDiff.Pdf.csproj" />
+  </ItemGroup>
+
 </Project>

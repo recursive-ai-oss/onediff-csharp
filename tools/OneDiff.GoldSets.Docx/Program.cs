@@ -302,7 +302,7 @@ internal static class Program
     /// its own. That is valid OPC, but OneOffice 0.1 does not recognise such a package, so the override is added to the content-type
     /// list (nothing else is touched) before the file is read.
     /// </summary>
-    private static byte[] Openable(byte[] bytes)
+    internal static byte[] Openable(byte[] bytes)
     {
         try
         {
@@ -311,7 +311,8 @@ internal static class Program
         }
         catch (OfficeException)
         {
-            using var input = new MemoryStream(bytes);
+            using var input = new MemoryStream();
+            input.Write(bytes);
             using var zip = new System.IO.Compression.ZipArchive(input, System.IO.Compression.ZipArchiveMode.Update);
             System.IO.Compression.ZipArchiveEntry entry = zip.GetEntry("[Content_Types].xml") ?? throw new InvalidDataException("no content-type list");
             string xml;
