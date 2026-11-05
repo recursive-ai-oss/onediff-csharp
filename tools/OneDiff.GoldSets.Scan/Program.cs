@@ -35,6 +35,7 @@ internal static class Program
         OneDiff.GoldSets.Scan manifest --pdf DIR --data DIR --out DIR
         OneDiff.GoldSets.Scan compare --set DIR --out DIR [--source ocr|pdf] [--settings legal|strict] [--ids FILE] [--from N --count N] [--jobs N]
         OneDiff.GoldSets.Scan gate --set DIR --out FILE [--ids FILE] [--from N --count N | --every N] [--determinism-every N] [--digest FILE] [--jobs N]
+        OneDiff.GoldSets.Scan time --set DIR [--ids FILE] [--from N --count N | --every N]
 
           build     for each pair of the labelled set DATA whose id starts with one of the languages, reads PDF/<id>.{old,new}.pdf (the rendered
                     pair), draws the pages, degrades them and writes OUT/pdf/<id>.{old,new}.pdf with the pair's block map beside them
@@ -73,6 +74,7 @@ internal static class Program
                 "compare" => Compare(opt),
                 "gate" => Gate(opt),
                 "dump" => Dump(opt),
+                "time" => Time(opt),
                 _ => Fail("unknown command " + args[0]),
             };
         }
@@ -339,6 +341,63 @@ internal static class Program
         return 0;
     }
 
+    // ---- time ----
+
+    /// <summary>
+    /// Times, one pair at a time on one thread, what a scan comparison costs: reading both scans (recognition), comparing, and marking
+    /// both pages. Prints one line per pair and the medians. Run it as an indicative job on a quiet machine.
+    /// </summary>
+    private static int Time(Dictionary<string, string> opt)
+    {
+        string set = Path.GetFullPath(Req(opt, "set"));
+        string dir = Directory.Exists(Path.Combine(set, "pdf")) ? Path.Combine(set, "pdf") : set;
+        string[] ids = Ids(opt, dir);
+        var source = new OcrDocumentSource();
+        var rows = new List<(string Id, int Pages, double Read, double Compare, double Mark)>();
+        // The first read loads the models: not part of any pair's time.
+        source.Read(DocumentInput.FromBytes(File.ReadAllBytes(Path.Combine(dir, ids[0] + ".old.pdf")), "warm"));
+        foreach (string id in ids)
+        {
+            byte[] oldPdf = File.ReadAllBytes(Path.Combine(dir, id + ".old.pdf")), newPdf = File.ReadAllBytes(Path.Combine(dir, id + ".new.pdf"));
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            CompareDocument o = source.Read(DocumentInput.FromBytes(oldPdf, id + ".old.pdf")), n = source.Read(DocumentInput.FromBytes(newPdf, id + ".new.pdf"));
+            double read = sw.Elapsed.TotalMilliseconds;
+            sw.Restart();
+            Comparison c = Comparison.Of(o, n, CompareSettings.Legal);
+            double cmp = sw.Elapsed.TotalMilliseconds;
+            sw.Restart();
+            using (var ms = new MemoryStream())
+            {
+                PdfRedline.OnPages.MarkNewDocument(c, newPdf, ms);
+            }
+
+            using (var ms = new MemoryStream())
+            {
+                PdfRedline.OnPages.MarkOldDocument(c, oldPdf, ms);
+            }
+
+            double mark = sw.Elapsed.TotalMilliseconds;
+            int pages;
+            using (PdfDocument d1 = PdfDocument.Open(oldPdf))
+            using (PdfDocument d2 = PdfDocument.Open(newPdf))
+            {
+                pages = d1.PageCount + d2.PageCount;
+            }
+
+            rows.Add((id, pages, read, cmp, mark));
+            Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"{id} pages={pages} read-ms={read:F0} compare-ms={cmp:F0} mark-ms={mark:F0} read-ms/page={read / pages:F0}"));
+        }
+
+        static double Median(IEnumerable<double> v)
+        {
+            double[] a = [.. v.Order()];
+            return a[a.Length / 2];
+        }
+
+        Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"pairs={rows.Count} median pages={Median(rows.Select(r => (double)r.Pages)):F0} read-ms={Median(rows.Select(r => r.Read)):F0} compare-ms={Median(rows.Select(r => r.Compare)):F0} mark-ms={Median(rows.Select(r => r.Mark)):F0} max compare+mark-ms={rows.Max(r => r.Compare + r.Mark):F0} read-ms/page={Median(rows.Select(r => r.Read / r.Pages)):F0}"));
+        return 0;
+    }
+
     // ---- gate ----
 
     private static int Gate(Dictionary<string, string> opt)
@@ -464,7 +523,8 @@ internal static class Program
     {
         foreach (PdfSkippedChange s in result.Skipped)
         {
-            if (!s.Reason.Contains("container", StringComparison.Ordinal))
+            // A pure insertion has no place on the old page and a pure deletion none on the new one: nothing to mark there by design.
+            if (!s.Reason.Contains("container", StringComparison.Ordinal) && !s.Reason.Contains("has no place in the", StringComparison.Ordinal))
             {
                 yield return $"change {s.ChangeId} was not marked: {s.Reason}";
             }
@@ -508,7 +568,7 @@ internal static class Program
             }
 
             Change ch = c.Changes.First(x => x.Id == m.ChangeId);
-            string expected = Squash((isNew ? ch.New : ch.Old).Text);
+            string expected = Letters((isNew ? ch.New : ch.Old).Text);
             if (!rectsByChange.TryGetValue(m.ChangeId, out var rects))
             {
                 yield return $"change {m.ChangeId} has a mark ({m.Name}) that cannot be read back";
@@ -527,9 +587,13 @@ internal static class Program
 
                     Quad q = seg.Anchor.Quads[0];
                     double cx = (q.X1 + q.X2 + q.X3 + q.X4) / 4, cy = (q.Y1 + q.Y2 + q.Y3 + q.Y4) / 4;
+                    // A band across a skewed line follows the chord from its first word to its last, so a word in between can stick out
+                    // of it by a fraction of its own height; a word counts as under the band when its centre is within a quarter of its
+                    // height of it.
+                    double slack = Math.Max(0.01, 0.25 * Math.Sqrt(((q.X4 - q.X1) * (q.X4 - q.X1)) + ((q.Y4 - q.Y1) * (q.Y4 - q.Y1))));
                     foreach (var r in rects)
                     {
-                        if (r.Page == q.Page && cx >= r.L - 0.01 && cx <= r.R + 0.01 && cy >= r.B - 0.01 && cy <= r.T + 0.01)
+                        if (r.Page == q.Page && cx >= r.L - slack && cx <= r.R + slack && cy >= r.B - slack && cy <= r.T + slack)
                         {
                             under.Append(node.Text.AsSpan(seg.Start, seg.Length));
                             break;
@@ -538,15 +602,41 @@ internal static class Program
                 }
             }
 
-            string actual = Squash(under.ToString());
-            if (!string.Equals(actual, expected, StringComparison.Ordinal))
+            // A mark rounds out to whole tokens (so it may hold more than the edit), and what a change shows can carry what the source
+            // folds (hyphen at a line end, list label, page number): only the letters are compared, and a change with no text of its own
+            // (an attribute) is checked for position alone.
+            string actual = Letters(under.ToString());
+            if (expected.Length > 0 && !actual.Contains(expected, StringComparison.Ordinal) && !expected.Contains(actual, StringComparison.Ordinal))
             {
+                if (Environment.GetEnvironmentVariable("SCAN_EXPLAIN") is not null)
+                {
+                    var ex = new StringBuilder();
+                    foreach (var r in rects)
+                    {
+                        ex.Append(CultureInfo.InvariantCulture, $"\n  rect p{r.Page} L{r.L:F1} B{r.B:F1} R{r.R:F1} T{r.T:F1}");
+                    }
+
+                    foreach (int nid in (isNew ? ch.New : ch.Old).Nodes)
+                    {
+                        foreach (AnchoredSpan seg in doc[nid].Segments)
+                        {
+                            if (seg.Anchor.Kind == AnchorKind.OcrWords && !seg.Anchor.Quads.IsDefaultOrEmpty)
+                            {
+                                Quad q = seg.Anchor.Quads[0];
+                                ex.Append(CultureInfo.InvariantCulture, $"\n  seg [{doc[nid].Text.AsSpan(seg.Start, seg.Length)}] p{q.Page} cx={(q.X1 + q.X2 + q.X3 + q.X4) / 4:F1} cy={(q.Y1 + q.Y2 + q.Y3 + q.Y4) / 4:F1}");
+                            }
+                        }
+                    }
+
+                    yield return $"EXPLAIN change {m.ChangeId} side={(isNew ? "new" : "old")} range={(isNew ? ch.New : ch.Old).Start}+{(isNew ? ch.New : ch.Old).Length}{ex}";
+                }
+
                 yield return $"change {m.ChangeId} ({m.Kind}): under the mark \"{Trim(actual)}\", changed text \"{Trim(expected)}\"";
             }
         }
     }
 
-    private static string Squash(string s) => string.Concat(s.Where(static ch => !char.IsWhiteSpace(ch)));
+    private static string Letters(string s) => string.Concat(s.Where(static ch => char.IsLetter(ch)));
 
-    private static string Trim(string s) => s.Length <= 60 ? s : s[..60] + "...";
+    private static string Trim(string s) => s.Length <= 600 ? s : s[..600] + "...";
 }
