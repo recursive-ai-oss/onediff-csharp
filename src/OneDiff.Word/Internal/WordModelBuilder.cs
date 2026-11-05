@@ -10,6 +10,7 @@ using RecursiveAI.OneOffice.Documents.ContentControls;
 using RecursiveAI.OneOffice.Documents.Notes;
 using RecursiveAI.OneOffice.Documents.Numbering;
 using RecursiveAI.OneOffice.Documents.Styles;
+using RecursiveAI.OneOffice.Properties;
 using RecursiveAI.OneOffice.Markup;
 using RecursiveAI.OneOffice.Packaging;
 using RecursiveAI.OneOffice.Schema;
@@ -92,6 +93,7 @@ internal sealed class WordModelBuilder
     private readonly CancellationToken cancellation;
     private readonly string mainPart;
     private readonly Dictionary<MarkupNode, ListLabel> labels = [];
+    private readonly Dictionary<MarkupNode, TextBox> textBoxes = [];
     private readonly Dictionary<MarkupNode, ContentControl> controls = [];
     private readonly Dictionary<string, Dictionary<string, Relationship>> relationships = new(StringComparer.Ordinal);
     private string? footnotesPart;
@@ -111,9 +113,17 @@ internal sealed class WordModelBuilder
 
     public void Build()
     {
-        foreach (ListLabel l in doc.Numbering.LabelBody())
+        foreach (StoryLabels story in doc.Numbering.LabelStories())
         {
-            labels.TryAdd(l.Paragraph.Markup.Node, l);
+            foreach (ListLabel l in story.Labels)
+            {
+                labels.TryAdd(l.Paragraph.Markup.Node, l);
+            }
+        }
+
+        foreach (TextBox box in doc.TextBoxes())
+        {
+            textBoxes.TryAdd(box.Container.Node, box);
         }
 
         foreach (ContentControl c in doc.ContentControls())
@@ -1016,7 +1026,16 @@ internal sealed class WordModelBuilder
     private void EmitTextBox(MarkupNode content, string part)
     {
         Begin(NodeKind.TextBox, new NodeContent { Anchor = Anchor.ForNode(WordAnchors.Of(part, content)) });
-        EmitPlainParagraphs(content, part);
+        if (textBoxes.TryGetValue(content, out TextBox? box))
+        {
+            // The hub reads the box like the body: tables, lists, fields and formatting, not only text.
+            EmitBlocks(box.Blocks(), part);
+        }
+        else
+        {
+            EmitPlainParagraphs(content, part);
+        }
+
         End();
     }
 
@@ -1144,31 +1163,28 @@ internal sealed class WordModelBuilder
     private void EmitProperties()
     {
         var found = new SortedDictionary<string, (string Value, string Part)>(StringComparer.Ordinal);
-        foreach (Relationship r in doc.Package.GetRelationships())
+        CoreProperties core = doc.Properties.Core;
+        // The fifteen fixed core elements, read through the hub; dates come back as UTC to the second.
+        (string Name, string? Value)[] fixedCore =
+        [
+            ("title", core.Title), ("subject", core.Subject), ("creator", core.Creator), ("keywords", core.Keywords),
+            ("description", core.Description), ("lastModifiedBy", core.LastModifiedBy), ("revision", core.Revision),
+            ("category", core.Category), ("contentStatus", core.ContentStatus), ("language", core.Language),
+            ("identifier", core.Identifier), ("version", core.Version), ("created", DateText(core.Created)),
+            ("modified", DateText(core.Modified)), ("lastPrinted", DateText(core.LastPrinted)),
+        ];
+        foreach ((string name, string? raw) in fixedCore)
         {
-            bool core = r.Type.EndsWith("/metadata/core-properties", StringComparison.Ordinal);
-            bool custom = r.Type.EndsWith("/custom-properties", StringComparison.Ordinal);
-            if (!(core || custom) || r.TargetMode != RelationshipTargetMode.Internal
-                || !PartUri.TryResolve(null, r.Target, out PartUri uri) || doc.Package.FindPart(uri.Value) is not { } part
-                || !MarkupDocument.TryParse(part.GetBytes(), out MarkupDocument? props, doc.Context) || props is null || props.Root.IsNull)
+            string value = raw?.Trim() ?? string.Empty;
+            if (value.Length > 0)
             {
-                continue;
+                found[name] = (value, "/docProps/core.xml");
             }
+        }
 
-            for (MarkupNode c = props.Root.FirstChild; !c.IsNull; c = c.NextSibling)
-            {
-                if (c.Kind != MarkupNodeKind.Element)
-                {
-                    continue;
-                }
-
-                string name = core ? c.LocalNameString : "custom:" + (c.GetAttribute("name") ?? string.Empty);
-                string value = c.InnerText.Trim();
-                if (value.Length > 0 || !core)
-                {
-                    found[name] = (value, uri.Value);
-                }
-            }
+        foreach (CustomProperty c in doc.Properties.Custom.List())
+        {
+            found["custom:" + c.Name] = (c.Text.Trim(), "/docProps/custom.xml");
         }
 
         foreach (KeyValuePair<string, (string Value, string Part)> kv in found)
@@ -1187,6 +1203,9 @@ internal sealed class WordModelBuilder
                 });
         }
     }
+
+    private static string? DateText(DateTimeOffset? d) =>
+        d?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
 
     private static string Prefix(string part) => WordAnchors.Prefix + part + "#";
 

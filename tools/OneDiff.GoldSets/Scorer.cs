@@ -533,7 +533,7 @@ internal sealed record MetricRow(string Set, string SetHash, string Scope, strin
 
 internal static class Report
 {
-    /// <summary>The metrics of every row, by name.</summary>
+    /// <summary>Every metric row with the way it is computed from summed counts.</summary>
     public static List<(string Name, Bootstrap.Metric M)> Definitions()
     {
         var defs = new List<(string Name, Bootstrap.Metric M)>();

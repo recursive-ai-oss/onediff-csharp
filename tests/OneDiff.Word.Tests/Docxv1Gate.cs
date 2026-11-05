@@ -1,6 +1,7 @@
 using System.Text;
 using OneDiff.Documents;
 using OneDiff.Documents.Model;
+using OneDiff.Documents.Serialization;
 
 namespace OneDiff.Word.Tests;
 
@@ -59,6 +60,12 @@ public class Docxv1Gate
                         string d = Path.Combine(outDir, settings.Name + "-" + on);
                         Directory.CreateDirectory(d);
                         File.WriteAllBytes(Path.Combine(d, id + ".docx"), bytes);
+                        if (Environment.GetEnvironmentVariable("ONEDIFF_DOCXV1_CMP") == "1")
+                        {
+                            string cd = Path.Combine(outDir, settings.Name + "-cmp");
+                            Directory.CreateDirectory(cd);
+                            File.WriteAllBytes(Path.Combine(cd, id + ".cmp.json"), ComparisonJson.Write(cmp));
+                        }
                     }
 
                     if (schema)

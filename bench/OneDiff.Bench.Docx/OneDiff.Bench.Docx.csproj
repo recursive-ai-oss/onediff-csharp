@@ -10,6 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../src/OneDiff.Word/OneDiff.Word.csproj" />
     <PackageReference Include="BenchmarkDotNet" />
     <PackageReference Include="Docxodus" />
     <PackageReference Include="OfficeIMO.Word" />

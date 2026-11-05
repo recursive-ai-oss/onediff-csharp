@@ -16,6 +16,11 @@ internal sealed partial class TrackedWriter
         ct.ThrowIfCancellationRequested();
         Node n = dm[id];
         AlignmentLink? l = LinkOfDonor(id);
+        if (handledDonor.Contains(id))
+        {
+            return;
+        }
+
         if (donorCopy.TryGetValue(id, out DonorMode mode))
         {
             Transplant(id, mode, l);
@@ -205,6 +210,15 @@ internal sealed partial class TrackedWriter
                     if (pid >= 0 && pl is { Kind: LinkKind.Match, OldNodes.Length: 1, NewNodes.Length: 1 })
                     {
                         anchor = b.Element(BaseOf(pl));
+                    }
+                    else if (pl is { Kind: LinkKind.Split or LinkKind.Merge } && splitTail.TryGetValue(pl.Id, out MarkupNode tail))
+                    {
+                        // The last of the paragraphs a split or merge was written as, when the previous donor paragraph went into one.
+                        int last = baseIsNew ? pl.OldNodes[^1] : pl.NewNodes[^1];
+                        if (last == pid)
+                        {
+                            anchor = tail;
+                        }
                     }
                 }
 

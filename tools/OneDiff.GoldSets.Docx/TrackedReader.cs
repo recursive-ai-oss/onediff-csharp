@@ -6,9 +6,9 @@ using RecursiveAI.OneOffice.Markup;
 namespace OneDiff.GoldSets.Docx;
 
 /// <summary>What a revision does to a stretch of text.</summary>
-internal enum SegKind { Equal, Delete, Insert, MoveFrom, MoveTo }
+internal enum SegKind { Equal, Delete, Insert, MoveFrom, MoveTo, Gone }
 
-internal sealed record Seg(SegKind Kind, string Text, string? Move);
+internal sealed record Seg(SegKind Kind, string Text, string? Move, bool Fmt = false);
 
 /// <summary>One paragraph of a tracked-changes file: its text in pieces, and whether its paragraph mark exists with changes rejected and accepted.</summary>
 internal sealed class ParaRec
@@ -29,7 +29,8 @@ internal sealed class ParaRec
 /// The two views are the document with every revision rejected and with every revision accepted, one line per non-empty paragraph;
 /// a paragraph whose mark is removed in a view runs on into the next one (ECMA-376 §17.13.5). A <em>change</em> is a maximal run of
 /// revisions inside a paragraph with no unchanged text between them, and a move's two halves (paired by the name on their range
-/// markers) are one change. Formatting revisions carry no text and are not changes here.
+/// markers) are one change. A run whose formatting was changed (<c>w:rPrChange</c>) is a revision of its text: the same text in both
+/// views, and it counts as a change with the other revisions around it. Paragraph-level property revisions carry no text and are not changes.
 /// </para>
 /// </summary>
 internal static class TrackedReader
@@ -196,16 +197,20 @@ internal static class TrackedReader
 
                 if (sb.Length > 0)
                 {
-                    Add(rec, ctx, sb.ToString(), move);
+                    bool fmt = ctx == SegKind.Equal && c.ChildElements.Any(x => Is(x, "rPr") && x.ChildElements.Any(y => Is(y, "rPrChange")));
+                    Add(rec, ctx, sb.ToString(), move, fmt);
                 }
             }
             else if (Is(c, "ins"))
             {
-                ReadInline(c, rec, moves, ctx == SegKind.Delete ? SegKind.Delete : SegKind.Insert, move);
+                // Accepting or rejecting everything resolves the outer revision first: an insertion inside moved-away text is
+                // removed with it (accept) and restored text never contains it (reject), so it is in neither view.
+                ReadInline(c, rec, moves, ctx == SegKind.Delete ? SegKind.Delete : ctx is SegKind.MoveFrom or SegKind.Gone ? SegKind.Gone : SegKind.Insert, move);
             }
             else if (Is(c, "del"))
             {
-                ReadInline(c, rec, moves, SegKind.Delete, move);
+                // A deletion inside inserted or moved-here text goes with it on reject-all and on accept-all.
+                ReadInline(c, rec, moves, ctx is SegKind.Insert or SegKind.MoveTo or SegKind.Gone ? SegKind.Gone : SegKind.Delete, move);
             }
             else if (Is(c, "moveFrom"))
             {
@@ -238,15 +243,15 @@ internal static class TrackedReader
         }
     }
 
-    private static void Add(ParaRec rec, SegKind kind, string text, string? move)
+    private static void Add(ParaRec rec, SegKind kind, string text, string? move, bool fmt = false)
     {
-        if (rec.Segs.Count > 0 && rec.Segs[^1].Kind == kind && rec.Segs[^1].Move == move)
+        if (rec.Segs.Count > 0 && rec.Segs[^1].Kind == kind && rec.Segs[^1].Move == move && rec.Segs[^1].Fmt == fmt)
         {
             rec.Segs[^1] = rec.Segs[^1] with { Text = rec.Segs[^1].Text + text };
         }
         else
         {
-            rec.Segs.Add(new Seg(kind, text, move));
+            rec.Segs.Add(new Seg(kind, text, move, fmt));
         }
     }
 
@@ -328,36 +333,35 @@ internal static class TrackedReader
             int oldPos = oldAt[i].Start, newPos = newAt[i].Start;
             int oldLine = oldMap[i], newLine = newMap[i];
             List<LineSpan>? oldSpans = null, newSpans = null;
-            bool isMove = false;
+            List<LineSpan>? moveOld = null, moveNew = null;
             string? moveName = null;
 
+            // A move is the moved text; insertions, deletions and formatting beside it or inside it are changes of their own.
             void Close()
             {
-                if (oldSpans is null && newSpans is null)
+                if (moveName is not null || moveOld is not null || moveNew is not null)
                 {
-                    return;
-                }
-
-                if (isMove && moveName is not null)
-                {
-                    if (oldSpans is not null)
+                    string name = moveName ?? string.Empty;
+                    if (moveOld is not null)
                     {
-                        AddTo(moveFrom, moveName, oldSpans);
+                        AddTo(moveFrom, name, moveOld);
                     }
 
-                    if (newSpans is not null)
+                    if (moveNew is not null)
                     {
-                        AddTo(moveTo, moveName, newSpans);
+                        AddTo(moveTo, name, moveNew);
                     }
                 }
-                else
+
+                if (oldSpans is not null || newSpans is not null)
                 {
-                    changes.Add(new ToolChange(nextId++, isMove ? "move" : "text", oldSpans ?? [], newSpans ?? []));
+                    changes.Add(new ToolChange(nextId++, "text", oldSpans ?? [], newSpans ?? []));
                 }
 
                 oldSpans = null;
                 newSpans = null;
-                isMove = false;
+                moveOld = null;
+                moveNew = null;
                 moveName = null;
             }
 
@@ -365,6 +369,23 @@ internal static class TrackedReader
             {
                 switch (s.Kind)
                 {
+                    case SegKind.Gone:
+                        break;
+                    case SegKind.Equal when s.Fmt:
+                        // A formatting revision: the same text in both views, changed.
+                        if (oldLine >= 0)
+                        {
+                            (oldSpans ??= []).Add(new LineSpan(oldLine, oldPos, s.Text.Length));
+                        }
+
+                        if (newLine >= 0)
+                        {
+                            (newSpans ??= []).Add(new LineSpan(newLine, newPos, s.Text.Length));
+                        }
+
+                        oldPos += s.Text.Length;
+                        newPos += s.Text.Length;
+                        break;
                     case SegKind.Equal:
                         if (s.Text.Trim().Length > 0)
                         {
@@ -374,16 +395,28 @@ internal static class TrackedReader
                         oldPos += s.Text.Length;
                         newPos += s.Text.Length;
                         break;
-                    case SegKind.Delete or SegKind.MoveFrom:
+                    case SegKind.MoveFrom:
+                        if (oldLine >= 0)
+                        {
+                            (moveOld ??= []).Add(new LineSpan(oldLine, oldPos, s.Text.Length));
+                        }
+
+                        moveName ??= s.Move;
+                        oldPos += s.Text.Length;
+                        break;
+                    case SegKind.MoveTo:
+                        if (newLine >= 0)
+                        {
+                            (moveNew ??= []).Add(new LineSpan(newLine, newPos, s.Text.Length));
+                        }
+
+                        moveName ??= s.Move;
+                        newPos += s.Text.Length;
+                        break;
+                    case SegKind.Delete:
                         if (oldLine >= 0)
                         {
                             (oldSpans ??= []).Add(new LineSpan(oldLine, oldPos, s.Text.Length));
-                        }
-
-                        if (s.Kind == SegKind.MoveFrom)
-                        {
-                            isMove = true;
-                            moveName ??= s.Move;
                         }
 
                         oldPos += s.Text.Length;
@@ -392,12 +425,6 @@ internal static class TrackedReader
                         if (newLine >= 0)
                         {
                             (newSpans ??= []).Add(new LineSpan(newLine, newPos, s.Text.Length));
-                        }
-
-                        if (s.Kind == SegKind.MoveTo)
-                        {
-                            isMove = true;
-                            moveName ??= s.Move;
                         }
 
                         newPos += s.Text.Length;
