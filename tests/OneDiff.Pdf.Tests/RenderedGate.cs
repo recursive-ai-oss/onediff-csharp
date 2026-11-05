@@ -75,7 +75,7 @@ internal static class RenderedGate
 
     private static bool Eq(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 
-    public static Extracted Extract(byte[] pdfBytes, RedlineStyle style)
+    public static Extracted Extract(byte[] pdfBytes, RedlineStyle style, bool sideBySide = false)
     {
         var pieces = new List<Piece>();
         var columns = new List<(double X, char Ch)>();
@@ -112,7 +112,8 @@ internal static class RenderedGate
                 }
             }
 
-            foreach (Ln line in InRows(lines))
+            IEnumerable<Ln> readingOrder = InRows(lines, sideBySide);
+            foreach (Ln line in readingOrder)
             {
                 foreach (PdfTextWord w in line.Words)
                 {
@@ -204,9 +205,11 @@ internal static class RenderedGate
     /// at the horizontal gaps that no line crosses, left to right, each column read top to bottom: the cells of a table row are read
     /// one after another, not line by line across the row.
     /// </summary>
-    private static List<Ln> InRows(List<Ln> lines)
+    private static List<Ln> InRows(List<Ln> lines, bool sideBySide)
     {
-        const double BandGap = 5.5, ColumnGap = 6;
+        // Side by side, a hanging brace one indent left of its block, level with a line of the other half, would read as a column at 6 pt.
+        const double BandGap = 5.5;
+        double ColumnGap = sideBySide ? 12 : 6;
         var byTop = lines.OrderByDescending(l => l.Top).ThenBy(l => l.Left).ToList();
         var result = new List<Ln>(lines.Count);
         int i = 0;
@@ -291,7 +294,7 @@ internal static class RenderedGate
         }
 
         drop = [.. new[] { style.Insertion, style.Deletion, style.MoveFrom, style.MoveTo, style.Formatting }.SelectMany(m => m.Glyph)];
-        Extracted x = Extract(pdf, style);
+        Extracted x = Extract(pdf, style, sideBySide);
         if (x.Pages == 0)
         {
             Fail("no pages");
