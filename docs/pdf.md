@@ -76,6 +76,7 @@ Quadrilaterals use the coordinates OnePDF reports: points, **upright page space*
 - **Determinism.** The same comparison, PDF and settings give the same bytes on every platform. `/M` is written only when `ModifiedDate` is set; nothing reads the clock. Identifiers come from the change ids and OnePDF's hash-derived `/ID`.
 - **Saving.** Incremental by default: the output is the original bytes followed by an update, so signatures over the original stay in place where their permissions allow markup (12.8.2.2). A file that was rebuilt on opening cannot take an update and is rewritten whole; `PdfMarkupResult.SavedIncrementally` says which happened. `Incremental = false` always rewrites.
 - **Encrypted input.** Needs `PdfRedline.Password`; the output keeps the input's encryption.
+- **In the browser (WebAssembly).** The .NET browser runtime has no AES, so encrypted PDFs cannot be read or marked there; reading reports `Encrypted`. Everything else works in the browser.
 
 ### As an output form
 
