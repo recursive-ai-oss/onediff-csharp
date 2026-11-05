@@ -7,7 +7,7 @@
 set -u
 SET=$1
 OUT=$2
-export PATH=${DOTNET_BIN:-$HOME/dotnet10}:$PATH DOTNET_ROOT=${DOTNET_BIN:-$HOME/dotnet10} DOTNET_PROCESSOR_COUNT=4 ONEDIFF_ARTIFACTS=${ONEDIFF_ARTIFACTS:-$HOME/onediff/u26/art}
+export PATH=${DOTNET_BIN:-$HOME/dotnet10}:$PATH DOTNET_ROOT=${DOTNET_BIN:-$HOME/dotnet10} DOTNET_PROCESSOR_COUNT=4 ONEDIFF_ARTIFACTS=${ONEDIFF_ARTIFACTS:-$HOME/onediff/nlp/art}
 mkdir -p "$OUT"
 uptime > "$OUT/load-before.txt"
 dotnet build tools/OneDiff.GoldSets -c Release -m:4 -v quiet -clp:NoSummary 2>&1 | tail -3
