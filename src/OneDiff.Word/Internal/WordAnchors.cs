@@ -1,6 +1,6 @@
 using System.Globalization;
 using System.Text;
-using RecursiveAI.OneOffice.Markup;
+using RecursiveAI.OneDocument.Markup;
 
 namespace OneDiff.Word.Internal;
 

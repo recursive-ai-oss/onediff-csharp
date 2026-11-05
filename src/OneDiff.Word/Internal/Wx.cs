@@ -1,9 +1,9 @@
 using System.Text;
-using RecursiveAI.OneOffice.Markup;
+using RecursiveAI.OneDocument.Markup;
 
 namespace OneDiff.Word.Internal;
 
-/// <summary>Small helpers over the OneOffice markup layer for the WordprocessingML elements the tracked-changes writer touches (ECMA-376 Part 1 §17).</summary>
+/// <summary>Small helpers over the OneDocument markup layer for the WordprocessingML elements the tracked-changes writer touches (ECMA-376 Part 1 §17).</summary>
 internal static class Wx
 {
     public const string Main = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";

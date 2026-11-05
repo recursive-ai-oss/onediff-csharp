@@ -1,11 +1,11 @@
 using System.Collections.Immutable;
 using System.Text;
 using OneDiff.Documents.Model;
-using RecursiveAI.OneOffice;
-using RecursiveAI.OneOffice.Documents;
-using RecursiveAI.OneOffice.Documents.Revisions;
-using RecursiveAI.OneOffice.IO;
-using RecursiveAI.OneOffice.Markup;
+using RecursiveAI.OneDocument;
+using RecursiveAI.OneDocument.Documents;
+using RecursiveAI.OneDocument.Documents.Revisions;
+using RecursiveAI.OneDocument.IO;
+using RecursiveAI.OneDocument.Markup;
 
 namespace OneDiff.Word.Internal;
 

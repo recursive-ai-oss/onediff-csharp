@@ -41,7 +41,7 @@ for t in tools:
         sum(r["acceptParagraphs"] for r in rt), 100 * sum(r["acceptParagraphs"] for r in rt) / n,
         sum(r["rejectParagraphs"] for r in rt), 100 * sum(r["rejectParagraphs"] for r in rt) / n,
         statistics.median(r["revisions"] for r in rt)))
-print("\nAccept and reject rates are over all pairs (a pair with no output counts as a miss); paragraph sequences compared through OneOffice's accept-all and reject-all.")
+print("\nAccept and reject rates are over all pairs (a pair with no output counts as a miss); paragraph sequences compared through OneDocument's accept-all and reject-all.")
 for scope, title in (("all", "All pairs (a pair without output scores as an empty result)"), ("completed", "Completed pairs only")):
     print("\n## %s\n" % title)
     print("| Row | " + " | ".join(tools) + " |")

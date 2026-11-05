@@ -5,7 +5,7 @@ Rows for OneDiff on `docx-v1` (the 1,050 evaluation pairs, rendered to Word file
 - **(a) Engine on the Word source:** the `Comparison` made from the Word files, scored against the gold blocks (105,585 of 105,585 content nodes map to a gold block; `score --body-only`).
 - **(b) Tracked output:** the DOCX redline we write, read back by the same tracked-changes reader the comparators go through.
 
-Bootstrap: 10,000 resamples over the 210 base documents, seed 20261104. Each verdict is a paired bootstrap on the same resamples (`score`'s `pair`): *strictly better* when the interval of the difference excludes zero in our favour, *ceiling* when both tools sit at the best value within noise, *WORSE* otherwise. Indicative: one run, one machine (x64 Ryzen 9 7950X3D, shared with other jobs), SDK 10.0.403, runtime 10.0.14, OneOffice 0.1.0-preview.2. Comparator versions are those in docs/results/docx-v1-comparators.md.
+Bootstrap: 10,000 resamples over the 210 base documents, seed 20261104. Each verdict is a paired bootstrap on the same resamples (`score`'s `pair`): *strictly better* when the interval of the difference excludes zero in our favour, *ceiling* when both tools sit at the best value within noise, *WORSE* otherwise. Indicative: one run, one machine (x64 Ryzen 9 7950X3D, shared with other jobs), SDK 10.0.403, runtime 10.0.14, OneDocument (then named OneOffice) 0.1.0-preview.2. Comparator versions are those in docs/results/docx-v1-comparators.md.
 
 ## How fragmentation rows are read
 

@@ -1,15 +1,15 @@
 using OneDiff.Documents;
 using OneDiff.Documents.Model;
 using OneDiff.Word.Internal;
-using RecursiveAI.OneOffice;
-using RecursiveAI.OneOffice.Documents;
-using RecursiveAI.OneOffice.Formats;
-using RecursiveAI.OneOffice.IO;
+using RecursiveAI.OneDocument;
+using RecursiveAI.OneDocument.Documents;
+using RecursiveAI.OneDocument.Formats;
+using RecursiveAI.OneDocument.IO;
 
 namespace OneDiff.Word;
 
 /// <summary>
-/// Reads a Word document (DOCX, DOCM, DOTX, DOTM) into the flowing compare model through the OneOffice document hub. The input is
+/// Reads a Word document (DOCX, DOCM, DOTX, DOTM) into the flowing compare model through the OneDocument document hub. The input is
 /// recognized by its content (a package whose main part is a word-processing document), never by file name.
 /// </summary>
 /// <remarks>

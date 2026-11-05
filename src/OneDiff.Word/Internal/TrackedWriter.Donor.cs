@@ -1,7 +1,7 @@
 using System.Globalization;
 using OneDiff.Documents.Model;
 using OneDiff.Documents.Pipeline;
-using RecursiveAI.OneOffice.Markup;
+using RecursiveAI.OneDocument.Markup;
 
 namespace OneDiff.Word.Internal;
 

@@ -1,14 +1,14 @@
 using System.Globalization;
 using System.Text;
-using RecursiveAI.OneOffice;
-using RecursiveAI.OneOffice.Documents;
-using RecursiveAI.OneOffice.Documents.Numbering;
-using RecursiveAI.OneOffice.Documents.Styles;
-using RecursiveAI.OneOffice.Packaging;
+using RecursiveAI.OneDocument;
+using RecursiveAI.OneDocument.Documents;
+using RecursiveAI.OneDocument.Documents.Numbering;
+using RecursiveAI.OneDocument.Documents.Styles;
+using RecursiveAI.OneDocument.Packaging;
 
 namespace OneDiff.Word.Tests;
 
-// ---- a small description of a document, written here and rendered through OneOffice's authoring API ---------------------------------------
+// ---- a small description of a document, written here and rendered through OneDocument's authoring API ---------------------------------------
 
 internal abstract record Inl;
 
@@ -254,11 +254,11 @@ internal static class DocFactory
             }
         }
 
-        RecursiveAI.OneOffice.Markup.MarkupNode body = doc.Body.Container.Node;
-        RecursiveAI.OneOffice.Markup.MarkupNode sect = doc.Body.SectionProperties!.Value.Node;
-        for (RecursiveAI.OneOffice.Markup.MarkupNode c = body.FirstChild; !c.IsNull; c = c.NextSibling)
+        RecursiveAI.OneDocument.Markup.MarkupNode body = doc.Body.Container.Node;
+        RecursiveAI.OneDocument.Markup.MarkupNode sect = doc.Body.SectionProperties!.Value.Node;
+        for (RecursiveAI.OneDocument.Markup.MarkupNode c = body.FirstChild; !c.IsNull; c = c.NextSibling)
         {
-            if (c.Kind == RecursiveAI.OneOffice.Markup.MarkupNodeKind.Element && c.LocalNameString == "p")
+            if (c.Kind == RecursiveAI.OneDocument.Markup.MarkupNodeKind.Element && c.LocalNameString == "p")
             {
                 c.Remove();
                 break;

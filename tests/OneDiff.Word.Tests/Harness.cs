@@ -1,8 +1,8 @@
 using System.Globalization;
 using OneDiff.Documents.Model;
-using RecursiveAI.OneOffice.Documents;
-using RecursiveAI.OneOffice.IO;
-using RecursiveAI.OneOffice.Markup;
+using RecursiveAI.OneDocument.Documents;
+using RecursiveAI.OneDocument.IO;
+using RecursiveAI.OneDocument.Markup;
 using OneDiff.Word.Internal;
 
 namespace OneDiff.Word.Tests;

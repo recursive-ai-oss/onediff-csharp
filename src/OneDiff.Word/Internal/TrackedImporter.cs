@@ -1,12 +1,12 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
-using RecursiveAI.OneOffice.Documents;
-using RecursiveAI.OneOffice.Documents.Notes;
-using RecursiveAI.OneOffice.Documents.Styles;
-using RecursiveAI.OneOffice.Documents.Numbering;
-using RecursiveAI.OneOffice.Markup;
-using RecursiveAI.OneOffice.Packaging;
+using RecursiveAI.OneDocument.Documents;
+using RecursiveAI.OneDocument.Documents.Notes;
+using RecursiveAI.OneDocument.Documents.Styles;
+using RecursiveAI.OneDocument.Documents.Numbering;
+using RecursiveAI.OneDocument.Markup;
+using RecursiveAI.OneDocument.Packaging;
 
 namespace OneDiff.Word.Internal;
 

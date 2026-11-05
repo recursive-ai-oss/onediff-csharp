@@ -88,7 +88,7 @@ public class ReconstructedDocxTests
                 List<string> problems = ReconstructionGate.Run(cmp, on, out byte[] bytes, out DocxRedlineResult result, detail: true);
                 Assert.True(problems.Count == 0, $"{on} {settings.Name}: " + string.Join("\n", problems.Take(6)) + "\nnotcarried: " + string.Join(",", ReconstructionGate.Describe(result)));
                 Assert.True(bytes.Length > 1000);
-                using RecursiveAI.OneOffice.Documents.Document d = RecursiveAI.OneOffice.Documents.Document.Open(RecursiveAI.OneOffice.IO.ByteSource.FromMemory(bytes));
+                using RecursiveAI.OneDocument.Documents.Document d = RecursiveAI.OneDocument.Documents.Document.Open(RecursiveAI.OneDocument.IO.ByteSource.FromMemory(bytes));
                 Assert.True(d.Revisions.Revisions.Count >= 4, "revisions: " + d.Revisions.Revisions.Count);
             }
         }
