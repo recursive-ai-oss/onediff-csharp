@@ -90,8 +90,8 @@ public sealed class DocxRedline : RedlineForm
         ArgumentException.ThrowIfNullOrEmpty(Author);
         bool onNew = BuildOn == WordBuildOn.New;
         CancellationToken ct = cancellationToken;
-        (CompareDocument newModel, ReadOnlyMemory<byte> newBytes, WordRevisionMode newMode) = Prepare(comparison.New, ct);
-        (CompareDocument oldModel, ReadOnlyMemory<byte> oldBytes, WordRevisionMode oldMode) = Prepare(comparison.Old, ct);
+        (CompareDocument newModel, ReadOnlyMemory<byte> newBytes, WordRevisionMode newMode) = Prepare(comparison.New, comparison.Settings, ct);
+        (CompareDocument oldModel, ReadOnlyMemory<byte> oldBytes, WordRevisionMode oldMode) = Prepare(comparison.Old, comparison.Settings, ct);
         using var writer = new TrackedWriter(
             comparison.Alignment,
             comparison.Changes,
@@ -108,14 +108,14 @@ public sealed class DocxRedline : RedlineForm
     /// The document and package a side is written on: a Word document as read, any other flowing document (a PDF, a scan, plain text)
     /// reconstructed as a DOCX and re-anchored (see docs/word.md).
     /// </summary>
-    private (CompareDocument Model, ReadOnlyMemory<byte> Bytes, WordRevisionMode Mode) Prepare(CompareDocument document, CancellationToken cancellationToken)
+    private (CompareDocument Model, ReadOnlyMemory<byte> Bytes, WordRevisionMode Mode) Prepare(CompareDocument document, CompareSettings settings, CancellationToken cancellationToken)
     {
         if (WordOrigins.TryGet(document, out WordOrigin origin))
         {
             return (document, origin.Bytes, origin.Revisions);
         }
 
-        ReconstructedDocx rebuilt = Reconstruction.Build(document, document.SourceFormat.Length > 0 ? document.SourceFormat : "a non-Word document", ReconstructionNote, cancellationToken);
+        ReconstructedDocx rebuilt = Reconstruction.Build(document, settings, document.SourceFormat.Length > 0 ? document.SourceFormat : "a non-Word document", ReconstructionNote, cancellationToken);
         return (rebuilt.Model, rebuilt.Bytes, WordRevisionMode.Accepted);
     }
 

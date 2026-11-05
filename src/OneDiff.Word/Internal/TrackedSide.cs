@@ -63,6 +63,30 @@ internal sealed class TrackedSide : IDisposable
 
     public CompareDocument Model { get; }
 
+    /// <summary>Whether <paramref name="node"/> belongs to one of this document's parts.</summary>
+    public bool Owns(MarkupNode node) => parts.Values.Any(p => ReferenceEquals(p, node.Document));
+
+    private readonly Dictionary<string, string> numberingKeys = [];
+
+    /// <summary>What a numbering number of this document stands for (its definition without ids); the number itself when it names nothing.</summary>
+    public string NumberingKey(string numId)
+    {
+        if (numberingKeys.TryGetValue(numId, out string? known))
+        {
+            return known;
+        }
+
+        string key = numId;
+        if (long.TryParse(numId, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out long n) && n != 0
+            && Doc.Numbering.FindInstance(n) is { } inst && Doc.Numbering.FindAbstract(inst.AbstractNumberingId) is { } abs)
+        {
+            key = TrackedImporter.NumberingSignature(abs.Markup.Node, inst.Markup.Node);
+        }
+
+        numberingKeys[numId] = key;
+        return key;
+    }
+
     public Document Doc { get; }
 
     public RevisionAuthor Marker { get; }

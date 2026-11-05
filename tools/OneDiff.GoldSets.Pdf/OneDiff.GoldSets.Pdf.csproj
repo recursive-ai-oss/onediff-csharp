@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/OneDiff.Pdf/OneDiff.Pdf.csproj" />
+    <ProjectReference Include="../../src/OneDiff.Word/OneDiff.Word.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1039,7 +1039,12 @@ internal sealed partial class TrackedWriter : IDisposable
         return sb.ToString();
     }
 
-    private static string Signature(MarkupNode props, string[] keep)
+    /// <summary>
+    /// What identifies a set of properties for comparison: the XML of each property, and for a list (<c>w:numPr</c>) also what its numbering
+    /// number stands for in its own package, because two packages number their lists independently and the same number can mean a
+    /// different label (two documents that were each built with their own list definitions).
+    /// </summary>
+    private string Signature(MarkupNode props, string[] keep)
     {
         if (props.IsNull)
         {
@@ -1055,6 +1060,10 @@ internal sealed partial class TrackedWriter : IDisposable
             }
 
             sb.Append(StripNamespaces(c.OuterXml));
+            if (Wx.Is(c, "numPr") && Wx.Attr(Wx.Child(c, "numId"), "val") is { } numId)
+            {
+                sb.Append('#').Append((b.Owns(props) ? b : d).NumberingKey(numId));
+            }
         }
 
         return sb.ToString();

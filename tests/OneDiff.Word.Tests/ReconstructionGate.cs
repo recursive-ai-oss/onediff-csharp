@@ -18,19 +18,19 @@ internal static class ReconstructionGate
     public sealed record Side(CompareDocument Document, byte[] Bytes, bool Reconstructed);
 
     /// <summary>The side as the writer sees it: a Word document as is, anything else rebuilt (the same rebuild the writer makes).</summary>
-    public static Side Prepare(CompareDocument model, bool note = true)
+    public static Side Prepare(CompareDocument model, CompareSettings settings, bool note = true)
     {
         if (WordOrigins.TryGet(model, out WordOrigin o))
         {
             return new Side(model, o.Bytes.ToArray(), false);
         }
 
-        ReconstructedDocx r = Reconstruction.Build(model, model.SourceFormat, note);
+        ReconstructedDocx r = Reconstruction.Build(model, settings, model.SourceFormat, note);
         return new Side(Harness.Read(r.Bytes, model.Name + ".docx"), r.Bytes, true);
     }
 
     /// <summary>Whether every paragraph of the package, read back, carries the model's character formatting and list label.</summary>
-    public static List<string> Fidelity(CompareDocument model, byte[] package)
+    public static List<string> Fidelity(CompareDocument model, byte[] package, CompareSettings settings)
     {
         var problems = new List<string>();
         CompareDocument read = Harness.Read(package);
@@ -46,13 +46,13 @@ internal static class ReconstructionGate
         for (int i = 0; i < mine.Count; i++)
         {
             Node a = mine[i], b = theirs[i];
-            if (a.Text != b.Text)
+            if (Reconstruction.Project(a, settings).Text != Reconstruction.Project(b, settings).Text)
             {
                 problems.Add($"text of paragraph {i}");
                 continue;
             }
 
-            string[] fa = PerChar(a), fb = PerChar(b);
+            string[] fa = PerChar(a, settings), fb = PerChar(b, settings);
             for (int k = 0; k < fa.Length; k++)
             {
                 // A character the model gives no formatting (the space that stands for a line break) reads back with the document's defaults.
@@ -98,9 +98,11 @@ internal static class ReconstructionGate
         }
     }
 
-    private static string[] PerChar(Node n)
+    /// <summary>The carried formatting of every character of the projected text.</summary>
+    private static string[] PerChar(Node n, CompareSettings settings)
     {
-        var res = new string[n.Text.Length];
+        (string text, int[] map) = Reconstruction.Project(n, settings);
+        var res = new string[text.Length];
         Array.Fill(res, "");
         foreach (FormatRun r in n.Runs)
         {
@@ -113,7 +115,7 @@ internal static class ReconstructionGate
                 }
             }
 
-            for (int i = r.Start; i < r.End; i++)
+            for (int i = map[r.Start]; i < map[r.End]; i++)
             {
                 res[i] = sb.ToString();
             }
@@ -125,16 +127,17 @@ internal static class ReconstructionGate
     /// <summary>Writes the comparison as a DOCX and runs every check; the problems found (empty when all hold).</summary>
     public static List<string> Run(Comparison cmp, WordBuildOn on, out byte[] output, out DocxRedlineResult result, bool detail = false)
     {
+        detail |= Environment.GetEnvironmentVariable("ONEDIFF_PDFDOCX_DETAIL") == "1";
         using var ms = new MemoryStream();
         result = new DocxRedline { BuildOn = on }.Create(cmp, ms);
         output = ms.ToArray();
-        Side o = Prepare(cmp.Old), n = Prepare(cmp.New);
+        Side o = Prepare(cmp.Old, cmp.Settings), n = Prepare(cmp.New, cmp.Settings);
         var problems = new List<string>();
         foreach (Side s in new[] { o, n })
         {
             if (s.Reconstructed)
             {
-                problems.AddRange(Fidelity(s == o ? cmp.Old : cmp.New, s.Bytes).Select(x => "fidelity: " + x));
+                problems.AddRange(Fidelity(s == o ? cmp.Old : cmp.New, s.Bytes, cmp.Settings).Select(x => "fidelity: " + x));
             }
         }
 

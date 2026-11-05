@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Text;
+using OneDiff.Documents;
 using OneDiff.Documents.Model;
 using RecursiveAI.OneOffice;
 using RecursiveAI.OneOffice.Documents;
@@ -20,10 +21,13 @@ internal sealed record ReconstructedDocx(byte[] Bytes, CompareDocument Model);
 /// invented: no page layout, no styles, no pictures. The package says it is reconstructed (core properties and a note in the header).
 /// </summary>
 /// <remarks>
-/// The text written is the model's normalized text, so that reading the package back gives the same text for every node (checked, and
-/// a difference is a failure). The reconstruction keeps the model's node ids, because the alignment and the changes of a comparison are
-/// keyed on them: <see cref="Build"/> reads the package back through the Word source and copies each node's anchor and segments onto the
-/// node of the same id.
+/// The text written is the text the comparison projected (the node's text with every fold whose category the settings do not hide undone;
+/// see <see cref="Project"/>), because the offsets of a comparison's edits are in that text. Under the default settings this is the
+/// normalized text, so a PDF paragraph is one reflowable paragraph; under settings that show line breaks and hyphenation (Strict) the
+/// line breaks and hyphens of the PDF are written, because they are then differences like any other. Reading the package back gives the
+/// same projected text for every node (checked, and a difference is a failure). The reconstruction keeps the model's node ids, because the
+/// alignment and the changes of a comparison are keyed on them: <see cref="Build"/> reads the package back through the Word source and
+/// gives each node of the model the content (text, folds, anchor, segments) of the node read back.
 /// </remarks>
 internal static class Reconstruction
 {
@@ -39,12 +43,13 @@ internal static class Reconstruction
 
     /// <summary>Rebuilds <paramref name="model"/> as a DOCX.</summary>
     /// <param name="model">A flowing compare model.</param>
+    /// <param name="settings">The settings of the comparison: they decide which folds are written as the original characters.</param>
     /// <param name="sourceFormat">What it was reconstructed from, for the labels (for example <c>application/pdf</c>).</param>
     /// <param name="note">Whether to write the visible note into the header.</param>
     /// <param name="cancellationToken">Observed per block.</param>
     /// <exception cref="NotSupportedException">The model holds nodes a reconstruction cannot write (children of paragraphs such as fields or pictures, notes, comments, text boxes, properties).</exception>
     /// <exception cref="InvalidOperationException">The package read back does not match the model (a defect, reported with the first mismatch).</exception>
-    public static ReconstructedDocx Build(CompareDocument model, string sourceFormat, bool note, CancellationToken cancellationToken = default)
+    public static ReconstructedDocx Build(CompareDocument model, CompareSettings settings, string sourceFormat, bool note, CancellationToken cancellationToken = default)
     {
         if (model.Kind != DocumentKind.Flowing)
         {
@@ -98,10 +103,16 @@ internal static class Reconstruction
             }
         }
 
+        if (labels.Count == 0)
+        {
+            // A package always has a numbering part, so that list definitions of the other document can be added to it as revisions.
+            doc.Numbering.AddInstance(doc.Numbering.AddAbstractNumbering([new NumberingDefinitions.LevelSpec("none", "")]));
+        }
+
         var sb = new StringBuilder();
         foreach (int id in body)
         {
-            Block(model, id, labels, sb, cancellationToken);
+            Block(model, id, labels, settings, sb, cancellationToken);
         }
 
         RecursiveAI.OneOffice.Markup.MarkupNode bodyNode = doc.Body.Container.Node;
@@ -122,10 +133,10 @@ internal static class Reconstruction
 
         // One header and one footer (the default ones); a model with more than one of a kind keeps the first in the package and the
         // others have no place in it (their nodes get no anchor, and the writer lists them as not carried).
-        Story(doc, HeaderFooterKind.Header, headers.Count > 0 ? headers[0] : -1, model, labels, note ? NoteText : null, cancellationToken);
+        Story(doc, HeaderFooterKind.Header, headers.Count > 0 ? headers[0] : -1, model, labels, settings, note ? NoteText : null, cancellationToken);
         if (footers.Count > 0)
         {
-            Story(doc, HeaderFooterKind.Footer, footers[0], model, labels, null, cancellationToken);
+            Story(doc, HeaderFooterKind.Footer, footers[0], model, labels, settings, null, cancellationToken);
         }
 
         doc.Properties.Core.Description = "Reconstructed by OneDiff from " + sourceFormat + "; not a Word file originally.";
@@ -135,19 +146,68 @@ internal static class Reconstruction
         byte[] bytes = ms.ToArray();
 
         CompareDocument read = new WordDocumentSource().Read(DocumentInput.FromBytes(bytes, model.Name + ".docx"), cancellationToken);
-        return new ReconstructedDocx(bytes, Graft(model, read, body, headers, footers, bodySections, furnitureSections));
+        return new ReconstructedDocx(bytes, Graft(model, read, settings, body, headers, footers, bodySections, furnitureSections));
+    }
+
+    /// <summary>
+    /// The text a comparison under <paramref name="settings"/> works on: the node's text with every fold whose category is not hidden
+    /// undone (the fold's original characters put back). <c>Map[i]</c> is where position <c>i</c> of the node text lands in it; a position
+    /// inside an undone fold lands at the start of the characters that replace it.
+    /// </summary>
+    public static (string Text, int[] Map) Project(Node n, CompareSettings settings)
+    {
+        string text = n.Text;
+        var map = new int[text.Length + 1];
+        if (n.Folds.IsDefaultOrEmpty)
+        {
+            for (int i = 0; i < map.Length; i++)
+            {
+                map[i] = i;
+            }
+
+            return (text, map);
+        }
+
+        var sb = new StringBuilder(text.Length + 16);
+        int pos = 0;
+        foreach (NormalizationFold f in n.Folds)
+        {
+            for (int i = pos; i < f.Start; i++)
+            {
+                map[i] = sb.Length + (i - pos);
+            }
+
+            sb.Append(text, pos, f.Start - pos);
+            bool stays = settings.Hidden.Contains(f.Category);
+            for (int k = 0; k < f.Length; k++)
+            {
+                map[f.Start + k] = sb.Length + (stays ? k : 0);
+            }
+
+            sb.Append(stays ? text.AsSpan(f.Start, f.Length) : f.Original.AsSpan());
+            pos = f.Start + f.Length;
+        }
+
+        for (int i = pos; i < text.Length; i++)
+        {
+            map[i] = sb.Length + (i - pos);
+        }
+
+        sb.Append(text, pos, text.Length - pos);
+        map[text.Length] = sb.Length;
+        return (sb.ToString(), map);
     }
 
     // ------------------------------------------------------------------------------------------------------------------ writing
 
-    private static void Story(Document doc, HeaderFooterKind kind, int node, CompareDocument model, SortedDictionary<string, long> labels, string? note, CancellationToken ct)
+    private static void Story(Document doc, HeaderFooterKind kind, int node, CompareDocument model, SortedDictionary<string, long> labels, CompareSettings settings, string? note, CancellationToken ct)
     {
         var sb = new StringBuilder();
         if (node >= 0)
         {
             foreach (int c in model.ChildrenOf(node))
             {
-                Block(model, c, labels, sb, ct);
+                Block(model, c, labels, settings, sb, ct);
             }
         }
 
@@ -178,7 +238,7 @@ internal static class Reconstruction
         container.AppendXml(Encoding.UTF8.GetBytes(sb.ToString()));
     }
 
-    private static void Block(CompareDocument m, int id, SortedDictionary<string, long> labels, StringBuilder sb, CancellationToken ct)
+    private static void Block(CompareDocument m, int id, SortedDictionary<string, long> labels, CompareSettings settings, StringBuilder sb, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
         Node n = m[id];
@@ -190,7 +250,7 @@ internal static class Reconstruction
                     throw new NotSupportedException($"a {n.Kind} with child nodes (fields, pictures, notes) cannot be reconstructed");
                 }
 
-                Paragraph(n, labels, sb);
+                Paragraph(n, labels, settings, sb);
                 break;
             case NodeKind.Table:
                 {
@@ -222,7 +282,7 @@ internal static class Reconstruction
 
                             foreach (int x in inner)
                             {
-                                Block(m, x, labels, sb, ct);
+                                Block(m, x, labels, settings, sb, ct);
                             }
 
                             sb.Append("</w:tc>");
@@ -240,7 +300,7 @@ internal static class Reconstruction
         }
     }
 
-    private static void Paragraph(Node n, SortedDictionary<string, long> labels, StringBuilder sb)
+    private static void Paragraph(Node n, SortedDictionary<string, long> labels, CompareSettings settings, StringBuilder sb)
     {
         sb.Append("<w:p").Append(Decl).Append('>');
         if (n.Kind == NodeKind.ListItem && n.Attributes.Get(FormatKeys.ListLabel) is { Length: > 0 } label)
@@ -248,17 +308,23 @@ internal static class Reconstruction
             sb.Append("<w:pPr><w:numPr><w:ilvl w:val=\"0\"/><w:numId w:val=\"").Append(labels[label].ToString(CultureInfo.InvariantCulture)).Append("\"/></w:numPr></w:pPr>");
         }
 
-        string text = n.Text;
+        (string text, int[] map) = Project(n, settings);
         int pos = 0;
         foreach (FormatRun run in n.Runs)
         {
-            if (run.Start > pos)
+            int start = map[run.Start], end = map[run.End];
+            if (end <= start || start < pos)
             {
-                Run(sb, text.AsSpan(pos, run.Start - pos), null);
+                continue;
             }
 
-            Run(sb, text.AsSpan(run.Start, run.Length), run.Format);
-            pos = run.End;
+            if (start > pos)
+            {
+                Run(sb, text.AsSpan(pos, start - pos), null);
+            }
+
+            Run(sb, text.AsSpan(start, end - start), run.Format);
+            pos = end;
         }
 
         if (pos < text.Length)
@@ -428,7 +494,7 @@ internal static class Reconstruction
 
     // ------------------------------------------------------------------------------------------------------------------ re-anchoring
 
-    private static CompareDocument Graft(CompareDocument m, CompareDocument read, List<int> body, List<int> headers, List<int> footers, List<int> bodySections, List<int> furnitureSections)
+    private static CompareDocument Graft(CompareDocument m, CompareDocument read, CompareSettings settings, List<int> body, List<int> headers, List<int> footers, List<int> bodySections, List<int> furnitureSections)
     {
         var map = new Dictionary<int, int>(m.Count);
         int rs = read.Roots.FirstOrDefault(r => read[r].Kind == NodeKind.Section, -1);
@@ -460,7 +526,7 @@ internal static class Reconstruction
             map[bodySections[0]] = rs;
         }
 
-        Pair(m, read, body, rBody, map);
+        Pair(m, read, settings, body, rBody, map);
         if (headers.Count > 0)
         {
             if (rHeader < 0)
@@ -469,7 +535,7 @@ internal static class Reconstruction
             }
 
             map[headers[0]] = rHeader;
-            Pair(m, read, [.. m.ChildrenOf(headers[0])], [.. read.ChildrenOf(rHeader)], map, allowTrailing: true);
+            Pair(m, read, settings, [.. m.ChildrenOf(headers[0])], [.. read.ChildrenOf(rHeader)], map, allowTrailing: true);
         }
 
         if (footers.Count > 0)
@@ -480,7 +546,7 @@ internal static class Reconstruction
             }
 
             map[footers[0]] = rFooter;
-            Pair(m, read, [.. m.ChildrenOf(footers[0])], [.. read.ChildrenOf(rFooter)], map, allowTrailing: true);
+            Pair(m, read, settings, [.. m.ChildrenOf(footers[0])], [.. read.ChildrenOf(rFooter)], map, allowTrailing: true);
         }
 
         var builder = new CompareDocumentBuilder(m.Kind).WithMetadata(m.Name, m.SourceHash, m.SourceFormat);
@@ -494,15 +560,11 @@ internal static class Reconstruction
             }
 
             Node? r = map.TryGetValue(n.Id, out int rid) ? read[rid] : null;
-            var content = new NodeContent
-            {
-                Text = n.Text,
-                Runs = n.Runs,
-                Attributes = n.Attributes,
-                Anchor = r?.Anchor ?? Anchor.None,
-                Segments = r?.Segments ?? [],
-                Folds = r is null ? [] : r.Folds,
-            };
+            // The node read back has the text, folds, segments and anchor that fit the package; the model's own (a PDF's quadrilaterals,
+            // its line-break folds) do not exist in it. Nodes with no counterpart keep their text and lose their anchor.
+            NodeContent content = r is null
+                ? new NodeContent { Text = n.Text, Runs = n.Runs, Attributes = n.Attributes, Folds = n.Folds }
+                : new NodeContent { Text = r.Text, Runs = r.Runs, Attributes = r.Attributes, Anchor = r.Anchor, Segments = r.Segments, Folds = r.Folds };
             builder.Begin(n.Kind, content);
             open.Push(n.Id);
         }
@@ -522,7 +584,7 @@ internal static class Reconstruction
     }
 
     /// <summary>Pairs the model's blocks with the blocks read back, in order, kind by kind, requiring the same text.</summary>
-    private static void Pair(CompareDocument m, CompareDocument read, List<int> mine, List<int> theirs, Dictionary<int, int> map, bool allowTrailing = false)
+    private static void Pair(CompareDocument m, CompareDocument read, CompareSettings settings, List<int> mine, List<int> theirs, Dictionary<int, int> map, bool allowTrailing = false)
     {
         if (mine.Count > theirs.Count || (!allowTrailing && mine.Count != theirs.Count))
         {
@@ -540,9 +602,10 @@ internal static class Reconstruction
 
             if (para)
             {
-                if (!string.Equals(a.Text, b.Text, StringComparison.Ordinal))
+                string want = Project(a, settings).Text, got = Project(b, settings).Text;
+                if (!string.Equals(want, got, StringComparison.Ordinal))
                 {
-                    throw new InvalidOperationException($"node {a.Id}: the package reads back as '{Clip(b.Text)}' where the model has '{Clip(a.Text)}'");
+                    throw new InvalidOperationException($"node {a.Id}: the package reads back as '{Clip(got)}' where the model has '{Clip(want)}'");
                 }
 
                 if (a.Kind == NodeKind.ListItem && !string.Equals(a.Attributes.Get(FormatKeys.ListLabel), b.Attributes.Get(FormatKeys.ListLabel), StringComparison.Ordinal))
@@ -557,7 +620,7 @@ internal static class Reconstruction
                 ImmutableArray<int> ac = m.ChildrenOf(a.Id);
                 var bc = new List<int>(read.ChildrenOf(b.Id));
                 // A cell with no blocks is written with one empty paragraph, because a cell needs one.
-                Pair(m, read, [.. ac], bc, map, allowTrailing: a.Kind == NodeKind.TableCell && ac.IsDefaultOrEmpty);
+                Pair(m, read, settings, [.. ac], bc, map, allowTrailing: a.Kind == NodeKind.TableCell && ac.IsDefaultOrEmpty);
             }
         }
     }

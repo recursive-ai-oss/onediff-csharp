@@ -444,7 +444,7 @@ internal sealed class TrackedImporter
     private static string SetAttr(string xml, string attr, string oldValue, string newValue) =>
         xml.Replace(attr + "=\"" + oldValue + "\"", attr + "=\"" + newValue + "\"", StringComparison.Ordinal);
 
-    private static string NumberingSignature(MarkupNode abs, MarkupNode inst)
+    internal static string NumberingSignature(MarkupNode abs, MarkupNode inst)
     {
         string a = Strip(abs.OuterXml, ["abstractNumId", "nsid", "tmpl"]);
         string i = Strip(inst.OuterXml, ["numId", "val"]);

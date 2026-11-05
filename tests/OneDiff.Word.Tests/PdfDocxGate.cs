@@ -129,6 +129,10 @@ public class PdfDocxGate
 
                 line.Append(' ').Append(settings.Name).Append('/').Append(on).Append('=').Append(Convert.ToHexStringLower(SHA256.HashData(bytes))[..16])
                     .Append(":nc").Append(result.NotCarried.Length);
+                foreach (IGrouping<string, WordNotCarried> g in result.NotCarried.GroupBy(x => x.Category).OrderBy(g => g.Key, StringComparer.Ordinal))
+                {
+                    line.Append('[').Append(g.Key).Append('x').Append(g.Count()).Append(']');
+                }
             }
         }
 
