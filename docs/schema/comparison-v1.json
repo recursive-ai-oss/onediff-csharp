@@ -287,6 +287,14 @@
           "const": false,
           "description": "Optional. Written only when the change is not substantive (formatting, list labels and the references they caused, white space and typography, attributes); a reader treats a missing member as true."
         },
+        "ocrConfidence": {
+          "type": "number", "minimum": 0, "maximum": 1,
+          "description": "Optional. Written when a word the change's edits touch was read by an OCR source: the lowest confidence of those words on either side. See docs/ocr.md."
+        },
+        "possibleOcrError": {
+          "const": true,
+          "description": "Optional. Written only when ocrConfidence is below settings.ocrConfidenceThreshold: the difference may be a recognition error. The change is shown like any other."
+        },
         "properties": { "$ref": "#/$defs/format" }
       }
     },
@@ -326,6 +334,7 @@
         "collapseCascades": { "type": "boolean" },
         "typedChanges": { "type": "boolean" },
         "seed": { "type": "integer", "minimum": 0 },
+        "ocrConfidenceThreshold": { "type": "number", "exclusiveMinimum": 0, "maximum": 1, "description": "Optional. Written only when it differs from the default 0.95." },
         "style": {
           "type": "object",
           "required": ["name", "insertion", "deletion", "moveFrom", "moveTo", "formatting", "changeBars", "changeBarColor", "coverPage", "footer", "typeTags"],

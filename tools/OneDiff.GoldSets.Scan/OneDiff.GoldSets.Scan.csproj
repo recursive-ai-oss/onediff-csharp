@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Builds the scanned-page gold set from rendered pairs and runs the scan gates. Tooling only: nothing here ships. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>$(LibName).GoldSets.Scan</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/OneDiff.Ocr/OneDiff.Ocr.csproj" />
+  </ItemGroup>
+
+</Project>

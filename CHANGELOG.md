@@ -37,6 +37,11 @@ The first release on nuget.org: `RecursiveAI.OneDiff`, `RecursiveAI.OneDiff.Docu
 - `RecursiveAI.OneDiff.Word` (DOCX source and tracked-changes writer) and `RecursiveAI.OneDiff.Nlp` (OneNLP value recognizer) are in the repository but not published, because they depend on previews of OneOffice and OneNLP that are not on nuget.org. Change semantics, combine, chains, the change report and the recognizer seam live in `RecursiveAI.OneDiff.Documents` and are in this release.
 - Scans, spreadsheets, slides, the model and the OneOffice rendering package are not built yet.
 
+- `RecursiveAI.OneDiff.Ocr`: `OcrDocumentSource` reads scans into the flowing compare model through the local OCR engine of `RecursiveAI.OneOcr`: images (PNG, JPEG, TIFF, recognized by content) and PDFs whose pages carry no text of their own (`OcrDocumentSource.IsScannedPdf`). Paragraphs, list items (clause numbers included), and running headers and footers (found by their repetition across pages) become nodes whose words are anchored by `AnchorKind.OcrWords`: the page quadrilateral in upright page space and the engine's confidence. `OcrSourceOptions` carries the engine, resolution, limits and layout switches. `OcrRedline.Register()` registers the PDF and scan sources and the on-page markup form; a scan is marked on its own pages (an image on a PDF page made from it) by `PdfRedline`. See docs/ocr.md.
+- `RecursiveAI.OneDiff.Documents`: possible OCR errors. `Change.OcrConfidence` is the lowest confidence of the recognized words a change's edits touch, and `Change.PossibleOcrError` is true when it is below `CompareSettings.OcrConfidenceThreshold` (default 0.95, chosen on a development scan set). The comparison JSON carries `ocrConfidence` and `possibleOcrError` on changes and `ocrConfidenceThreshold` in the settings when it differs from the default; all three are optional additions to schema version 1.
+- Gold sets: scan-v1, the Latin-script pairs of the digital gold set scanned under seeded degradations (`tools/OneDiff.GoldSets.Scan`), with exact gates, noise and flag rows and an indicative cost row. See docs/results/scan-v1-eval.md.
+- `RecursiveAI.OneDiff.Pdf`: the markup writer places marks on `AnchorKind.OcrWords` anchors as it does on glyph quadrilaterals.
+
 ## [0.1.0-preview.1]
 
 The first preview. Public API may change before 1.0.

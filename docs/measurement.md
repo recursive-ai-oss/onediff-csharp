@@ -196,6 +196,9 @@ The combine set is built by `OneDiff.GoldSets generate-combine --out DIR` (seed 
 
 **Gates.** The seeded property sweeps are the tests `RandomReviewersAlwaysVerify` (1 to 4 reviewers per random document tree, with shared mutations replayed from one stream; `ONEDIFF_COMBINE_CASES`, `ONEDIFF_COMBINE_SEED`) and `RandomChainsAlwaysVerify` (3 to 5 steps; `ONEDIFF_CHAIN_CASES`, `ONEDIFF_CHAIN_SEED`). The cross-machine digest is `digest-combine --data DIR --count 20`: it hashes the combination JSON and report page of the first 20 cases, twice. Timing is `time-combine`: a combine of 4 reviewers on a 100-page synthetic contract. Results: `results/combine-v1-eval.md`.
 
+## Scan gold set
+
+scan-v1 is the digital gold set's Latin-script eval pairs scanned under seeded degradations; `tools/OneDiff.GoldSets.Scan` builds it (`build`, `manifest`), runs the exact gates (`gate`: Verify, fallback, JSON round trip, marks re-read on both sides, determinism, a digest for cross-platform comparison) and times the cost (`time`). Rows come from the digital scorer with `--fuzzy-blocks` (recognized text is matched to the gold blocks by similarity and positions carry over by a page-wide character alignment) plus `noise.changes.share`, `noise.changes.per10kchars` and `ocr.flag.P/R/share`. Method in `ocr.md`, results in `results/scan-v1-eval.md`.
 ## Budgets
 
 `bench/run-budgets.sh OUT` times the document budgets with the machine record (`bench/record-run.sh`: CPU, cores, instruction-set flags, load before, during and after). Each part runs in its own process with `DOTNET_PROCESSOR_COUNT=4`, one untimed warm-up and three timed repetitions, and the table reports the median:
