@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recursiveai.org/onediff/schema/combination-v1.json",
+  "title": "OneDiff combination, version 1",
+  "description": "Reviewers' copies of one original, combined: each change attributed to the reviewers who made it, identical changes merged, conflicts listed. Each reviewer's complete comparison is embedded; a combined change's content is the holder's change in comparisons[reviewer].changes[change]. Members marked optional are omitted when empty.",
+  "type": "object",
+  "required": ["schema", "version", "original", "reviewers", "verification", "changes", "conflicts", "diagnostics", "comparisons"],
+  "properties": {
+    "schema": { "const": "onediff.combination" },
+    "version": { "const": 1 },
+    "original": {
+      "type": "object",
+      "required": ["name", "hash"],
+      "properties": { "name": { "type": "string" }, "hash": { "type": "string" } }
+    },
+    "reviewers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["index", "name", "hash"],
+        "properties": { "index": { "type": "integer", "minimum": 0 }, "name": { "type": "string" }, "hash": { "type": "string" } }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "required": ["passed", "fallbackLevel", "failureCount"],
+      "properties": { "passed": { "type": "boolean" }, "fallbackLevel": { "enum": [0, 1] }, "failureCount": { "type": "integer", "minimum": 0 } }
+    },
+    "changes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "kind", "reviewers", "holders"],
+        "properties": {
+          "id": { "type": "integer", "minimum": 0 },
+          "kind": { "enum": ["insert", "delete", "replace", "move", "split", "merge", "format", "attribute"] },
+          "reviewers": { "type": "array", "items": { "type": "integer", "minimum": 0 }, "minItems": 1 },
+          "holders": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["reviewer", "change"],
+              "properties": { "reviewer": { "type": "integer", "minimum": 0 }, "change": { "type": "integer", "minimum": 0 } }
+            }
+          },
+          "editReviewers": { "type": "array", "description": "Optional. For each edit of the change, every reviewer who made that same edit.", "items": { "type": "array", "items": { "type": "integer", "minimum": 0 } } },
+          "conflict": { "type": "integer", "minimum": 0, "description": "Optional. The conflict this change is part of." }
+        }
+      }
+    },
+    "conflicts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "kind", "changes", "reviewers"],
+        "properties": {
+          "id": { "type": "integer", "minimum": 0 },
+          "kind": { "enum": ["editAndDelete", "edits", "move", "structure", "attribute", "insert"] },
+          "changes": { "type": "array", "items": { "type": "integer" }, "minItems": 2 },
+          "reviewers": { "type": "array", "items": { "type": "integer" }, "minItems": 2 }
+        }
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["severity", "code", "message"],
+        "properties": { "severity": { "enum": [0, 1, 2] }, "code": { "type": "string" }, "message": { "type": "string" } }
+      }
+    },
+    "comparisons": { "type": "array", "description": "One onediff.comparison document per reviewer, by index (comparison-v1.json).", "items": { "type": "object" } }
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recursiveai.org/onediff/schema/chain-v1.json",
+  "title": "OneDiff version chain, version 1",
+  "description": "A chain of versions v1 to vN: one complete comparison per step, and the net comparison from the first to the last with the steps that touched each net change.",
+  "type": "object",
+  "required": ["schema", "version", "versions", "steps", "net", "diagnostics"],
+  "properties": {
+    "schema": { "const": "onediff.chain" },
+    "version": { "const": 1 },
+    "versions": {
+      "type": "array",
+      "minItems": 2,
+      "items": { "type": "object", "required": ["name", "hash"], "properties": { "name": { "type": "string" }, "hash": { "type": "string" } } }
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["index", "from", "to", "comparison"],
+        "properties": { "index": { "type": "integer", "minimum": 0 }, "from": { "type": "string" }, "to": { "type": "string" }, "comparison": { "type": "object", "description": "onediff.comparison (comparison-v1.json) of version index with index + 1." } }
+      }
+    },
+    "net": {
+      "type": "object",
+      "required": ["comparison", "changeSteps"],
+      "properties": {
+        "comparison": { "type": "object", "description": "onediff.comparison of the first version with the last." },
+        "changeSteps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["change", "steps"],
+            "properties": { "change": { "type": "integer" }, "steps": { "type": "array", "items": { "type": "integer", "minimum": 0 } } }
+          }
+        }
+      }
+    },
+    "diagnostics": { "type": "array", "items": { "type": "object", "required": ["severity", "code", "message"] } }
+  }
+}
