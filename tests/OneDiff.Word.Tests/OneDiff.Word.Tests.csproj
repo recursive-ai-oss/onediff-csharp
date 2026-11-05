@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>OneDiff.Word.Tests</RootNamespace>
+    <AssemblyName>OneDiff.Word.Tests</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <NoWarn>$(NoWarn);xUnit1051</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <!-- The cross-format test reads a PDF written with OnePDF's layout engine; the library under test does not use it. -->
+    <PackageReference Include="RecursiveAI.OnePdf.Layout" />
+    <PackageReference Include="RecursiveAI.OnePdf.Fonts" />
+    <PackageReference Include="RecursiveAI.OnePdf.Hyphenation" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/OneDiff.Word/OneDiff.Word.csproj" />
+    <ProjectReference Include="../../src/OneDiff.Pdf/OneDiff.Pdf.csproj" />
+  </ItemGroup>
+
+</Project>

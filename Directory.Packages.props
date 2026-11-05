@@ -16,6 +16,7 @@
     <PackageVersion Include="RecursiveAI.OnePdf.Layout" Version="1.18.0-preview.1" />
     <PackageVersion Include="RecursiveAI.OnePdf.Fonts" Version="1.18.0-preview.1" />
     <PackageVersion Include="RecursiveAI.OnePdf.Hyphenation" Version="1.18.0-preview.1" />
+    <PackageVersion Include="RecursiveAI.OneOffice.Documents" Version="0.1.0-preview.1" />
     <PackageVersion Include="RecursiveAI.OneFont" Version="1.4.0-preview.1" />
   </ItemGroup>
 </Project>
