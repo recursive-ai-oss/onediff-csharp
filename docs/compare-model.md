@@ -37,7 +37,7 @@ Conventions for the flowing kind:
 - **Comments** and **document properties** are nodes (`Comment`, with block children; `Property`, named by `prop.name`, the value is the text). They can be hidden into the ledger.
 - Attribute keys have a prefix that says which hiding category they belong to: `run.` (character formatting), `para.`, `list.`, `section.`, `field.`. Other prefixes (`hash.`, `table.`, `prop.`, …) are content or structure and are never hidden.
 
-**Slides and grids** use the same `Node` shape. Adding them means adding `NodeKind` values (slide, shape, sheet, row, column, cell), keeping geometry, formulas (as R1C1) and number formats in `Attributes`, using `Anchor.ForCell` for cells, and choosing the matching `DocumentKind`. `Stages.Align` refuses to compare documents of different kinds. No new stage contract is needed.
+**Slides and grids** are not read by the 1.0 packages. The model is shaped for them (`DocumentKind`, `Anchor.ForCell`, attributes for geometry, R1C1 formulas and number formats) so that they can arrive as sources without a change to the stages. `Stages.Align` refuses to compare documents of different kinds.
 
 ### Anchors
 
@@ -47,7 +47,7 @@ An `Anchor` is a source location the engine copies but never interprets. The anc
 
 ### Normalization and the ledger
 
-A normalizer (`ITextNormalizer`) looks at one position of raw text and may replace the characters there. `TextNormalization.Normalize` runs them and returns the normalized text plus a `NormalizationFold` per replacement: its ledger category, its place in the normalized text, and the original characters. A node keeps both, so `Node.RawText` always reconstructs the source text. The reference `TypographicNormalizer` folds quotes, the dash family and runs of horizontal whitespace; PDF sources add `LineBreaks`, `Hyphenation` and `PageNumbers` folds in the same way.
+A normalizer (`ITextNormalizer`) looks at one position of raw text and may replace the characters there. `TextNormalization.Normalize` runs them and returns the normalized text plus a `NormalizationFold` per replacement: its ledger category, its place in the normalized text, and the original characters. A node keeps both, so `Node.RawText` always reconstructs the source text. The built-in `TypographicNormalizer` folds quotes, the dash family and runs of horizontal whitespace; PDF sources add `LineBreaks`, `Hyphenation` and `PageNumbers` folds in the same way.
 
 What the settings hide is a **projection** of the model:
 
@@ -78,15 +78,15 @@ Comparison   Stages.Verify(changeSet, ct)
 Comparison.Of(old, new, settings?, scorer?, ct)   // the five in a row
 ```
 
-| Stage | Reference implementation | Contract the next stage relies on |
+| Stage | What it does | Contract the next stage relies on |
 |---|---|---|
-| `Align` | the text core over subtree hashes of all nodes in document order (equal text, tables and sections in order; repeats pair in order), equal subtrees that moved, then text blocks: candidates from a shingle index, splits and merges from containment, ambiguous pairs judged by `IPairScorer` in batches, a global maximum-weight assignment weighing similarity, same changed stretch, matched neighbours and position; then containers (tables, rows, cells, sections, notes) by matched content and by position between matched siblings; then `Normalize` | links satisfy the rules above |
-| `DiffPairs` | per link, word-level text-core diff of the joined compared text; format-only edits for equal text with different runs; attribute edits; the ledger | for every non-hidden link, edits that replay old → new and back; `Link i` is indexed by link id |
-| `Group` | one `Change` per diff region, one per whole inserted/deleted node, one `Move` per moved link, one `Split`/`Merge` per such link, one `Attribute` per link with attribute edits; one display group per change | every inserted/deleted node and every link is explained; ids unique; groups partition the changes |
-| `Classify` | `Decision(Rule, "reference", 1.0)` on every change, no typing | none beyond `Group` |
-| `Verify` | the checks in §5, fallback, `Comparison` | — |
+| `Align` | The text core over subtree hashes of all nodes in document order, equal subtrees that moved, then text blocks: candidates from a shingle index, splits and merges from containment, ambiguous pairs judged by `IPairScorer` in batches, a global maximum-weight assignment; then containers by matched content and position; then `Normalize`. Details: [alignment.md](alignment.md) | links satisfy the rules above |
+| `DiffPairs` | Per link, a word-level diff over UAX #29 segments with semantic cleanup; format-only edits for equal text with different runs; attribute edits; the ledger. Details: [grouping.md](grouping.md) | for every non-hidden link, edits that replay old → new and back; `Links[i]` is indexed by link id |
+| `Group` | Rule-based change units (values, overlap, sentence and clause breaks, density), one `Change` per unit, whole inserted/deleted nodes, moves, splits, merges and attribute changes; display groups, with cascades and defined-term renames lifted when `CollapseCascades` is on. Details: [grouping.md](grouping.md), [semantics.md](semantics.md) | every inserted/deleted node and every link is explained; ids unique; groups partition the changes |
+| `Classify` | Change types and resolved values (when `TypedChanges` is on, through the value recognizer), `IsSubstantive`, OCR flags and the `Decision` on every change. Details: [semantics.md](semantics.md) | none beyond `Group` |
+| `Verify` | The checks in section 5, the fallback, and the `Comparison` | — |
 
-Seams: `IPairScorer` (`Score`, `ScoreBatch`) for alignment candidates, `ITextNormalizer` for sources, `IDocumentSource` for inputs. A scorer can only reweigh pairings; every pairing is verified afterwards. Recognizers (typed values) will join as a seam on `Classify`; `Change.Properties` is the slot for their results and `Change.Decision` records rule, model or user with a score.
+Seams: `IPairScorer` (`Score`, `ScoreBatch`) for alignment candidates, `ITextNormalizer` for sources, `IDocumentSource` for inputs. A scorer can only reweigh pairings; every pairing is verified afterwards. `IValueRecognizer` is the seam on `Classify` for typed values (`CompareSettings.ValueRecognizer`); `Change.Decision` records rule, model or user with a score.
 
 ### Change shapes
 
@@ -109,7 +109,7 @@ Seams: `IPairScorer` (`Score`, `ScoreBatch`) for alignment candidates, `ITextNor
 | V400–V401 | every `Match` keeps its parent and its sibling order |
 | V500 | the ledger lists every hidden difference |
 
-**Fallback** (when not strict), each step checked again: **1** regroup with the reference stages on the same alignment (drops a bad grouping or a bad in-pair diff); **2** replace every changed block as a whole (drops a bad word diff); **3** nothing aligned, so every block is deleted and inserted (drops a bad alignment). `VerificationResult.FallbackLevel` records the level, and the failures that triggered it are `Error` diagnostics (`verify.V302`, …) followed by a `verify.fallback` warning. The fallback rate is 0 on the reference pipeline's gate sets; any non-zero rate is a defect in the stage that produced the failing result.
+**Fallback** (when not strict), each step checked again: **1** regroup with the plain fallback stages on the same alignment (drops a bad grouping or a bad in-pair diff); **2** replace every changed block as a whole (drops a bad word diff); **3** nothing aligned, so every block is deleted and inserted (drops a bad alignment). `VerificationResult.FallbackLevel` records the level, and the failures that triggered it are `Error` diagnostics (`verify.V302`, …) followed by a `verify.fallback` warning. The fallback rate is expected to be 0; any non-zero rate is a defect in the stage that produced the failing result.
 
 ## 6. JSON
 
@@ -119,7 +119,7 @@ Seams: `IPairScorer` (`Score`, `ScoreBatch`) for alignment candidates, `ITextNor
 
 `PlainTextSource` reads UTF-8/UTF-16 text (by byte order mark, otherwise UTF-8) into one `Section` holding a `Paragraph` per run of non-blank lines; the lines are kept, joined by LF. It normalizes with the typographic normalizer and gives each paragraph a `TextSpan` anchor into the decoded text and a segment per line. Input containing a zero byte (and no UTF-16 mark) is not text. Sources are chosen by content (`DocumentSources.Sniff`), never by file name.
 
-## 8. What a follow-on unit needs to know
+## 8. Extending it
 
 - **Alignment:** described in `alignment.md`. A replacement stage returns a normalized `Alignment`; a scorer plugs in through `IPairScorer`.
 - **In-pair diff and grouping:** produce `LinkDiff`s with replayable `RegionEdit`s; group by emitting `Change`s whose edits are a partition of the link's edits, and `ChangeGroup`s over their ids. Never put data in a group.

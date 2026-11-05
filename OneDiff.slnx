@@ -22,9 +22,11 @@
     <Project Path="tests/OneDiff.Pdf.Tests/OneDiff.Pdf.Tests.csproj" />
     <Project Path="tests/OneDiff.Nlp.Tests/OneDiff.Nlp.Tests.csproj" />
     <Project Path="tests/OneDiff.Word.Tests/OneDiff.Word.Tests.csproj" />
+    <Project Path="tests/OneDiff.Samples.Tests/OneDiff.Samples.Tests.csproj" />
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/OneDiff.AotSmoke/OneDiff.AotSmoke.csproj" />
+    <Project Path="samples/OneDiff.Samples/OneDiff.Samples.csproj" />
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/OneDiff.GoldSets/OneDiff.GoldSets.csproj" />

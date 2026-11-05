@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>$(LibName).Samples</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/OneDiff/OneDiff.csproj" />
+    <ProjectReference Include="../../src/OneDiff.Documents/OneDiff.Documents.csproj" />
+    <ProjectReference Include="../../src/OneDiff.Pdf/OneDiff.Pdf.csproj" />
+    <ProjectReference Include="../../src/OneDiff.Ocr/OneDiff.Ocr.csproj" />
+  </ItemGroup>
+
+</Project>

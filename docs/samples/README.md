@@ -1,5 +1,7 @@
 # Samples
 
+The runnable code samples (one task per method) are in [samples/OneDiff.Samples](../../samples/OneDiff.Samples/Samples.cs). This page covers the rendered files and the choice of form.
+
 Every file here is made from a short pair of documents written for the purpose (a list of clauses with an edit, an insertion, a deletion, a move and a formatting change), by the tests that check the writers. A change in the look shows up as a change to these files in review. To rewrite them after an intended change, run the tests with `ONEDIFF_UPDATE_SAMPLES=1`.
 
 | Files | What they show |

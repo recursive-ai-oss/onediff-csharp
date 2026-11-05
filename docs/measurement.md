@@ -43,7 +43,7 @@ dotnet run -c Release --project tools/OneDiff.Oracles -- run \
 | `dmp-interop` | our diff-match-patch patch text applies in the Python package and the package's patch text applies in ours |
 | `merge-file:merge`, `:diff3`, `:zdiff3` | our three-way merge equals `git merge-file -p` byte for byte in each conflict style, with the conflict count; each mismatch keeps a unified diff in `merge-mismatch/` |
 
-The patch and merge gates call the library through one file, `tools/OneDiff.Oracles/Seam.cs`. Until the library has the feature its gates report `pending`; wiring it is filling in the seam's members and returning true from `Has`. `--seam oracle` answers from the oracles themselves, so every gate must pass against it; that tests the gate plumbing.
+The patch and merge gates call the library through one file, `tools/OneDiff.Oracles/Seam.cs`. `--seam oracle` answers from the oracles themselves, so every gate must pass against it; that tests the gate plumbing.
 
 Cases run in parallel (`--cores`), are listed in ordinal order, and each finished case is appended to `results-<seam>.jsonl`; rerunning with the same `--out` skips them (`--fresh` starts over). `report.json` has no timings and is byte-identical across runs. Oracle timeouts and inputs too large for the Python package are counted as skips, never as passes. Exit code 1 means some gate has failures.
 
@@ -66,7 +66,6 @@ Settings, so the work is the same on both sides:
 - diff-match-patch runs with `Diff_Timeout = 0` (no time limit), so it finds the full diff. Its line mode maps each distinct line to one character, diffs the characters and reads the result in lines; the package keeps its own line mapping non-public, so the mapping is done in the benchmark, inside the timed work.
 - DiffPlex's word differ cuts words at the separators it is given (spaces, line ends and common punctuation), so the word rows do not see identical token streams. `info` prints the edit distance each implementation finds on each input; lines and characters agree between DiffPlex and diff-match-patch.
 - Cleanup rows start each call from a copy of the same diff, and the copy is timed on both sides.
-- Rows whose library side does not exist yet are not run and show as pending; rows on stand-in algorithms run but are marked as placeholders and draw no verdict.
 
 `bench/run-bench.sh OUT [BenchmarkDotNet args]` runs everything: the suites (with `ONEDIFF_BENCH_MODE=smoke` for a short indicative pass), the input and edit-distance listing, peak working set per row (one cold run per child process, reported above a load-only baseline), and `results-table.md`: per size, ours against each comparator with time ratio, allocations and allocation ratio, a geometric mean per area and comparator, and the verdict against the bars (geomean at most 1.0, no row above 1.25). `bench/record-run.sh` writes the CPU model, core count, instruction-set flags and the load average before, during and after into the same folder. Timings from a machine that was doing other work are not results.
 
