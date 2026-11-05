@@ -151,7 +151,8 @@ internal sealed partial class TrackedWriter : IDisposable
     private static ImmutableArray<RegionEdit> RegionsOf(Change c)
     {
         bool text = c.Kind is ChangeKind.Replace or ChangeKind.Insert or ChangeKind.Delete or ChangeKind.Format;
-        if (!text || c.Old.Nodes.Length != 1 || c.New.Nodes.Length != 1
+        // A format change keeps its own edits: their runs say what changed (a hyperlink, for one, cannot be a run property change).
+        if (!text || c.Kind == ChangeKind.Format || c.Old.Nodes.Length != 1 || c.New.Nodes.Length != 1
             || c.Old.Text.Contains('\uFFFC', StringComparison.Ordinal) || c.New.Text.Contains('\uFFFC', StringComparison.Ordinal))
         {
             return c.Edits;
@@ -722,6 +723,14 @@ internal sealed partial class TrackedWriter : IDisposable
 
         if (r.IsFormatOnly)
         {
+            // A hyperlink is a wrapper element, not a run property, so a revision of run properties cannot carry its change.
+            if (r.OldRuns.Any(x => x.Format.Get(FormatKeys.Link) is not null) != r.NewRuns.Any(x => x.Format.Get(FormatKeys.Link) is not null)
+                || r.OldRuns.Select(x => x.Format.Get(FormatKeys.Link)).Distinct().Count() != r.NewRuns.Select(x => x.Format.Get(FormatKeys.Link)).Distinct().Count()
+                || !r.OldRuns.Select(x => x.Format.Get(FormatKeys.Link)).Distinct().SequenceEqual(r.NewRuns.Select(x => x.Format.Get(FormatKeys.Link)).Distinct()))
+            {
+                throw new ReplaceNeeded("a hyperlink was added, removed or changed");
+            }
+
             FormatRegion(bp, scratch, bh, bhl, dh, dhl);
             return;
         }

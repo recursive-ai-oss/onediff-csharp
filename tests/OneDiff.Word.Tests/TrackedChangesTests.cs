@@ -134,7 +134,11 @@ public class TrackedDebug
         CompareDocument oldDoc = source.Read(DocumentInput.FromBytes(DocFactory.Build(o), "o.docx")), newDoc = source.Read(DocumentInput.FromBytes(DocFactory.Build(n), "n.docx"));
         Comparison c = Comparison.Of(oldDoc, newDoc, Environment.GetEnvironmentVariable("ONEDIFF_TRACKED_SETTINGS") == "strict" ? CompareSettings.Strict : CompareSettings.Legal);
         using var ms = new MemoryStream();
+        var traceLines = new List<string>();
+        TrackedWriter.Trace = traceLines.Add;
         var res = new DocxRedline { BuildOn = Environment.GetEnvironmentVariable("ONEDIFF_TRACKED_BUILD") == "old" ? WordBuildOn.Old : WordBuildOn.New }.Create(c, ms);
+        TrackedWriter.Trace = null;
+        File.WriteAllLines(Path.Combine(Environment.GetEnvironmentVariable("ONEDIFF_TRACKED_DEBUG_DIR") ?? ".", "trace.txt"), traceLines);
         string dir = Environment.GetEnvironmentVariable("ONEDIFF_TRACKED_DEBUG_DIR") ?? Path.Combine(Path.GetTempPath(), "onediff-tracked-debug");
         Directory.CreateDirectory(dir);
         File.WriteAllBytes(dir + "/out.docx", ms.ToArray());

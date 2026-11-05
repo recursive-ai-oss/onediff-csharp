@@ -23,8 +23,8 @@ Register the source once with `WordRedline.Register()`; after that `Redline.Crea
 | Inline content control | `ContentControl` as a child of its paragraph, the text it holds as its text |
 | Picture | `Image` as a child of its paragraph: `hash.content` (SHA-256 of the image part), `hash.perceptual` when the format is decoded, `image.alt`, `image.extent` (EMU), `image.link` for a linked picture |
 | Chart, shape, diagram, ink | `Image` with `image.kind=drawing` and a SHA-256 of its markup as `hash.content` |
-| Text box | `TextBox` as a child of its paragraph, holding one `Paragraph` per paragraph of the box (text only) |
-| Core and custom document properties | one `Property` per property after the sections (`prop.name`; custom ones are `custom:<name>`) |
+| Text box | `TextBox` as a child of its paragraph, holding the blocks of the box as the hub reads them (paragraphs with formatting, lists, fields and tables), the same as the body; a box the hub does not list is read as plain paragraphs |
+| Core and custom document properties | one `Property` per property after the sections (`prop.name`; custom ones are `custom:<name>`), read through the hub's `Document.Properties`: the fifteen core elements, dates as UTC to the second (`yyyy-MM-ddTHH:mm:ssZ`), empty ones left out |
 | Custom XML, embedded objects, charts, diagrams, macros, ink, glossary parts | `Opaque` parts known by a SHA-256 of their bytes (reported "differs, not itemized") |
 
 The paragraph's text holds U+FFFC where a field, a picture, a text box, a note reference or an inline content control sits; the child node carries the object, in order. A comment leaves no mark in the text, because comments are hidden into the ledger by default and a mark would show as a change; its place is its position among the paragraph's children.
@@ -98,9 +98,12 @@ Resolution is `WordAnchors.TryParse` and `WordAnchors.Follow` (internal, tested)
 | Moved paragraph (also moved and edited) | `w:moveFrom` at one place and `w:moveTo` at the other, with `w:moveFromRangeStart/End` and `w:moveToRangeStart/End` sharing a name; text edits of a moved-and-edited paragraph are `w:ins`/`w:del` inside the `w:moveTo` copy of the base |
 | Split and merge | the inserted or deleted paragraph marks of the two paragraphs |
 | Paragraph, table, row, cell and section properties | `w:pPrChange`, `w:tblPrChange`, `w:trPrChange`, `w:tcPrChange`, `w:sectPrChange`, holding the properties reject-all restores |
-| A paragraph whose objects (fields, pictures, notes, text boxes, content controls) or run formatting differ | the whole paragraph is replaced: the other document's paragraph as a deletion (insertion) next to the base paragraph as an insertion (deletion) |
+| Format-only difference of a stretch of runs | `w:rPrChange` on those runs, holding the properties reject-all restores; the text is the same in both views |
+| A changed field result | edits of the result inside the field, not a replaced paragraph |
+| An edited text box | revisions inside the box's own paragraphs, written like those of the body |
+| A paragraph whose pictures, notes, content controls or fields (other than a changed result) differ | the whole paragraph is replaced: the other document's paragraph as a deletion (insertion) next to the base paragraph as an insertion (deletion) |
 
-Run-level formatting changes (`w:rPrChange`) are not written yet; a paragraph with a format-only difference is carried as a replacement, which is complete (accept and reject are exact) but coarser than Word would write.
+Each change of the comparison is written as one replaced unit (its extent in both documents), widened symmetrically, so a reader that counts runs of adjacent revisions sees the changes the engine reports. Atomic edits are used only where the unit holds an object. A split or merge is written with paragraph marks when every edit is a boundary or lies inside one paragraph, and the pieces keep equal paragraph properties for a merge; anything else is a whole-paragraph replacement, which is complete but coarser.
 
 ### What is not carried (`NotCarried`)
 
@@ -131,10 +134,22 @@ A revision cannot express these differences, so they are listed in `DocxRedlineR
 - **Schema**: the Open XML SDK validator (Office 2019) over every output. Errors the two inputs also have (same rule and element) are not counted against the output.
 - **Determinism**: two runs give identical bytes; the digest of 20 seeded pairs built on either document is the same on x64 and arm64.
 
+### Reading tracked output back (all tools)
+
+The scorer reads every tool's DOCX with one reader (`TrackedReader`), so no tool is favoured:
+
+1. A run with `w:rPrChange` is a revision of its text: the text is the same in both views and the stretch is a format change.
+2. A revision nested in an insertion or move-to (a deletion) or in a move-from (an insertion) is in neither view, as accept-all and reject-all resolve it.
+3. A move's own change is the moved text only; insertions, deletions and format changes beside or inside it are separate changes.
+
+The engine's own row on a Word source is scored on body content (`score --body-only`): headers, footers, notes, comments, text boxes and empty nodes have no gold block, and a field placeholder reads as its result.
+
 ### OneOffice gaps met (workarounds in the writer)
 
 - Accepting or rejecting moves the content of a paragraph whose mark goes by serialized fragments, which can only be read back when the prefixes they use (`r:` for a hyperlink) are declared on the part's root; when they are not, the join fails silently and the emptied paragraph stays. The writer declares the well-known prefixes on every part root it saves.
 - A paragraph whose pPr holds both a paragraph-mark revision and a `w:pPrChange` is not joined on reject (the property restore replaces the element the mark revision points to). The writer never produces that pair.
 - A resolved revision leaves the empty wrapper of a hyperlink, smart tag, simple field or content control behind, and a paragraph that joins the next carries it along.
 - There is no way to mark existing runs as inserted or deleted without going through delete text: the writer authors a deletion under a marker author and renames it (`w:del` to `w:ins`, `w:delText` to `w:t`).
+- A text box is listed twice once edited with a copy in `mc:Fallback` (the revision list shows each change per branch, with the same id). The writer edits the exposed branch only and does not call `SyncAlternate`, so each revision exists once; the fallback copy keeps the base text, and Word reads the exposed branch. Ids are renumbered in document order at the end, as for everything else.
+- Rejecting a paragraph with `w:pPrChange` after `InsertParagraph` leaves a paragraph-mark revision; the writer never produces that pair (see above).
 - The notes part hands out an id a copied note already took; the writer chooses ids from what the part holds.

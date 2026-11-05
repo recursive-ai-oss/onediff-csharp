@@ -53,6 +53,45 @@ internal sealed partial class TrackedWriter
         return ok;
     }
 
+    /// <summary>The donor-side id of the nearest sibling before a paragraph that is an unmoved one-to-one match, or -1 when none.</summary>
+    private int StablePredecessor(TrackedSide side, MarkupNode start, bool baseSide)
+    {
+        for (MarkupNode e = Wx.PreviousElement(start); !e.IsNull; e = Wx.PreviousElement(e))
+        {
+            if (StableId(side, e, baseSide) is { } id and >= 0)
+            {
+                return id;
+            }
+        }
+
+        return -1;
+    }
+
+    private int StableSuccessor(TrackedSide side, MarkupNode start, bool baseSide)
+    {
+        for (MarkupNode e = Wx.NextElement(start); !e.IsNull; e = Wx.NextElement(e))
+        {
+            if (StableId(side, e, baseSide) is { } id and >= 0)
+            {
+                return id;
+            }
+        }
+
+        return -1;
+    }
+
+    private int? StableId(TrackedSide side, MarkupNode e, bool baseSide)
+    {
+        int id = side.NodeOf(e);
+        if (id < 0)
+        {
+            return null;
+        }
+
+        AlignmentLink? l = baseSide ? LinkOfBase(id) : LinkOfDonor(id);
+        return l is { Kind: LinkKind.Match, OldNodes.Length: 1, NewNodes.Length: 1 } ? DonorOf(l) : null;
+    }
+
     private static int ProjectedLength(Node n, CompareSettings settings)
     {
         int len = n.Text.Length;
@@ -96,6 +135,14 @@ internal sealed partial class TrackedWriter
             }
 
             delements.Add(el);
+        }
+
+        // The pieces are written where the base paragraph sits, so the other version's paragraph must sit in the same place: the nearest
+        // unmoved paragraph before each (and, for the donor, after) must be the same pair. A split whose paragraph also moved is replaced.
+        if (StablePredecessor(b, belements[0], baseSide: true) != StablePredecessor(d, delements[0], baseSide: false)
+            || StableSuccessor(b, belements[^1], baseSide: true) != StableSuccessor(d, delements[^1], baseSide: false))
+        {
+            throw new ReplaceNeeded("the paragraph changed place as well");
         }
 
         for (int i = 0; i + 1 < belements.Count; i++)

@@ -4,13 +4,13 @@
 #
 #   run-tracked-gates.sh SWEEP_PAIRS DOCX_DIR OUT_DIR
 #
-# SWEEP_PAIRS is how many generated pairs to run (in chunks of 1000), DOCX_DIR a directory of ID.old.docx / ID.new.docx pairs (pass
+# MODES (environment, default "new old") picks the documents to build on. SWEEP_PAIRS is how many generated pairs to run (in chunks of 1000), DOCX_DIR a directory of ID.old.docx / ID.new.docx pairs (pass
 # "-" to skip it), OUT_DIR where summaries and the tracked files go. Each gate runs built on the new document and built on the old one.
 set -u
 PAIRS=${1:?pairs} DOCX=${2:?docx dir} OUT=${3:?out dir}
 mkdir -p "$OUT"
 dotnet build -c Release -v quiet -clp:NoSummary -m:4 tests/OneDiff.Word.Tests 2>&1 | tail -2
-for mode in new old; do
+for mode in ${MODES:-new old}; do
   if [ "$DOCX" != "-" ]; then
     ONEDIFF_DOCXV1_DIR=$DOCX ONEDIFF_DOCXV1_OUT=$OUT/tracked ONEDIFF_DOCXV1_SCHEMA=1 ONEDIFF_DOCXV1_BUILD=$mode ONEDIFF_DOCXV1_REPORT=$OUT/docx-$mode.txt \
       dotnet test -c Release --no-build --project tests/OneDiff.Word.Tests --filter-method '*AcceptRejectAndSchema' > /dev/null 2>&1
