@@ -11,7 +11,7 @@ The SDK version is pinned in `global.json`. Build output goes outside the checko
 
 ## Sister-library previews
 
-Some packages depend on a prerelease of another Recursive AI library (OnePDF, OneFont, OneOffice with its OneArchive and OneCompress) that is not on nuget.org yet. The pins are the prerelease `RecursiveAI.*` entries in `Directory.Packages.props`. To restore them, point NuGet at a folder or feed that holds them:
+Some packages depend on a prerelease of another Recursive AI library (OnePDF, OneFont, OneNLP, OneOffice with its OneArchive and OneCompress) that is not on nuget.org yet. The pins are the prerelease `RecursiveAI.*` entries in `Directory.Packages.props`. To restore them, point NuGet at a folder or feed that holds them:
 
 1. Copy `docs/nuget-local.config.example` to `NuGet.Config` in the repository root (the path is not tracked).
 2. Set `ONEDIFF_PREVIEW_FEED` to the folder (or feed URL).

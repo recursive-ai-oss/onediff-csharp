@@ -14,6 +14,7 @@ This project is unaffiliated with any other project named OneDiff, including the
 |---|---|
 | `RecursiveAI.OneDiff` | The text core: diff algorithms, tokenizers, cleanup, unified and diff-match-patch patches, three-way merge. Depends on nothing beyond the .NET base class library. |
 | `RecursiveAI.OneDiff.Documents` | The document comparison engine (preview): compare model, alignment, verification, change list and HTML redlines. |
+| `RecursiveAI.OneDiff.Nlp` | Typed values from OneNLP (preview): written-out numbers, amounts, durations and percentages for the change types, with the built-in recognizer as the fallback. |
 
 Further document packages (`.Pdf`, `.Word` and others) arrive later.
 

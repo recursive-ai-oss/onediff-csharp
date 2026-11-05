@@ -2,6 +2,7 @@ using OneDiff.Documents;
 using OneDiff.Documents.Combine;
 using OneDiff.Documents.Model;
 using OneDiff.Documents.Serialization;
+using OneDiff.Nlp;
 using OneDiff.Pdf;
 using OneDiff.Word;
 using OnePdf;
@@ -42,6 +43,7 @@ internal static class Program
 
         failures += CheckDocuments();
         failures += CheckSemantics();
+        failures += CheckNlp();
         failures += CheckPdf();
         failures += CheckWord();
         failures += CheckRedline();
@@ -49,6 +51,31 @@ internal static class Program
 
         Console.Out.WriteLine(failures == 0 ? "ok" : "FAILED");
         return failures == 0 ? 0 : 1;
+    }
+
+    /// <summary>The OneNLP value recognizer under NativeAOT: written-out values typed in a comparison, the built-in fallback, and a stable result.</summary>
+    private static int CheckNlp()
+    {
+        int failures = 0;
+        CompareSettings settings = CompareSettings.Legal.UseOneNlp();
+        CompareDocument a = CompareDocument.FromText("Payment is due within thirty days of the invoice.\nThe cap on its liability is forty-two thousand dollars.\nThe fee is 18.000 EUR.", "old");
+        CompareDocument b = CompareDocument.FromText("Payment is due within two months of the invoice.\nThe cap on its liability is $50,000.\nThe fee is 20.000 EUR.", "new");
+        Comparison c = Comparison.Of(a, b, settings);
+        string[] values = [.. c.Changes.Select(x => x.Type + " " + x.OldValue?.Canonical + ">" + x.NewValue?.Canonical)];
+        string[] want = ["Duration 30 d>2 mo", "Amount USD 42000>USD 50000", "Amount EUR 18000>EUR 20000"];
+        if (!values.AsSpan().SequenceEqual(want) || !c.Verification.Passed || c.Verification.FallbackLevel != 0 || !c.Check().IsEmpty)
+        {
+            Console.Error.WriteLine("nlp: unexpected values " + string.Join("; ", values));
+            failures++;
+        }
+
+        if (!ComparisonJson.Write(c).AsSpan().SequenceEqual(ComparisonJson.Write(Comparison.Of(a, b, settings))))
+        {
+            Console.Error.WriteLine("nlp: JSON differs between runs");
+            failures++;
+        }
+
+        return failures;
     }
 
     /// <summary>Combine and chain under NativeAOT: attribution, a conflict, the report page, both JSON forms and the checks.</summary>

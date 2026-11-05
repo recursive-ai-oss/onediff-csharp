@@ -12,6 +12,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - `RecursiveAI.OneDiff.Tool`: `onediff combine <original> <copy>... -o <out>` and `onediff chain <v1> <v2>... -o <out>`.
 
 - `RecursiveAI.OneDiff.Word`: `DocxRedline` writes a comparison as a DOCX with real tracked changes, built on the new document (default) or the old one: `w:ins`/`w:del` for text, paragraphs, rows and cells, `w:moveFrom`/`w:moveTo` with range markers, property changes for paragraphs, tables, rows, cells and sections. Accepting every revision gives the new document and rejecting every one the old. The author is a setting, no date is written unless asked, ids are numbered in document order, and the output is byte-identical from run to run. Differences a revision cannot carry are returned in `DocxRedlineResult.NotCarried`. `WordRedline.Register()` makes `Redline.Create` and `SaveAs` use it for `.docx`. See `docs/word.md`.
+- `RecursiveAI.OneDiff.Nlp`: `NlpValueRecognizer`, an `IValueRecognizer` built on OneNLP's recognizers. It reads written-out English values (`forty-two`, `six percent`, `thirty (30) days`, `two hundred thousand dollars`, `1 year and 6 months`) into the same canonical values as the built-in recognizer, and leaves everything else (other languages, party names, unresolved dates) to it. `CompareSettings.Legal.UseOneNlp()` selects it for one comparison and `OneNlpRecognizers.Register()` for the process. See `docs/nlp.md`.
+- `RecursiveAI.OneDiff.Documents`: `CompareSettings.ValueRecognizer` and `ValueRecognizers.Register` choose the value recognizer of a comparison (settings, else the registered one, else the built-in one); the fallback stages read it from the settings too. Not written to JSON.
 
 ## [0.1.0-preview.1]
 

@@ -81,7 +81,7 @@ public static class Stages
     }
 
     /// <summary>
-    /// Classifies each change with the built-in recognizer (<see cref="BuiltInValueRecognizer"/>): who decided (always a rule), whether
+    /// Classifies each change with the settings' recognizer (<see cref="CompareSettings.ValueRecognizer"/>; <see cref="BuiltInValueRecognizer"/> by default): who decided (always a rule), whether
     /// it is substantive, and, with <see cref="CompareSettings.TypedChanges"/>, its <see cref="Change.Type"/> and resolved values.
     /// Kinds, sides and edits are never touched.
     /// </summary>
@@ -95,12 +95,12 @@ public static class Stages
     /// References, list labels, defined terms and the substantive flag are decided by the library's own rules (docs/semantics.md).
     /// </summary>
     /// <param name="changes">The output of <see cref="Group"/>.</param>
-    /// <param name="recognizer">The recognizer; <see cref="BuiltInValueRecognizer.Instance"/> when null.</param>
+    /// <param name="recognizer">The recognizer; when null, <see cref="CompareSettings.ValueRecognizer"/>, else the one registered with <see cref="ValueRecognizers.Register"/>, else <see cref="BuiltInValueRecognizer.Instance"/>.</param>
     /// <param name="cancellationToken">Observed per change.</param>
     public static ChangeSet Classify(ChangeSet changes, IValueRecognizer? recognizer, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(changes);
-        return Semantics.ChangeClassifier.Classify(changes, recognizer ?? BuiltInValueRecognizer.Instance, cancellationToken);
+        return Semantics.ChangeClassifier.Classify(changes, recognizer ?? ValueRecognizers.For(changes.Settings), cancellationToken);
     }
 
     /// <summary>
@@ -165,7 +165,7 @@ public static class Stages
     private static ChangeSet Reference(Alignment alignment, bool coarse, CancellationToken ct)
     {
         PairDiffs diffs = ReferenceDiff.Run(alignment, coarse, ct);
-        return Semantics.ChangeClassifier.Classify(ReferenceGrouper.Group(diffs, ct), BuiltInValueRecognizer.Instance, ct);
+        return Semantics.ChangeClassifier.Classify(ReferenceGrouper.Group(diffs, ct), ValueRecognizers.For(alignment.Settings), ct);
     }
 
     private static void AddFailures(List<Diagnostic> diagnostics, List<VerificationFailure> failures, int level)

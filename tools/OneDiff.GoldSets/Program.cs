@@ -5,6 +5,7 @@ using OneDiff.Documents;
 using OneDiff.Documents.Model;
 using OneDiff.Documents.Pipeline;
 using OneDiff.Documents.Serialization;
+using OneDiff.Nlp;
 
 namespace OneDiff.GoldSets;
 
@@ -18,6 +19,7 @@ internal static class Program
         OneDiff.GoldSets generate --out DIR [--role eval|dev|train] [--seed N] [--docs-per-lang N] [--langs en,de,...] [--verify]
         OneDiff.GoldSets score --data DIR --out FILE [--settings legal] [--oracle-alignment] [--cmp DIR | --changes DIR] [--blocks DIR] [--save-cmp DIR] [--pipeline NAME] [--jobs N] [--limit N] [--ids FILE] [--resamples N]
         OneDiff.GoldSets check-split --a DIR --b DIR
+        OneDiff.GoldSets nlp-gate --data DIR [--jobs N] [--show N] [--digest-only --count N]
         OneDiff.GoldSets generate-combine --out DIR [--seed N] [--docs-per-lang N] [--langs en,de,...]
         OneDiff.GoldSets score-combine --data DIR --out FILE [--jobs N] [--limit N] [--resamples N]
 
@@ -59,6 +61,8 @@ internal static class Program
                 "time-combine" => CombineSet.Time(opt),
                 "explain" => Explain(opt),
                 "real-gate" => RealGate(opt),
+                "nlp-gate" => NlpGate.Run(opt),
+                "time-nlp" => NlpGate.Time(opt),
                 _ => Fail("unknown command " + args[0]),
             };
         }
@@ -296,6 +300,12 @@ internal static class Program
         string pipeline = opt.GetValueOrDefault("pipeline") ?? (oracleAlignment ? "gold-alignment" : "reference");
         // Scored with nothing hidden and cascades and types on, unless --settings legal asks for the default preset.
         CompareSettings scoreSettings = opt.GetValueOrDefault("settings") == "legal" ? CompareSettings.Legal with { ThrowOnFailure = false } : Pipeline.Settings;
+        // --recognizer nlp types values with OneNLP's recognizers (the .Nlp package) instead of the built-in ones.
+        if (opt.GetValueOrDefault("recognizer") == "nlp")
+        {
+            scoreSettings = scoreSettings.UseOneNlp();
+        }
+
         int jobs = int.Parse(opt.GetValueOrDefault("jobs") ?? "4", CultureInfo.InvariantCulture);
         Bootstrap.Resamples = int.Parse(opt.GetValueOrDefault("resamples") ?? "10000", CultureInfo.InvariantCulture);
         int limit = int.Parse(opt.GetValueOrDefault("limit") ?? "0", CultureInfo.InvariantCulture);

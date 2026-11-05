@@ -173,6 +173,13 @@ public sealed record CompareSettings
     /// <summary>Whether changes carry resolved types and values. Read by later stages.</summary>
     public bool TypedChanges { get; init; }
 
+    /// <summary>
+    /// The recognizer that finds and resolves values (amounts, dates, durations, percentages, numbers, party names) when changes are
+    /// typed. Null (the default) uses the one registered with <see cref="ValueRecognizers.Register"/>, else <see cref="BuiltInValueRecognizer"/>.
+    /// Not written to JSON; a comparison read back from JSON has it null.
+    /// </summary>
+    public IValueRecognizer? ValueRecognizer { get; init; }
+
     /// <summary>The look writers use unless told otherwise.</summary>
     public RedlineStyle Style { get; init; } = RedlineStyle.Blackline;
 
