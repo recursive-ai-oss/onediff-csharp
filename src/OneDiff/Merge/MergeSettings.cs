@@ -18,6 +18,17 @@ public sealed record MergeSettings
     /// <summary>The algorithm that aligns each side with the base (and, narrowing conflicts, the sides with each other). Myers by default.</summary>
     public DiffAlgorithm Algorithm { get; init; } = DiffAlgorithm.Myers;
 
+    /// <summary>
+    /// The most work the alignments of one merge may spend, counted as in <see cref="Algorithms.MyersDiff"/>: edit-graph diagonals
+    /// visited, items compared along them and items slid. 2^31 (about 6 seconds) by default; zero or more.
+    /// </summary>
+    /// <remarks>
+    /// When the work runs out the merge is still complete and correct, only coarser: stretches the alignment had not solved count as
+    /// changed on that side, so conflicts can be larger, and sliding of changed runs stops where it was. The merge reports it in
+    /// <c>Diagnostic</c>. Merges that stay within the cap are unaffected.
+    /// </remarks>
+    public long MaxWork { get; init; } = Algorithms.Budget.DefaultCap;
+
     /// <summary>The text after <c>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</c> on our side of a conflict. "ours" by default; null or empty prints the marker alone.</summary>
     public string? OursLabel { get; init; } = "ours";
 
