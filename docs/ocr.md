@@ -6,7 +6,7 @@ How `RecursiveAI.OneDiff.Ocr` reads a scanned PDF or an image into the compare m
 
 `OcrDocumentSource` reads PNG, JPEG and TIFF images (recognized by their signatures, never by file name) and PDFs whose pages carry no text of their own.
 
-- A PDF is a scan when none of the pages examined has at least `MinTextLayerCharacters` (default 20) non-space characters in its text layer. All pages are examined up to 8; beyond that, 8 pages spread evenly.
+- A PDF is a scan when none of the pages examined has at least `MinTextLayerCharacters` (default 20) non-space characters in its text layer. All pages are examined up to 8; beyond that, 8 pages spread evenly. A PDF none of whose pages has a content stream is not a scan but a damaged file, and is left to the PDF source, which refuses it. When the pages render but the engine recognizes no word on any of them, the document carries the warning `ocr.nothingRecognized` (the diagnostic `source.<side>.ocr.nothingRecognized`), and strict settings throw on it.
 - A PDF with an invisible recognized-text layer therefore counts as a digital PDF and is read by the PDF source.
 - An unreadable or encrypted PDF is not a scan; the PDF source reports why.
 - Each image frame is one page. An image is wrapped in a one-page-per-frame PDF so that markings can be written on it. The marked file is checked against the wrapper's hash (`PdfOrigin.Sha256`), the compare model's `SourceHash` is the image's own hash.

@@ -8,6 +8,14 @@ All notable changes to this project are documented here. The format follows [Kee
 
 - `RecursiveAI.OneDiff`: `TextDiff.Pieces` and `TextDiff.Lines` read a diff as typed runs and lines with line numbers; `Diff.SideBySide` lays a line diff out in aligned rows with the changed words marked; `DiffSettings` (algorithm and work cap) is taken by the `Diff` one-liners and `TextDiff.Diagnostic` reports the cap; `Diff.ApplyUnified`, `ApplyPatchText` and `PatchText` take the apply options, patcher and cancellation token; `TextMerge.Conflicts` and `ItemMerge<T>.Items` expose a merge's conflicts and merged items.
 - `RecursiveAI.OneDiff`: `HunkResult.Line` and `DmpPatchResult.Location` are `int?` (null when not placed), and `DmpPatcher.Match` became `TryMatch`.
+- `RecursiveAI.OneDiff`: the `*Using` comparer one-liners (`TextUsing`, `LinesUsing`, `WordsUsing`) and `Diff.Semantic` and `Diff.Efficient` take `DiffSettings`, so the work cap reaches every diff one-liner. `TextDiff.Diagnostic.Work` includes the items of the shared head and tail, so a small real diff no longer reports zero.
+- `RecursiveAI.OneDiff.Documents`: `Redline.CreateAsync`, `Comparison.OfAsync`, `SaveAsync`, `ComparisonJson.ReadAsync` and `WriteAsync` work on streams that refuse synchronous I/O (for example ASP.NET Core request and response bodies), and every `SaveAs` overload takes a `CancellationToken`.
+- `RecursiveAI.OneDiff.Documents`: `VerificationResult.VerifiedHere` says whether the completeness checks ran in this process on this value; `ComparisonFormatException` carries the position of a JSON syntax error (`LineNumber`, `BytePositionInLine`, `Path`).
+- `RecursiveAI.OneDiff.Documents`: `CompareDocument.Origin` holds the bytes a document was read from (and the password), so a PDF is marked from the document itself; `PdfRedline.Auto` chooses from the new document's source format and its origin.
+- `RecursiveAI.OneDiff.Documents`: `Redline.Register(source, priority)` and `DocumentSources.Register(source, priority)`: a source with a higher priority is asked first, so the order of registration no longer decides which source reads a file. `OcrRedline.Register()` registers the scan source above the PDF source.
+- `RecursiveAI.OneDiff.Documents`: `RedlineStyle.MarkWholeWords` widens marks inside a word to the whole word, as the page markup and the change list already do.
+- `RecursiveAI.OneDiff.Documents`: plain text reads leading clause markers (such as `1.1` or `(a)`) as list labels, with the rule the PDF source uses, so renumbering in plain text groups as a cascade the way it does for PDF.
+- `RecursiveAI.OneDiff.Tool`: `onediff --version`, `--exit-code`, `--whole-words` and `--form`; the tool registers the scan source and reads scans.
 
 In packages that are not on nuget.org yet, because they depend on previews of other libraries (`RecursiveAI.OneDiff.Word`, `RecursiveAI.OneDiff.Nlp`):
 
@@ -16,6 +24,20 @@ In packages that are not on nuget.org yet, because they depend on previews of ot
 - `RecursiveAI.OneDiff.Word`: `DocxRedline` writes a tracked-changes DOCX for a PDF, a scan, plain text or any other flowing source too. A side that is not a Word file is reconstructed as a DOCX from its compare model (paragraphs, list items with their labels, tables, one header and one footer, character formatting), on the other side's package when that one is a Word file, and labelled as reconstructed in its core properties and by a note in its header (`DocxRedline.ReconstructionNote`); the revisions are then written as for two Word files. The comparison is the one that was verified. See `docs/word.md` and `docs/results/pdf-docx.md`.
 - `RecursiveAI.OneDiff.Word`: a paragraph whose list is numbered by different definitions in the two packages now gets a property change (the same number can mean different labels in two packages), and blocks that followed a block content control that only the other document has are placed after the copies of what stood inside it, not before.
 - `RecursiveAI.OneDiff.Nlp`: `NlpValueRecognizer`, an `IValueRecognizer` built on OneNLP's recognizers. It reads written-out English values (`forty-two`, `six percent`, `thirty (30) days`, `two hundred thousand dollars`, `1 year and 6 months`) into the same canonical values as the built-in recognizer, and leaves everything else (other languages, party names, unresolved dates) to it. `CompareSettings.Legal.UseOneNlp()` selects it for one comparison and `OneNlpRecognizers.Register()` for the process. See `docs/nlp.md`.
+
+### Changed
+
+- **Breaking:** `ComparisonJson.Read` and `ReadAsync` re-run the completeness checks by default (`verify: true`), so `Verification.Passed` is true only when this process proved it, and a tampered file shows failures. Pass `verify: false` for the cheaper read: the value then reports `VerifiedHere == false` and `Passed == false`, and `Comparison.Check()` returns the failures without changing it (a `Comparison` is immutable; read again with `verify: true` for a proven value).
+- **Breaking:** a PDF with pages but no text is refused (`InvalidDataException`, `PdfSourceErrors.FailureOf` = `NoTextLayer`, with a message naming `RecursiveAI.OneDiff.Ocr`) instead of being compared as an empty document; a PDF whose pages have no content at all is refused as `Malformed` and described as damaged, with or without the scan source registered. Content OnePDF could not recover becomes the comparison diagnostic `source.<side>.pdf.unrecovered`, which strict settings throw on. A scan in which the OCR engine finds no word carries `source.<side>.ocr.nothingRecognized`, with the same strict behaviour.
+- **Breaking:** `PdfRedline.Auto` and `SaveAs(".pdf")` no longer consult process-wide state. A comparison read back from JSON has no PDF to mark and says so (use `PdfRedline.Rendered`, or `MarkNewDocument` with the PDF's bytes).
+- `ItemMerge` is an unsealed base class of `ItemMerge<T>`.
+- `RecursiveAI.OneDiff`: the line type of `TextDiff.Lines` and `TextDiff.Pieces` is named `DiffRun` (it was `DiffPiece`, which clashed with DiffPlex's type in files that import both during a migration).
+- `RecursiveAI.OneDiff.Documents`: plain-text comparisons now carry list items, so the JSON of existing text comparisons changes where lines start with clause markers.
+- Exception messages start with a capital letter.
+
+### Removed
+
+- `RecursiveAI.OneDiff.Documents`: `Redline.Compare`, the alias of `Comparison.Of`. Use `Comparison.Of`.
 
 ## [0.2.0-preview.1]
 
@@ -36,7 +58,6 @@ The first release on nuget.org: `RecursiveAI.OneDiff`, `RecursiveAI.OneDiff.Docu
 ### Changed
 
 - `PdfRedline.Register()` registers `PdfRedline.Auto` for `.pdf` instead of `PdfRedline.OnPages` alone; a PDF as the new input is marked on its pages as before.
-
 ### Not in this release
 
 - `RecursiveAI.OneDiff.Word` (DOCX source and tracked-changes writer) and `RecursiveAI.OneDiff.Nlp` (OneNLP value recognizer) are in the repository but not published, because they depend on previews of OneOffice and OneNLP that are not on nuget.org. Change semantics, combine, chains, the change report and the recognizer seam live in `RecursiveAI.OneDiff.Documents` and are in this release.

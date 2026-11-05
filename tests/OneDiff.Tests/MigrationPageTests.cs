@@ -26,7 +26,7 @@ public sealed class MigrationPageTests
 
         // --- begin snippet inline
         var sb = new StringBuilder();
-        foreach (DiffPiece line in Diff.Lines(before, after).Lines)
+        foreach (DiffRun line in Diff.Lines(before, after).Lines)
         {
             string prefix = line.Kind switch { EditKind.Insert => "+ ", EditKind.Delete => "- ", _ => "  " };
             sb.Append(prefix).Append(line.Text).Append('\n');

@@ -55,8 +55,9 @@ public static partial class ComparisonJson
     /// in two links, text and run bounds). With <paramref name="verify"/> (the default) the completeness checks of
     /// <see cref="Comparison.Check"/> run on the value read, and <see cref="Comparison.Verification"/> reports their outcome, so
     /// <see cref="VerificationResult.Passed"/> is never a claim copied from the file. Without it the read is cheaper, and the result
-    /// says <see cref="VerificationResult.VerifiedHere"/> = false and <see cref="VerificationResult.Passed"/> = false until you call
-    /// <see cref="Comparison.Check"/> yourself; writing such a value back records that it was not verified.
+    /// says <see cref="VerificationResult.VerifiedHere"/> = false and <see cref="VerificationResult.Passed"/> = false for good: a comparison is immutable, so
+    /// <see cref="Comparison.Check"/> returns the failures without changing <see cref="Comparison.Verification"/>. Read again with
+    /// <paramref name="verify"/> to get a proven value. Writing an unverified value back records that it was not verified.
     /// </summary>
     /// <param name="utf8">The JSON text, UTF-8, without a byte order mark.</param>
     /// <param name="limits">Bounds on size, array length and depth; <see cref="ComparisonJsonLimits.Default"/> when null.</param>

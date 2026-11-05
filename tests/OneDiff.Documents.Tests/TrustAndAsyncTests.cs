@@ -129,11 +129,13 @@ public class TrustAndAsyncTests
         Assert.False(bad.Verification.Passed);
         Assert.True(bad.Verification.VerifiedHere);
 
-        // Without verification the value never claims a pass.
+        // Without verification the value never claims a pass, and Check() reports failures without changing it.
         Comparison unverified = ComparisonJson.Read(json, verify: false);
         Assert.False(unverified.Verification.VerifiedHere);
         Assert.False(unverified.Verification.Passed);
         Assert.Empty(unverified.Check());
+        Assert.False(unverified.Verification.Passed);
+        Assert.True(ComparisonJson.Read(json).Verification.Passed);
 
         // A comparison the stages made was verified here.
         Assert.True(c.Verification.VerifiedHere);

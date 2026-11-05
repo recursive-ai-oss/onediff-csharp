@@ -27,6 +27,6 @@ Renderers over a line-token `TextDiff`. Output is a pure function of the diff an
 
 Three views read a `TextDiff` without token arithmetic.
 
-- `TextDiff.Pieces`: one `DiffPiece(Kind, OldLine, NewLine, Text)` per edit run, with the run's text as it stands (line breaks included) and the 1-based line each side starts on (`null` on the side that lacks the run). Works for every token kind.
+- `TextDiff.Pieces`: one `DiffRun(Kind, OldLine, NewLine, Text)` per edit run, with the run's text as it stands (line breaks included) and the 1-based line each side starts on (`null` on the side that lacks the run). Works for every token kind.
 - `TextDiff.Lines`: the pieces cut at line breaks (`\n`, `\r\n`, a lone `\r`), the breaks dropped. For a line diff that is one entry per line; for a word or character diff a changed line shows as several entries with the same line number. A side's line number advances when a piece starts a new line on that side, so an unterminated last line is one line.
 - `Diff.SideBySide(old, new)` / `SideBySideDiff.From(lineDiff)`: aligned rows. A run of deleted lines followed by a run of inserted lines is paired line by line into `Modified` rows (the longer run's remainder is `Deleted` or `Inserted` rows with the other cell null). A modified row's cells hold word-level `Parts` from `Diff.Words` plus semantic cleanup of the two lines: Equal and Delete on the left, Equal and Insert on the right. Needs a diff made with line tokens.

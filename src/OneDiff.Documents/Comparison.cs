@@ -20,7 +20,7 @@ public sealed record Provenance(string LibraryVersion, int SchemaVersion, string
 /// <param name="Passed">True when the comparison passed every check (possibly after falling back) <b>in this process</b>: it is false for a comparison read from JSON with verification off, because the stored claim was not checked here.</param>
 /// <param name="FallbackLevel">0: the stages' own result was complete. 1: regrouped with the reference stages on the same alignment. 2: each changed block replaced as a whole. 3: nothing aligned; every block deleted and inserted.</param>
 /// <param name="FailureCount">How many checks failed before the result that was kept (0 when no fallback ran).</param>
-/// <param name="VerifiedHere">True when the checks ran in this process on this value: always for a comparison the stages made; for one read from JSON, only when the reader was asked to verify (the default). False means <see cref="Passed"/> says nothing about the content: call <see cref="Comparison.Check"/>.</param>
+/// <param name="VerifiedHere">True when the checks ran in this process on this value: always for a comparison the stages made; for one read from JSON, only when the reader was asked to verify (the default). False means <see cref="Passed"/> says nothing about the content: call <see cref="Comparison.Check"/>, or read the JSON again with verification.</param>
 public sealed record VerificationResult(bool Passed, int FallbackLevel, int FailureCount, bool VerifiedHere = true);
 
 /// <summary>
@@ -96,7 +96,10 @@ public sealed partial class Comparison
         return Stages.Verify(Stages.Classify(Stages.Group(Stages.DiffPairs(a, cancellationToken), cancellationToken), cancellationToken), cancellationToken);
     }
 
-    /// <summary>Re-runs the completeness checks on this comparison (for example after reading it from JSON).</summary>
+    /// <summary>
+    /// Re-runs the completeness checks on this comparison (for example after reading it from JSON with <c>verify: false</c>). The
+    /// comparison is immutable: this returns the failures and leaves <see cref="Verification"/> as it was.
+    /// </summary>
     /// <returns>The failures; empty when everything holds.</returns>
     public ImmutableArray<VerificationFailure> Check(CancellationToken cancellationToken = default) =>
         [.. Verifier.Check(Alignment, Changes, Groups, Ledger, cancellationToken)];

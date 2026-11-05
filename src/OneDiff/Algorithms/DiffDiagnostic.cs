@@ -11,6 +11,8 @@ namespace OneDiff.Algorithms;
 /// </param>
 /// <param name="Work">
 /// Work spent, in edit-graph steps: one per diagonal visited plus one per item matched while following a snake
-/// (Myers 1986), and one per item scanned when the anchor-based algorithms look for anchors. An estimate of cost, not a time.
+/// (Myers 1986), one per item scanned when the anchor-based algorithms look for anchors, and one per item of the shared head and tail
+/// that is trimmed before the search (which is not charged against the cap). An estimate of cost, not a time; it is zero when there was nothing
+/// to compare (an empty side) or the diff was not computed (<see cref="TextDiff.Create"/>).
 /// </param>
 public readonly record struct DiffDiagnostic(bool CostCapReached, long Work);

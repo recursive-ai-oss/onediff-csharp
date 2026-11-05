@@ -1,5 +1,6 @@
 using OneDiff.Documents;
 using OneDiff.Documents.Model;
+using OneDiff.Documents.Verification;
 using OneDiff.Pdf;
 
 namespace OneDiff.Ocr.Tests;
@@ -34,5 +35,35 @@ public class RegistrationOrderTests
             Comparison c = Comparison.Of(scan1, scan2);
             Assert.NotEmpty(c.Changes);
         }
+    }
+
+    [Fact]
+    public void ADamagedPdfWithNoPageContentIsRefusedEvenWithOcrRegistered()
+    {
+        using var doc = OnePdf.PdfDocument.CreateEmpty();
+        doc.InsertBlankPage(0, 300, 300);
+        using var ms = new MemoryStream();
+        doc.Save(ms);
+        DocumentInput damaged = DocumentInput.FromBytes(ms.ToArray(), "damaged.pdf");
+        DocumentInput scan = DocumentInput.FromBytes(Scans.ScanPdf(Scans.Png(Old)), "scan.pdf");
+
+        PdfRedline.Register();
+        OcrRedline.Register();
+        Assert.IsNotType<OcrDocumentSource>(DocumentSources.Sniff(damaged));
+        Assert.Throws<InvalidDataException>(() => Comparison.Of(damaged, scan));
+        Assert.Throws<InvalidDataException>(() => Comparison.Of(damaged, scan, CompareSettings.Strict));
+    }
+
+    [Fact]
+    public void AScanWhereNothingIsRecognizedCarriesAWarningAndStrictThrows()
+    {
+        PdfRedline.Register();
+        OcrRedline.Register();
+        DocumentInput blank = DocumentInput.FromBytes(Scans.ScanPdf(Scans.Png([])), "blank.pdf");
+        DocumentInput scan = DocumentInput.FromBytes(Scans.ScanPdf(Scans.Png(Old)), "scan.pdf");
+
+        Comparison c = Comparison.Of(blank, scan);
+        Assert.Contains(c.Diagnostics, d => d.Code.Contains("ocr.nothingRecognized", StringComparison.Ordinal));
+        Assert.Throws<ComparisonVerificationException>(() => Comparison.Of(blank, scan, CompareSettings.Strict));
     }
 }

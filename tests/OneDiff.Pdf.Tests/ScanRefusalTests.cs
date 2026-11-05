@@ -29,6 +29,20 @@ public class ScanRefusalTests
     }
 
     [Fact]
+    public void APdfWhosePagesAreEmptyIsCalledDamagedNotAScan()
+    {
+        using var doc = OnePdf.PdfDocument.CreateEmpty();
+        doc.InsertBlankPage(0, 300, 300);
+        using var ms = new MemoryStream();
+        doc.Save(ms);
+
+        InvalidDataException e = Assert.Throws<InvalidDataException>(() => new PdfDocumentSource().Read(DocumentInput.FromBytes(ms.ToArray(), "empty.pdf")));
+        Assert.Equal(PdfSourceFailure.Malformed, PdfSourceErrors.FailureOf(e));
+        Assert.Contains("damaged", e.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("OcrRedline", e.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ATruncatedPdfIsNotReadAsAnEmptyDocument()
     {
         byte[] good = Fixtures.Make(new Fixtures.Spec { Paragraphs = Old });

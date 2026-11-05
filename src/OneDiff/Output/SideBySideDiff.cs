@@ -26,7 +26,7 @@ public enum SideBySideKind
 /// The line in order. Unchanged and changed rows hold one part (the whole line, Equal, Delete or Insert). A modified row holds the
 /// word-level pieces: Equal and Delete on the left, Equal and Insert on the right. Concatenated, the parts are <paramref name="Text"/>.
 /// </param>
-public sealed record SideBySideCell(int Line, string Text, IReadOnlyList<DiffPiece> Parts);
+public sealed record SideBySideCell(int Line, string Text, IReadOnlyList<DiffRun> Parts);
 
 /// <summary>One row of a side-by-side view.</summary>
 /// <param name="Kind">What the row shows.</param>
@@ -61,11 +61,11 @@ public sealed class SideBySideDiff
             throw new ArgumentException("a side-by-side view needs a diff made with line tokens", nameof(diff));
         }
 
-        IReadOnlyList<DiffPiece> lines = diff.Lines;
+        IReadOnlyList<DiffRun> lines = diff.Lines;
         var rows = new List<SideBySideRow>(lines.Count);
-        var deleted = new List<DiffPiece>();
-        var inserted = new List<DiffPiece>();
-        foreach (DiffPiece line in lines)
+        var deleted = new List<DiffRun>();
+        var inserted = new List<DiffRun>();
+        foreach (DiffRun line in lines)
         {
             if (line.Kind == EditKind.Equal)
             {
@@ -93,9 +93,9 @@ public sealed class SideBySideDiff
     }
 
     // The line is already a piece with the right kind and numbers; it is the cell's single part.
-    private static SideBySideCell Cell(DiffPiece line, int number) => new(number, line.Text, [line]);
+    private static SideBySideCell Cell(DiffRun line, int number) => new(number, line.Text, [line]);
 
-    private static void Flush(List<SideBySideRow> rows, List<DiffPiece> deleted, List<DiffPiece> inserted)
+    private static void Flush(List<SideBySideRow> rows, List<DiffRun> deleted, List<DiffRun> inserted)
     {
         int paired = Math.Min(deleted.Count, inserted.Count);
         for (int i = 0; i < paired; i++)
@@ -117,22 +117,22 @@ public sealed class SideBySideDiff
         inserted.Clear();
     }
 
-    private static SideBySideRow Modified(DiffPiece oldLine, DiffPiece newLine)
+    private static SideBySideRow Modified(DiffRun oldLine, DiffRun newLine)
     {
         int oldNumber = oldLine.OldLine!.Value, newNumber = newLine.NewLine!.Value;
         TextDiff words = DiffCleanup.Semantic(Diff.Words(oldLine.Text, newLine.Text));
-        var left = new List<DiffPiece>();
-        var right = new List<DiffPiece>();
-        foreach (DiffPiece p in words.Pieces)
+        var left = new List<DiffRun>();
+        var right = new List<DiffRun>();
+        foreach (DiffRun p in words.Pieces)
         {
             if (p.Kind != EditKind.Insert)
             {
-                left.Add(new DiffPiece(p.Kind, oldNumber, p.Kind == EditKind.Equal ? newNumber : null, p.Text));
+                left.Add(new DiffRun(p.Kind, oldNumber, p.Kind == EditKind.Equal ? newNumber : null, p.Text));
             }
 
             if (p.Kind != EditKind.Delete)
             {
-                right.Add(new DiffPiece(p.Kind, p.Kind == EditKind.Equal ? oldNumber : null, newNumber, p.Text));
+                right.Add(new DiffRun(p.Kind, p.Kind == EditKind.Equal ? oldNumber : null, newNumber, p.Text));
             }
         }
 
