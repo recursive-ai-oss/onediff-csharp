@@ -16,8 +16,9 @@ internal static class Program
 {
     private const string Usage = """
         OneDiff.GoldSets generate --out DIR [--role eval|dev|train] [--seed N] [--docs-per-lang N] [--langs en,de,...] [--verify]
-        OneDiff.GoldSets score --data DIR --out FILE [--settings legal] [--oracle-alignment] [--cmp DIR | --changes DIR] [--blocks DIR] [--save-cmp DIR] [--body-only] [--pipeline NAME] [--jobs N] [--limit N] [--ids FILE] [--resamples N]
+        OneDiff.GoldSets score --data DIR --out FILE [--settings legal] [--oracle-alignment] [--cmp DIR | --changes DIR] [--blocks DIR] [--save-cmp DIR] [--body-only] [--dump-docs FILE] [--pipeline NAME] [--jobs N] [--limit N] [--ids FILE] [--resamples N]
         OneDiff.GoldSets check-split --a DIR --b DIR
+        OneDiff.GoldSets pair --a DUMP --b DUMP [--name-a X] [--name-b Y] [--resamples N]   (DUMP from score --dump-docs)
         OneDiff.GoldSets generate-combine --out DIR [--seed N] [--docs-per-lang N] [--langs en,de,...]
         OneDiff.GoldSets score-combine --data DIR --out FILE [--jobs N] [--limit N] [--resamples N]
 
@@ -58,6 +59,7 @@ internal static class Program
                 "digest-combine" => CombineSet.Digest(opt),
                 "time-combine" => CombineSet.Time(opt),
                 "explain" => Explain(opt),
+                "pair" => Pairing.Compare(opt),
                 "real-gate" => RealGate(opt),
                 _ => Fail("unknown command " + args[0]),
             };
@@ -408,6 +410,22 @@ internal static class Program
         File.WriteAllLines(outFile + ".missed.txt", results.Where(r => r.Counts.Missed.Count > 0).OrderBy(r => r.Labels.Id, StringComparer.Ordinal).Select(r => r.Labels.Id + " " + string.Join(" | ", r.Counts.Missed)));
         File.WriteAllLines(outFile + ".align.txt", results.Where(r => r.Counts.AlignErrors.Count > 0).OrderBy(r => r.Labels.Id, StringComparer.Ordinal).Select(r => r.Labels.Id + " " + string.Join(" ; ", r.Counts.AlignErrors.Order(StringComparer.Ordinal))));
         File.WriteAllLines(outFile + ".semantic.txt", results.Where(r => r.Counts.SemDiag.Count > 0).OrderBy(r => r.Labels.Id, StringComparer.Ordinal).SelectMany(r => r.Counts.SemDiag));
+        if (opt.TryGetValue("dump-docs", out string? dumpFile))
+        {
+            var perDocAll = new Dictionary<(string, int), Counts>();
+            foreach ((PairLabels labels, Counts c) in results)
+            {
+                if (!perDocAll.TryGetValue((labels.Lang, labels.BaseDoc), out Counts? sum))
+                {
+                    perDocAll[(labels.Lang, labels.BaseDoc)] = sum = new Counts();
+                }
+
+                sum.Add(c);
+            }
+
+            Pairing.Write(dumpFile, [.. perDocAll.OrderBy(k => k.Key.Item1, StringComparer.Ordinal).ThenBy(k => k.Key.Item2).Select(k => Pairing.ToDump(k.Key.Item1 + "/" + k.Key.Item2.ToString(CultureInfo.InvariantCulture), k.Value))]);
+        }
+
         var rows = new List<MetricRow>();
         void Scope(string name, Func<PairLabels, bool> pick)
         {

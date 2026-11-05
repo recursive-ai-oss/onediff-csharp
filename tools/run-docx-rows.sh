@@ -29,4 +29,10 @@ for T in ${COMPARATORS:-}; do
   dotnet "$GD" read --tool "$T" --tracked "$EVAL/cmp-docx-v1/$T" --docx "$DOCX" --out "$OUT/read/$T" --jobs 4 > "$OUT/read-$T.log" 2>&1
 done
 GOLDSETS_DLL=$GS tools/score-docx-comparators.sh "$SYNTH" "$DOCX" "$OUT/read" "$OUT/score" onediff-tracked onediff-engine ${COMPARATORS:-}
+# Paired rows against each comparator: the same documents resampled once for both tools.
+for MINE in onediff-tracked onediff-engine; do
+  for T in ${COMPARATORS:-}; do
+    dotnet "$GS" pair --a "$OUT/score/$MINE/all.docs.json" --b "$OUT/score/$T/all.docs.json" --name-a "$MINE" --name-b "$T" > "$OUT/pair-$MINE-vs-$T.md"
+  done
+done
 grep -hE '^(all|block map)' "$OUT/score/onediff-tracked/all.txt" "$OUT/score/onediff-engine/all.txt" | head -60

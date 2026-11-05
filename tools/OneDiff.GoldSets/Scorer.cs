@@ -437,8 +437,8 @@ internal sealed record MetricRow(string Set, string SetHash, string Scope, strin
 
 internal static class Report
 {
-    /// <summary>All metric rows for a group of pairs (already grouped by document).</summary>
-    public static IEnumerable<MetricRow> Rows(string set, string setHash, string scope, IReadOnlyList<Counts> docs, string pipeline)
+    /// <summary>Every metric row with the way it is computed from summed counts.</summary>
+    public static List<(string Name, Bootstrap.Metric M)> Definitions()
     {
         var defs = new List<(string Name, Bootstrap.Metric M)>();
         for (int i = 0; i < 6; i++)
@@ -479,6 +479,13 @@ internal static class Report
         defs.Add(("pairs.renamechain", c => c.RenChain));
         defs.Add(("verify.pass", c => c.Pairs == 0 ? double.NaN : (double)c.Passed / c.Pairs));
         defs.Add(("verify.fallback", c => c.Pairs == 0 ? double.NaN : (double)c.Fallbacks / c.Pairs));
+        return defs;
+    }
+
+    /// <summary>All metric rows for a group of pairs (already grouped by document).</summary>
+    public static IEnumerable<MetricRow> Rows(string set, string setHash, string scope, IReadOnlyList<Counts> docs, string pipeline)
+    {
+        List<(string Name, Bootstrap.Metric M)> defs = Definitions();
         int pairs = (int)docs.Sum(d => d.Pairs);
         (double Value, double Lo, double Hi)[] res = Bootstrap.RunAll(docs, [.. defs.Select(d => d.M)]);
         for (int i = 0; i < defs.Count; i++)

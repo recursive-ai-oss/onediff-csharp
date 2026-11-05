@@ -34,7 +34,7 @@ PY
   else
     ls "$READ/$T" | sed -n 's/\.cmp\.json$//p' > "$OUT/$T/ids-completed.txt"
   fi
-  dotnet "$DLL" score --data "$SYNTH" "${SRC[@]}" --blocks "$DOCX" $BODY --pipeline "$T" --jobs 4 --out "$OUT/$T/all.json" > "$OUT/$T/all.txt" 2>&1
+  dotnet "$DLL" score --data "$SYNTH" "${SRC[@]}" --blocks "$DOCX" $BODY --pipeline "$T" --jobs 4 --dump-docs "$OUT/$T/all.docs.json" --out "$OUT/$T/all.json" > "$OUT/$T/all.txt" 2>&1
   [ -n "${ONLY_ALL:-}" ] && continue
   dotnet "$DLL" score --data "$SYNTH" "${SRC[@]}" --blocks "$DOCX" $BODY --pipeline "$T" --jobs 4 --ids "$OUT/$T/ids-completed.txt" --out "$OUT/$T/completed.json" > "$OUT/$T/completed.txt" 2>&1
   for L in 0 1 2 3 4 5; do
