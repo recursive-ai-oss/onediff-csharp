@@ -83,6 +83,39 @@ public class TrackedChangesTests
     }
 }
 
+public class TrackedTextBoxTests
+{
+    private static DocSpec Doc(string box) => new(
+        Para.Of("Intro paragraph that stays."),
+        new Para(new T("The terms are in "), new Box(box), new T(" the box.")),
+        Para.Of("Closing paragraph."));
+
+    [Theory]
+    [InlineData(WordBuildOn.New)]
+    [InlineData(WordBuildOn.Old)]
+    public void EditedTextBoxIsTrackedInPlace(WordBuildOn on)
+    {
+        byte[] ob = DocFactory.Build(Doc("Payment within thirty days")), nb = DocFactory.Build(Doc("Payment within sixty days"));
+        var source = new WordDocumentSource();
+        CompareDocument o = source.Read(DocumentInput.FromBytes(ob, "o.docx")), n = source.Read(DocumentInput.FromBytes(nb, "n.docx"));
+        Comparison c = Comparison.Of(o, n, CompareSettings.Legal);
+        var trace = new List<string>();
+        TrackedWriter.Trace = trace.Add;
+        try
+        {
+            using var ms = new MemoryStream();
+            DocxRedlineResult res = new DocxRedline { BuildOn = on }.Create(c, ms);
+            Assert.Empty(TrackedGate.Problems(o, n, ms.ToArray(), c.Settings, on, res.NotCarried));
+        }
+        finally
+        {
+            TrackedWriter.Trace = null;
+        }
+
+        Assert.DoesNotContain(trace, t => t.StartsWith("replace", StringComparison.Ordinal));
+    }
+}
+
 public class TrackedDebug
 {
     private static string Dump(CompareDocument d) => string.Join("\n", d.Nodes.Where(n => n.Kind is not (NodeKind.Property)).Select(n => $"{new string(' ', n.Depth * 2)}{n.Id} {n.Kind} '{(n.Text.Length > 40 ? n.Text[..40] : n.Text).Replace("\uFFFC", "#")}'"));
