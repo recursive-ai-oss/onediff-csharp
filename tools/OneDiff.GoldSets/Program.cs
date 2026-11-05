@@ -16,7 +16,7 @@ internal static class Program
 {
     private const string Usage = """
         OneDiff.GoldSets generate --out DIR [--role eval|dev|train] [--seed N] [--docs-per-lang N] [--langs en,de,...] [--verify]
-        OneDiff.GoldSets score --data DIR --out FILE [--oracle-alignment] [--cmp DIR | --changes DIR] [--blocks DIR] [--save-cmp DIR] [--pipeline NAME] [--jobs N] [--limit N] [--ids FILE] [--resamples N]
+        OneDiff.GoldSets score --data DIR --out FILE [--settings legal] [--oracle-alignment] [--cmp DIR | --changes DIR] [--blocks DIR] [--save-cmp DIR] [--pipeline NAME] [--jobs N] [--limit N] [--ids FILE] [--resamples N]
         OneDiff.GoldSets check-split --a DIR --b DIR
 
           generate    writes DIR/pairs/<id>.docs.json and <id>.labels.json for the documents of the chosen role, split.json (every
@@ -285,6 +285,8 @@ internal static class Program
         int noOutput = 0;
         bool oracleAlignment = opt.ContainsKey("oracle-alignment");
         string pipeline = opt.GetValueOrDefault("pipeline") ?? (oracleAlignment ? "gold-alignment" : "reference");
+        // Scored with nothing hidden and cascades and types on, unless --settings legal asks for the default preset.
+        CompareSettings scoreSettings = opt.GetValueOrDefault("settings") == "legal" ? CompareSettings.Legal with { ThrowOnFailure = false } : Pipeline.Settings;
         int jobs = int.Parse(opt.GetValueOrDefault("jobs") ?? "4", CultureInfo.InvariantCulture);
         Bootstrap.Resamples = int.Parse(opt.GetValueOrDefault("resamples") ?? "10000", CultureInfo.InvariantCulture);
         int limit = int.Parse(opt.GetValueOrDefault("limit") ?? "0", CultureInfo.InvariantCulture);
@@ -357,7 +359,7 @@ internal static class Program
                 {
                     CompareDocument o = GoldJson.Build(docs.Old);
                     CompareDocument n = GoldJson.Build(docs.New);
-                    cmp = oracleAlignment ? Pipeline.OracleAlignment(o, n, labels) : Comparison.Of(o, n, Pipeline.Settings);
+                    cmp = oracleAlignment ? Pipeline.OracleAlignment(o, n, labels) : Comparison.Of(o, n, scoreSettings);
                     if (saveCmp is not null)
                     {
                         File.WriteAllBytes(Path.Combine(saveCmp, id + ".cmp.json"), ComparisonJson.Write(cmp));
