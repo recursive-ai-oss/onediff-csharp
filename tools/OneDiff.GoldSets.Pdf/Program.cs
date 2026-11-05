@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using OneDiff.Documents;
 using OneDiff.Documents.Serialization;
 using OneDiff.Documents.Model;
@@ -36,10 +37,15 @@ internal static class Program
     private const string Usage = """
         OneDiff.GoldSets.Pdf render --out DIR [--data DIR] [--real DIR] [--fonts DIR[,DIR]] [--jobs N] [--limit N]
         OneDiff.GoldSets.Pdf compare --pdf DIR --out DIR [--every N] [--limit N] [--jobs N]
+        OneDiff.GoldSets.Pdf cross --mode dp|pd|dd|pp --pdf DIR --docx DIR --out DIR [--settings legal|textonly] [--every N] [--limit N] [--jobs N]
 
           --data   a gold-set directory made by OneDiff.GoldSets generate (renders pairs/<id>.docs.json)
           --real   fetched real pairs: <source>/<pair>/{old.txt,new.txt}
           writes DIR/pdf/<id>.{old,new}.pdf and <id>.blocks.json, then manifest.json and manifest.sha256
+
+          cross compares a Word file with a PDF of the same pair: dp reads the old side from DIR/<id>.old.docx and the new side
+          from the PDF, pd the other way round (dd reads both sides from Word files and pp from PDFs, for reference). It writes OUT/<id>.cmp.json and OUT/<id>.blocks.json, a block map with the Word
+          file's side taken from the Word set's map, so that `OneDiff.GoldSets score --cmp OUT --blocks OUT` scores it. Only ids in both sets.
 
           compare reads each DIR/<id>.{old,new}.pdf through the PDF source, compares with the default settings and writes
           OUT/<id>.cmp.json, which `OneDiff.GoldSets score --cmp OUT --blocks DIR` maps onto the gold nodes (--every keeps every Nth pair)
@@ -88,11 +94,93 @@ internal static class Program
         return failed == 0 ? 0 : 1;
     }
 
+    private static int Cross(string[] args)
+    {
+        var opt = new Dictionary<string, string>();
+        for (int i = 1; i < args.Length; i++)
+        {
+            opt[args[i][2..]] = i + 1 < args.Length && !args[i + 1].StartsWith("--", StringComparison.Ordinal) ? args[++i] : "true";
+        }
+
+        string mode = opt.GetValueOrDefault("mode") ?? throw new ArgumentException("--mode dp|pd is required");
+        if (mode is not ("dp" or "pd" or "dd" or "pp"))
+        {
+            throw new ArgumentException("--mode is dp, pd, dd or pp");
+        }
+
+        bool oldWord = mode is "dp" or "dd", newWord = mode is "pd" or "dd";
+
+        string pdfDir = Path.GetFullPath(opt.GetValueOrDefault("pdf") ?? throw new ArgumentException("--pdf is required"));
+        string docxDir = Path.GetFullPath(opt.GetValueOrDefault("docx") ?? throw new ArgumentException("--docx is required"));
+        string outDir = Path.GetFullPath(opt.GetValueOrDefault("out") ?? throw new ArgumentException("--out is required"));
+        int every = int.Parse(opt.GetValueOrDefault("every") ?? "1", CultureInfo.InvariantCulture);
+        int limit = int.Parse(opt.GetValueOrDefault("limit") ?? "0", CultureInfo.InvariantCulture);
+        int jobs = int.Parse(opt.GetValueOrDefault("jobs") ?? "4", CultureInfo.InvariantCulture);
+        CompareSettings settings = (opt.GetValueOrDefault("settings") ?? "legal") switch
+        {
+            "legal" => CompareSettings.Legal,
+            "textonly" => CompareSettings.TextOnly,
+            _ => throw new ArgumentException("--settings is legal or textonly"),
+        };
+        Directory.CreateDirectory(outDir);
+        string[] ids = [.. Directory.EnumerateFiles(pdfDir, "*.old.pdf").Select(f => Path.GetFileName(f)[..^".old.pdf".Length])
+            .Where(id => File.Exists(Path.Combine(docxDir, id + ".old.docx")) && File.Exists(Path.Combine(docxDir, id + ".blocks.json")) && File.Exists(Path.Combine(pdfDir, id + ".blocks.json")))
+            .OrderBy(x => x, StringComparer.Ordinal).Where((_, i) => i % every == 0)];
+        if (limit > 0)
+        {
+            ids = [.. ids.Take(limit)];
+        }
+
+        int failed = 0;
+        Parallel.ForEach(ids, new ParallelOptions { MaxDegreeOfParallelism = jobs }, id =>
+        {
+            try
+            {
+                var pdf = new PdfDocumentSource();
+                var word = new OneDiff.Word.WordDocumentSource();
+                CompareDocument o = oldWord
+                    ? word.Read(DocumentInput.FromBytes(File.ReadAllBytes(Path.Combine(docxDir, id + ".old.docx")), id + ".old.docx"))
+                    : pdf.Read(DocumentInput.FromBytes(File.ReadAllBytes(Path.Combine(pdfDir, id + ".old.pdf")), id + ".old.pdf"));
+                CompareDocument n = newWord
+                    ? word.Read(DocumentInput.FromBytes(File.ReadAllBytes(Path.Combine(docxDir, id + ".new.docx")), id + ".new.docx"))
+                    : pdf.Read(DocumentInput.FromBytes(File.ReadAllBytes(Path.Combine(pdfDir, id + ".new.pdf")), id + ".new.pdf"));
+                File.WriteAllBytes(Path.Combine(outDir, id + ".cmp.json"), ComparisonJson.Write(Comparison.Of(o, n, settings)));
+
+                // The gold node ids are the source documents' own, so a side's block map is the same whichever rendering it comes from.
+                JsonNode pdfMap = JsonNode.Parse(File.ReadAllBytes(Path.Combine(pdfDir, id + ".blocks.json")))!;
+                JsonNode docxMap = JsonNode.Parse(File.ReadAllBytes(Path.Combine(docxDir, id + ".blocks.json")))!;
+                if (oldWord)
+                {
+                    pdfMap["old"] = docxMap["old"]!.DeepClone();
+                }
+
+                if (newWord)
+                {
+                    pdfMap["new"] = docxMap["new"]!.DeepClone();
+                }
+
+                File.WriteAllText(Path.Combine(outDir, id + ".blocks.json"), pdfMap.ToJsonString());
+            }
+            catch (Exception e) when (e is not OutOfMemoryException)
+            {
+                Interlocked.Increment(ref failed);
+                Console.Error.WriteLine($"{id}: {e.GetType().Name}: {e.Message}");
+            }
+        });
+        Console.WriteLine($"compared {ids.Length} cross pairs ({mode}), {failed} failed");
+        return failed == 0 ? 0 : 1;
+    }
+
     private static int Main(string[] args)
     {
         if (args.Length > 0 && args[0] == "compare")
         {
             return Compare(args);
+        }
+
+        if (args.Length > 0 && args[0] == "cross")
+        {
+            return Cross(args);
         }
 
         if (args.Length == 0 || args[0] != "render")

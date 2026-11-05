@@ -121,9 +121,17 @@ internal static class PdfText
         return false;
     }
 
-    /// <summary>Whether a word is a list marker: a bullet, a dash, or a number or letter closed by a dot or parenthesis.</summary>
+    /// <summary>
+    /// Whether a word is a list marker: a bullet, a dash, a number or letter closed by a dot or parenthesis, or a dotted-decimal
+    /// clause number such as <c>1.1</c> or <c>10.2.3.</c>.
+    /// </summary>
     public static bool IsListMarker(string word)
     {
+        if (IsDottedDecimal(word))
+        {
+            return true;
+        }
+
         if (word.Length == 0 || word.Length > 6)
         {
             return false;
@@ -158,6 +166,49 @@ internal static class PdfText
 
         // Roman numerals, either case.
         return core.Length <= 4 && (core.All(static ch => "ivxlcdm".Contains(ch, StringComparison.Ordinal)) || core.All(static ch => "IVXLCDM".Contains(ch, StringComparison.Ordinal)));
+    }
+
+    // Two to four groups of one to three digits joined by dots, with an optional closing dot: the clause numbers of contracts.
+    // A Word source reads these as list labels, so reading them the same way keeps the two models' clauses alike. Numbers that
+    // only look like them are left alone: 7.500 (thousands grouped with dots, as in German amounts) and 0.5.
+    public static bool IsDottedDecimal(string word)
+    {
+        int end = word.Length > 0 && word[^1] == '.' ? word.Length - 1 : word.Length;
+        int groups = 0, digits = 0;
+        bool onlyThousands = true;
+        for (int i = 0; i < end; i++)
+        {
+            char c = word[i];
+            if (char.IsAsciiDigit(c) && ++digits <= 3)
+            {
+                continue;
+            }
+
+            if (c != '.' || digits == 0 || i == end - 1)
+            {
+                return false;
+            }
+
+            if (groups == 0 && digits == 1 && word[0] == '0')
+            {
+                return false;
+            }
+
+            if (groups > 0 && digits != 3)
+            {
+                onlyThousands = false;
+            }
+
+            groups++;
+            digits = 0;
+        }
+
+        if (groups > 0 && digits != 3)
+        {
+            onlyThousands = false;
+        }
+
+        return digits > 0 && groups is >= 1 and <= 3 && !onlyThousands;
     }
 
     public static string Hex(int rgb) => "#" + (rgb & 0xFFFFFF).ToString("X6", System.Globalization.CultureInfo.InvariantCulture);

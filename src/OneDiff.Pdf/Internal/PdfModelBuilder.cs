@@ -73,12 +73,19 @@ internal sealed class PdfModelBuilder
         foreach (PdfPageText page in pages)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            foreach (PdfTextBlock block in page.Blocks)
+            PdfTextBlock[] body = [.. page.Blocks.Where(static b => b.Role == PdfTextRole.Body)];
+            for (int i = 0; i < body.Length; i++)
             {
-                if (block.Role == PdfTextRole.Body)
+                if (options.ReadTables && TryGrid(body, i, out List<List<List<PdfTextBlock>>>? rows))
                 {
-                    AddBodyBlock(page, block);
+                    FlushMarker();
+                    Flush();
+                    AddGrid(page, rows);
+                    i += rows.Sum(static r => r.Sum(static c => c.Count)) - 1;
+                    continue;
                 }
+
+                AddBodyBlock(page, body[i]);
             }
         }
 
@@ -206,7 +213,9 @@ internal sealed class PdfModelBuilder
                 continue;
             }
 
-            if (options.ReadListItems && IsMarkerLine(line))
+            // A clause number such as 2.2 that opens a wrapped line is usually a reference that fell there ("see clause\n2.2."), so
+            // within a block it starts an item only after a line that closed one.
+            if (options.ReadListItems && IsMarkerLine(line) && (i == 0 || !PdfText.IsDottedDecimal(line.Words[0].Text) || EndsItem(block.Lines[i - 1])))
             {
                 Flush();
                 open = new Piece(NodeKind.ListItem, line.Words[0].Text);
@@ -224,6 +233,9 @@ internal sealed class PdfModelBuilder
         double overlap = Math.Min(a.Top, b.Top) - Math.Max(a.Bottom, b.Bottom);
         return overlap > 0.5 * Math.Min(a.Height, b.Height);
     }
+
+    // A line closes an item when it ends a sentence or is a heading-sized fragment.
+    private static bool EndsItem(PdfTextLine line) => line.Words.Count <= 3 || PdfText.EndsSentence(line.Text);
 
     private static bool IsMarkerLine(PdfTextLine line) => line.Words.Count > 1 && PdfText.IsListMarker(line.Words[0].Text);
 
@@ -248,6 +260,128 @@ internal sealed class PdfModelBuilder
         // Same page: a jump up the page (the next column) continues a paragraph. So does a block that starts right under the
         // previous line, closer than any paragraph gap: the text analysis split a line off (a justified first line, say).
         return first.Bounds.Top > p.LastBottom + 2 || p.LastBottom - first.Bounds.Top < 0.4 * first.Bounds.Height;
+    }
+
+    // A ruled or aligned grid whose cells the text analysis returned as one block each, row by row ("Item", "Period", "Fee", then
+    // "Support", "24 months", "USD 25,000"): consecutive short blocks that fall into rows of the same number of cells (two or more),
+    // each cell sitting under the one above it, for at least two rows. A block that sits right under a cell of the row and
+    // overlaps it is that cell's next line (a narrow cell wraps "1 200 EUR" into two blocks). A Word source has the table, so
+    // reading the grid back as a table keeps the two models alike; a block that is longer than a cell or a row that breaks the
+    // pattern ends the grid. A cell is its blocks, a row its cells.
+    private static bool TryGrid(PdfTextBlock[] body, int start, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out List<List<List<PdfTextBlock>>>? rows)
+    {
+        rows = null;
+        var done = new List<List<List<PdfTextBlock>>>();
+        var row = new List<List<PdfTextBlock>>();
+        int columns = -1;
+        for (int j = start; j < body.Length; j++)
+        {
+            PdfTextBlock b = body[j];
+            if (!IsCell(b))
+            {
+                break;
+            }
+
+            if (row.Count > 0 && !SameBaseline(row[0][0].Lines[0].Bounds, b.Lines[0].Bounds))
+            {
+                if (row.Count >= 2 && ContinuesCell(row, b))
+                {
+                    continue;
+                }
+
+                // The row is complete: it must have as many cells as the rows before it, each under the one above.
+                if (row.Count < 2 || (columns >= 0 && row.Count != columns) || (done.Count > 0 && !Stacks(done[^1], row)))
+                {
+                    row = [];
+                    break;
+                }
+
+                columns = row.Count;
+                done.Add(row);
+                row = [];
+            }
+
+            row.Add([b]);
+        }
+
+        if (row.Count >= 2 && (columns < 0 || row.Count == columns) && (done.Count == 0 || Stacks(done[^1], row)))
+        {
+            done.Add(row);
+        }
+
+        if (done.Count < 2)
+        {
+            return false;
+        }
+
+        rows = done;
+        return true;
+    }
+
+    private static bool ContinuesCell(List<List<PdfTextBlock>> row, PdfTextBlock b)
+    {
+        PdfRectangle next = b.Lines[0].Bounds;
+        foreach (List<PdfTextBlock> cell in row)
+        {
+            PdfRectangle last = cell[^1].Lines[^1].Bounds;
+            bool overlaps = Math.Min(last.Right, next.Right) > Math.Max(last.Left, next.Left);
+            if (overlaps && last.Bottom - next.Top < 0.5 * next.Height && next.Top <= last.Bottom + 0.5 * next.Height)
+            {
+                cell.Add(b);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsCell(PdfTextBlock b)
+    {
+        if (b.IsTable || b.Lines.Count is 0 or > 3 || b.Lines.Any(static l => l.Words.Count == 0))
+        {
+            return false;
+        }
+
+        return b.Lines.Sum(static l => l.Words.Count) <= 8 && !PdfText.IsListMarker(b.Lines[0].Words[0].Text);
+    }
+
+    private static bool Stacks(List<List<PdfTextBlock>> above, List<List<PdfTextBlock>> below)
+    {
+        for (int c = 0; c < above.Count; c++)
+        {
+            PdfRectangle a = above[c][0].Lines[0].Bounds, b = below[c][0].Lines[0].Bounds;
+            if (Math.Min(a.Right, b.Right) <= Math.Max(a.Left, b.Left))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private void AddGrid(PdfPageText page, List<List<List<PdfTextBlock>>> rows)
+    {
+        builder.Begin(NodeKind.Table);
+        foreach (List<List<PdfTextBlock>> row in rows)
+        {
+            builder.Begin(NodeKind.TableRow);
+            foreach (List<PdfTextBlock> cell in row)
+            {
+                builder.Begin(NodeKind.TableCell);
+                var piece = new Piece(NodeKind.Paragraph, null);
+                foreach (PdfTextLine line in cell.SelectMany(static b => b.Lines))
+                {
+                    AddLine(piece, page, line, 0, line.Words.Count);
+                }
+
+                EmitParagraph(piece, TextNormalization.Normalize(piece.Raw.ToString(), BodyNormalizers));
+                builder.End();
+            }
+
+            builder.End();
+        }
+
+        builder.End();
     }
 
     private void AddTable(PdfPageText page, PdfTextBlock block)

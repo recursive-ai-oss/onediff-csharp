@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using OneDiff.Documents;
+using OneDiff.Documents.Model;
 using OneDiff.Word.Internal;
 
 namespace OneDiff.Word;
@@ -32,8 +33,12 @@ public sealed record DocxRedlineResult(byte[] Bytes, ImmutableArray<WordNotCarri
 /// document by default, so that accepting all revisions gives the new document and rejecting all gives the old one.
 /// </summary>
 /// <remarks>
-/// The comparison must come from Word documents read by <see cref="WordDocumentSource"/> in this process (the form reopens the bytes
-/// the source read). Differences a revision cannot express (document and comment changes, headers or footers present on one side,
+/// A side read by <see cref="WordDocumentSource"/> in this process is built on as it is (the form reopens the bytes the source read).
+/// Any other flowing document (a PDF, a scan, text) is first reconstructed as a DOCX from its compare model: paragraphs, list items with
+/// their resolved labels, tables, one header and one footer, and the character formatting the model carries; the package is labelled as
+/// reconstructed in its core properties and by a note in its header (<see cref="ReconstructionNote"/>). With <see cref="WordBuildOn.New"/>
+/// (the default) the output is built on the new document, reconstructed when it is not a Word file, and the old document is the donor of
+/// the deleted content; <see cref="WordBuildOn.Old"/> builds on the old one. Differences a revision cannot express (document and comment changes, headers or footers present on one side,
 /// content-control wrappers, section breaks) are listed in <see cref="DocxRedlineResult.NotCarried"/> by <see cref="Create"/>.
 /// Revision ids are numbered in document order, and no date is written unless <see cref="Date"/> is set, so equal inputs give equal bytes.
 /// </remarks>
@@ -56,6 +61,12 @@ public sealed class DocxRedline : RedlineForm
     /// <summary>Which document the output is built on. Default <see cref="WordBuildOn.New"/>.</summary>
     public WordBuildOn BuildOn { get; init; } = WordBuildOn.New;
 
+    /// <summary>
+    /// Whether a document that is reconstructed (it was not read from a Word file) carries a visible note saying so, as the last paragraph of
+    /// its header. Default true. The core properties say it either way. Word files read by <see cref="WordDocumentSource"/> are never touched.
+    /// </summary>
+    public bool ReconstructionNote { get; init; } = true;
+
     /// <summary>Registers the Word source and this form for the <c>.docx</c> extension.</summary>
     public static void Register()
     {
@@ -64,12 +75,13 @@ public sealed class DocxRedline : RedlineForm
     }
 
     /// <summary>Writes the comparison and returns what was left out.</summary>
-    /// <param name="comparison">A comparison whose built-on document was read by <see cref="WordDocumentSource"/> and whose other document is a Word document too.</param>
+    /// <param name="comparison">A comparison of two flowing documents; each may be a Word document read by <see cref="WordDocumentSource"/> or any other flowing document.</param>
     /// <param name="output">Where to write the DOCX; not closed.</param>
     /// <param name="cancellationToken">Observed between nodes.</param>
     /// <returns>The bytes written and the differences not carried.</returns>
     /// <exception cref="ArgumentNullException">An argument is null.</exception>
-    /// <exception cref="InvalidOperationException">A document was not read from a Word file by <see cref="WordDocumentSource"/> in this process.</exception>
+    /// <exception cref="NotSupportedException">A document that is not a Word file holds nodes a reconstruction cannot write (children of paragraphs, notes, comments, text boxes) or is not of the flowing kind.</exception>
+    /// <exception cref="InvalidOperationException">A reconstructed package does not read back as the model it was built from (a defect).</exception>
     /// <exception cref="OperationCanceledException">The token was cancelled.</exception>
     public DocxRedlineResult Create(Comparison comparison, Stream output, CancellationToken cancellationToken = default)
     {
@@ -77,21 +89,36 @@ public sealed class DocxRedline : RedlineForm
         ArgumentNullException.ThrowIfNull(output);
         ArgumentException.ThrowIfNullOrEmpty(Author);
         bool onNew = BuildOn == WordBuildOn.New;
-        if (!WordOrigins.TryGet(comparison.New, out WordOrigin newOrigin) || !WordOrigins.TryGet(comparison.Old, out WordOrigin oldOrigin))
-        {
-            throw new InvalidOperationException("both documents must be Word files read by WordDocumentSource in this process, so that their bytes are known");
-        }
-
-        WordOrigin baseOrigin = onNew ? newOrigin : oldOrigin, donorOrigin = onNew ? oldOrigin : newOrigin;
+        CancellationToken ct = cancellationToken;
+        // A side that is not a Word file is rebuilt on the other side's package when that one is a Word file, so that the two share styles.
+        WordOrigin? newOrigin = WordOrigins.TryGet(comparison.New, out WordOrigin no) ? no : null, oldOrigin = WordOrigins.TryGet(comparison.Old, out WordOrigin oo) ? oo : null;
+        (CompareDocument newModel, ReadOnlyMemory<byte> newBytes, WordRevisionMode newMode) = Prepare(comparison.New, comparison.Settings, oldOrigin, ct);
+        (CompareDocument oldModel, ReadOnlyMemory<byte> oldBytes, WordRevisionMode oldMode) = Prepare(comparison.Old, comparison.Settings, newOrigin, ct);
         using var writer = new TrackedWriter(
-            comparison,
+            comparison.Alignment,
+            comparison.Changes,
             new TrackedOptions(Author, Date, onNew),
-            new TrackedSide(onNew ? comparison.New : comparison.Old, baseOrigin.Bytes, baseOrigin.Revisions),
-            new TrackedSide(onNew ? comparison.Old : comparison.New, donorOrigin.Bytes, donorOrigin.Revisions),
-            cancellationToken);
+            onNew ? new TrackedSide(newModel, newBytes, newMode) : new TrackedSide(oldModel, oldBytes, oldMode),
+            onNew ? new TrackedSide(oldModel, oldBytes, oldMode) : new TrackedSide(newModel, newBytes, newMode),
+            ct);
         byte[] bytes = writer.Run();
         output.Write(bytes, 0, bytes.Length);
         return new DocxRedlineResult(bytes, [.. writer.Notes.Select(n => new WordNotCarried(n.Category, n.Message, n.BaseNodes, n.DonorNodes))]);
+    }
+
+    /// <summary>
+    /// The document and package a side is written on: a Word document as read, any other flowing document (a PDF, a scan, plain text)
+    /// reconstructed as a DOCX and re-anchored (see docs/word.md).
+    /// </summary>
+    private (CompareDocument Model, ReadOnlyMemory<byte> Bytes, WordRevisionMode Mode) Prepare(CompareDocument document, CompareSettings settings, WordOrigin? template, CancellationToken cancellationToken)
+    {
+        if (WordOrigins.TryGet(document, out WordOrigin origin))
+        {
+            return (document, origin.Bytes, origin.Revisions);
+        }
+
+        ReconstructedDocx rebuilt = Reconstruction.Build(document, settings, document.SourceFormat.Length > 0 ? document.SourceFormat : "a non-Word document", ReconstructionNote, template, cancellationToken);
+        return (rebuilt.Model, rebuilt.Bytes, WordRevisionMode.Accepted);
     }
 
     /// <inheritdoc />

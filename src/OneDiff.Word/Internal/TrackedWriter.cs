@@ -26,7 +26,8 @@ internal sealed record TrackedOptions(string Author, DateTimeOffset? Date, bool 
 /// </summary>
 internal sealed partial class TrackedWriter : IDisposable
 {
-    private readonly Comparison cmp;
+    private readonly Alignment alignment;
+    private readonly ImmutableArray<Change> changes;
     private readonly TrackedOptions options;
     private readonly bool baseIsNew;
     private readonly TrackedSide b;
@@ -64,16 +65,17 @@ internal sealed partial class TrackedWriter : IDisposable
         Move,
     }
 
-    public TrackedWriter(Comparison comparison, TrackedOptions options, TrackedSide baseSide, TrackedSide donorSide, CancellationToken cancellationToken)
+    public TrackedWriter(Alignment alignment, ImmutableArray<Change> changes, TrackedOptions options, TrackedSide baseSide, TrackedSide donorSide, CancellationToken cancellationToken)
     {
-        cmp = comparison;
+        this.alignment = alignment;
+        this.changes = changes;
         this.options = options;
         baseIsNew = options.BuildOnNew;
         b = baseSide;
         d = donorSide;
         bm = baseSide.Model;
         dm = donorSide.Model;
-        settings = comparison.Settings;
+        settings = alignment.Settings;
         wp = baseSide.Prefix;
         authorXml = Wx.EscapeAttribute(options.Author);
         dateXml = options.Date is { } dt ? " " + wp + ":date=\"" + dt.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture) + "\"" : "";
@@ -93,7 +95,7 @@ internal sealed partial class TrackedWriter : IDisposable
 
     public byte[] Run()
     {
-        foreach (Change c in cmp.Changes)
+        foreach (Change c in changes)
         {
             if (c.LinkId < 0)
             {
@@ -169,9 +171,9 @@ internal sealed partial class TrackedWriter : IDisposable
 
     // ------------------------------------------------------------------------------------------------------------------ orientation
 
-    private AlignmentLink? LinkOfBase(int node) => baseIsNew ? cmp.Alignment.LinkOfNew(node) : cmp.Alignment.LinkOfOld(node);
+    private AlignmentLink? LinkOfBase(int node) => baseIsNew ? alignment.LinkOfNew(node) : alignment.LinkOfOld(node);
 
-    private AlignmentLink? LinkOfDonor(int node) => baseIsNew ? cmp.Alignment.LinkOfOld(node) : cmp.Alignment.LinkOfNew(node);
+    private AlignmentLink? LinkOfDonor(int node) => baseIsNew ? alignment.LinkOfOld(node) : alignment.LinkOfNew(node);
 
     private static bool IsPair(AlignmentLink? l) => l is { Kind: LinkKind.Match or LinkKind.Move, OldNodes.Length: 1, NewNodes.Length: 1 };
 
@@ -1290,7 +1292,12 @@ internal sealed partial class TrackedWriter : IDisposable
         return sb.ToString();
     }
 
-    private static string Signature(MarkupNode props, string[] keep)
+    /// <summary>
+    /// What identifies a set of properties for comparison: the XML of each property, and for a list (<c>w:numPr</c>) also what its numbering
+    /// number stands for in its own package, because two packages number their lists independently and the same number can mean a
+    /// different label (two documents that were each built with their own list definitions).
+    /// </summary>
+    private string Signature(MarkupNode props, string[] keep)
     {
         if (props.IsNull)
         {
@@ -1306,6 +1313,10 @@ internal sealed partial class TrackedWriter : IDisposable
             }
 
             sb.Append(StripNamespaces(c.OuterXml));
+            if (Wx.Is(c, "numPr") && Wx.Attr(Wx.Child(c, "numId"), "val") is { } numId)
+            {
+                sb.Append('#').Append((b.Owns(props) ? b : d).NumberingKey(numId));
+            }
         }
 
         return sb.ToString();
@@ -1512,7 +1523,8 @@ internal sealed partial class TrackedWriter : IDisposable
                 PropertyChange(be, de, "tblPr", "tblPrChange", ["tblPrChange"], insertAtStart: true);
                 break;
             case NodeKind.TableRow:
-                PropertyChange(be, de, "trPr", "trPrChange", ["ins", "del", "trPrChange"], insertAtStart: false);
+                // w:trPr comes before the cells (CT_Row), so a row that had none gets it first.
+                PropertyChange(be, de, "trPr", "trPrChange", ["ins", "del", "trPrChange"], insertAtStart: true);
                 break;
             default:
                 PropertyChange(be, de, "tcPr", "tcPrChange", ["cellIns", "cellDel", "cellMerge", "tcPrChange"], insertAtStart: true);

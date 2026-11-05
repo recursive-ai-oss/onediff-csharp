@@ -48,6 +48,7 @@ internal static class Program
         failures += CheckScan();
         failures += CheckPdf();
         failures += CheckWord();
+        failures += CheckReconstructedDocx();
         failures += CheckRedline();
         failures += CheckCombine();
 
@@ -194,6 +195,69 @@ internal static class Program
         }
 
         return failures;
+    }
+
+    /// <summary>A PDF pair written as a tracked-changes DOCX (the sides are reconstructed as DOCX first): accept-all and reject-all give the two texts.</summary>
+    private static int CheckReconstructedDocx()
+    {
+        string[] oldText = ["The supplier shall deliver within thirty days.", "Payment is due in sixty days."];
+        string[] newText = ["The supplier shall deliver within forty days.", "Payment is due in sixty days.", "Notices must be written."];
+        var pdf = new PdfDocumentSource();
+        CompareDocument a = pdf.Read(DocumentInput.FromBytes(MakePdf(oldText), "old.pdf")), b = pdf.Read(DocumentInput.FromBytes(MakePdf(newText), "new.pdf"));
+        Comparison c = Comparison.Of(a, b);
+        using var tracked = new MemoryStream();
+        DocxRedlineResult result = new DocxRedline().Create(c, tracked);
+        int failures = 0;
+        var word = new WordDocumentSource();
+        foreach (bool accept in new[] { true, false })
+        {
+            using RecursiveAI.OneOffice.Documents.Document doc = RecursiveAI.OneOffice.Documents.Document.Open(RecursiveAI.OneOffice.IO.ByteSource.FromMemory(tracked.ToArray()));
+            if (doc.Revisions.Revisions.Count == 0)
+            {
+                Console.Error.WriteLine("reconstructed docx: no revisions");
+                failures++;
+            }
+
+            if (accept)
+            {
+                doc.Revisions.AcceptAll();
+            }
+            else
+            {
+                doc.Revisions.RejectAll();
+            }
+
+            using var resolved = new MemoryStream();
+            doc.SaveAs(resolved, RecursiveAI.OneOffice.OfficeFormat.Docx);
+            CompareDocument got = word.Read(DocumentInput.FromBytes(resolved.ToArray(), "resolved.docx"));
+            string[] texts = [.. got.Nodes.Where(n => n.Kind == NodeKind.Paragraph && !IsFurniture(got, n)).Select(n => n.Text)];
+            if (!texts.AsSpan().SequenceEqual(accept ? newText : oldText))
+            {
+                Console.Error.WriteLine("reconstructed docx: " + (accept ? "accept-all" : "reject-all") + " gives " + string.Join(" | ", texts));
+                failures++;
+            }
+        }
+
+        if (!result.NotCarried.IsDefaultOrEmpty && result.NotCarried.Any(x => x.Category is "unplaced" or "import"))
+        {
+            Console.Error.WriteLine("reconstructed docx: a node was not placed");
+            failures++;
+        }
+
+        return failures;
+    }
+
+    private static bool IsFurniture(CompareDocument d, Node n)
+    {
+        for (int p = n.Parent; p >= 0; p = d[p].Parent)
+        {
+            if (d[p].Kind is NodeKind.Header or NodeKind.Footer)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>Writes two small DOCX files with OneOffice, reads them through the Word source, compares them and writes the redline through the registered happy path.</summary>

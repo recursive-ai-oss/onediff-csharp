@@ -203,6 +203,12 @@ internal sealed partial class TrackedWriter
                 {
                     anchor = pe;
                 }
+                else if (Wx.Is(prev, "sdt") && !DonorSdtMatched(prev) && LastPlacedIn(prev) is { IsNull: false } inner)
+                {
+                    // A block content control that only the donor has is not copied; what stood inside it is, so what follows the control
+                    // goes after the last of those copies.
+                    anchor = inner;
+                }
                 else
                 {
                     int pid = d.NodeOf(prev);
@@ -246,6 +252,44 @@ internal sealed partial class TrackedWriter
             copy = InsertFirst(container, xml);
             return !copy.IsNull;
         }
+    }
+
+    /// <summary>The copy (or the base counterpart) of the last block inside a donor block content control, or null when none was placed.</summary>
+    private MarkupNode LastPlacedIn(MarkupNode sdt)
+    {
+        MarkupNode content = Wx.Child(sdt, "sdtContent");
+        if (content.IsNull)
+        {
+            return default;
+        }
+
+        MarkupNode last = default;
+        foreach (MarkupNode c in Wx.ChildElements(content))
+        {
+            last = c;
+        }
+
+        for (MarkupNode c = last; !c.IsNull; c = Wx.PreviousElement(c))
+        {
+            if (placedByElement.TryGetValue(c, out MarkupNode pe))
+            {
+                return pe;
+            }
+
+            if (Wx.Is(c, "sdt") && !DonorSdtMatched(c) && LastPlacedIn(c) is { IsNull: false } deeper)
+            {
+                return deeper;
+            }
+
+            int pid = d.NodeOf(c);
+            AlignmentLink? pl = pid >= 0 ? LinkOfDonor(pid) : null;
+            if (pid >= 0 && pl is { Kind: LinkKind.Match, OldNodes.Length: 1, NewNodes.Length: 1 })
+            {
+                return b.Element(BaseOf(pl));
+            }
+        }
+
+        return default;
     }
 
     private bool DonorSdtMatched(MarkupNode sdt)
