@@ -8,6 +8,8 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="OneDiff.Documents.Tests" />
+    <InternalsVisibleTo Include="OneDiff.Pdf" />
+    <InternalsVisibleTo Include="OneDiff.Pdf.Tests" />
   </ItemGroup>
 
   <ItemGroup>

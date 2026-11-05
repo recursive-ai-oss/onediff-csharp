@@ -359,6 +359,27 @@ internal static class Program
                 Console.Error.WriteLine("pdf: Register + Redline.Create did not write the markup");
                 failures++;
             }
+
+            // The rendered redline: text files in, a tagged PDF out, by the .pdf extension; and a PDF pair rendered by naming the form.
+            string ta = Path.Combine(dir, "a.txt"), tb = Path.Combine(dir, "b.txt"), tr = Path.Combine(dir, "rendered.pdf");
+            File.WriteAllText(ta, "The supplier shall deliver within thirty days.\n\nPayment is due in sixty days.");
+            File.WriteAllText(tb, "The supplier shall deliver within forty days.\n\nPayment is due in sixty days.");
+            Redline.Create(ta, tb, tr);
+            byte[] rendered = File.ReadAllBytes(tr);
+            using PdfDocument renderedDoc = PdfDocument.Open(rendered);
+            string text = renderedDoc.ExtractText().Select(p => p.Text).Aggregate("", (x, y) => x + y);
+            if (!renderedDoc.IsTagged || renderedDoc.Language != "en" || !text.Contains("forty", StringComparison.Ordinal) || !text.Contains("thirty", StringComparison.Ordinal))
+            {
+                Console.Error.WriteLine("pdf: the rendered redline is not a tagged PDF holding both texts");
+                failures++;
+            }
+
+            Comparison pdfPair = Comparison.Of(pa, pb);
+            if (!pdfPair.ToBytes(PdfRedline.Rendered).AsSpan().StartsWith("%PDF-"u8) || !pdfPair.ToBytes(PdfRedline.RenderedSideBySide).AsSpan().StartsWith("%PDF-"u8))
+            {
+                Console.Error.WriteLine("pdf: a PDF pair did not render");
+                failures++;
+            }
         }
         finally
         {

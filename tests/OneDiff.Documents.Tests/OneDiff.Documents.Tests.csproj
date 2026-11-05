@@ -20,4 +20,8 @@
     <ProjectReference Include="../../src/OneDiff.Documents/OneDiff.Documents.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="../Shared/SamplePair.cs" Link="Shared/SamplePair.cs" />
+  </ItemGroup>
+
 </Project>

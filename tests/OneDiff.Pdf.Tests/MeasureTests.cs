@@ -89,6 +89,71 @@ public class MeasureTests
         Assert.Empty(c.Check());
     }
 
+    /// <summary>
+    /// ONEDIFF_RENDER_BUDGET=file: times a rendered redline of a synthetic contract of 3,000 paragraphs with about 300 edits, and of the
+    /// 100-page PDF pair, splitting the page's HTML from the renderer. Each input is run three times in the order given; the first run
+    /// is a warm-up and is reported apart.
+    /// </summary>
+    [Fact]
+    public void RenderedRedlineCost()
+    {
+        string? path = Environment.GetEnvironmentVariable("ONEDIFF_RENDER_BUDGET");
+        if (path is null)
+        {
+            Assert.Skip("ONEDIFF_RENDER_BUDGET is not set");
+        }
+
+        var r = new Random(7);
+        string[] words = ["party", "agreement", "shall", "payment", "within", "days", "notice", "term", "services", "delivery", "liability", "clause", "the", "of", "and", "to", "in", "under", "this", "such"];
+        string Para() => string.Join(' ', Enumerable.Range(0, r.Next(10, 22)).Select(_ => words[r.Next(words.Length)])) + ".";
+        List<string> before = [.. Enumerable.Range(0, 3000).Select(_ => Para())];
+        List<string> after = [.. before];
+        for (int i = 0; i < 300; i++)
+        {
+            int k = r.Next(after.Count);
+            string[] w = after[k].Split(' ');
+            w[r.Next(w.Length)] = words[r.Next(words.Length)] + r.Next(100);
+            after[k] = string.Join(' ', w);
+        }
+
+        var lines = new List<string>();
+        using var proc = Process.GetCurrentProcess();
+        void Measure(string name, Comparison c)
+        {
+            foreach (bool sbs in new[] { false, true })
+            {
+                for (int rep = 0; rep < 3; rep++)
+                {
+                    long alloc0 = GC.GetAllocatedBytesForCurrentThread();
+                    var sw = Stopwatch.StartNew();
+                    string html = OneDiff.Documents.Html.HtmlRedline.Static(c, sbs ? RedlineStyle.SideBySide : RedlineStyle.Blackline, sbs, "A4");
+                    double htmlMs = sw.Elapsed.TotalMilliseconds;
+                    sw.Restart();
+                    using var ms = new MemoryStream();
+                    OneRender.Pdf.HtmlPdfResult res = OneRender.Pdf.HtmlPdf.ToPdf(html, ms, new OneRender.Pdf.HtmlPdfOptions { Output = new OneRender.Pdf.PdfOutputOptions { LeaveOpen = true } });
+                    double renderMs = sw.Elapsed.TotalMilliseconds;
+                    proc.Refresh();
+                    lines.Add($"{name} layout={(sbs ? "side-by-side" : "inline")} run={rep}{(rep == 0 ? "(warm-up)" : "")} blocks={c.New.Nodes.Length} changes={c.Changes.Length} htmlBytes={html.Length} pages={res.PageCount} pdfBytes={ms.Length} html_ms={htmlMs:F0} render_ms={renderMs:F0} total_ms={htmlMs + renderMs:F0} thread_alloc_MB={(GC.GetAllocatedBytesForCurrentThread() - alloc0) / (1024 * 1024)} peakWorkingSetMB={proc.PeakWorkingSet64 / (1024 * 1024)} gcHeapMB={GC.GetTotalMemory(false) / (1024 * 1024)}");
+                }
+            }
+        }
+
+        Comparison contract = Comparison.Of(DocumentInput.FromBytes(System.Text.Encoding.UTF8.GetBytes(string.Join("\n\n", before)), "contract-v1.txt"), DocumentInput.FromBytes(System.Text.Encoding.UTF8.GetBytes(string.Join("\n\n", after)), "contract-v2.txt"));
+        Measure("contract", contract);
+
+        var rp = new Random(2026);
+        List<string> pb = [.. Enumerable.Range(0, 1700).Select(_ => GateSetTests.Paragraph(rp))];
+        List<string> pa = pb;
+        for (int i = 0; i < 120; i++)
+        {
+            pa = GateSetTests.Edit(rp, pa);
+        }
+
+        var spec = new Fixtures.Spec { Header = "Master Services Agreement", PageNumbers = true, PageHeight = 842, Size = 10 };
+        Measure("pdfpair", Comparison.Of(Run.Read(Fixtures.Make(spec with { Paragraphs = [.. pb] }), "old.pdf"), Run.Read(Fixtures.Make(spec with { Paragraphs = [.. pa] }), "new.pdf")));
+        File.WriteAllLines(path, lines);
+    }
+
     private static int PageCount(byte[] pdf)
     {
         using OnePdf.PdfDocument d = OnePdf.PdfDocument.Open(pdf);

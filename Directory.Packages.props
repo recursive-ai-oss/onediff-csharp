@@ -12,10 +12,15 @@
     <PackageVersion Include="DiffPlex" Version="1.9.0" />
     <PackageVersion Include="DiffMatchPatch" Version="5.0.0" />
     <!-- Sister libraries (Recursive AI). The OnePDF and OneFont pins are previews until it is published on nuget.org; see docs/measurement.md for the extra restore source. -->
-    <PackageVersion Include="RecursiveAI.OnePdf" Version="1.18.0-preview.1" />
-    <PackageVersion Include="RecursiveAI.OnePdf.Layout" Version="1.18.0-preview.1" />
-    <PackageVersion Include="RecursiveAI.OnePdf.Fonts" Version="1.18.0-preview.1" />
-    <PackageVersion Include="RecursiveAI.OnePdf.Hyphenation" Version="1.18.0-preview.1" />
+    <PackageVersion Include="RecursiveAI.OnePdf" Version="1.18.0-preview.3" />
+    <PackageVersion Include="RecursiveAI.OnePdf.Layout" Version="1.18.0-preview.3" />
+    <PackageVersion Include="RecursiveAI.OnePdf.Fonts" Version="1.18.0-preview.3" />
+    <PackageVersion Include="RecursiveAI.OnePdf.Hyphenation" Version="1.18.0-preview.3" />
+    <PackageVersion Include="RecursiveAI.OneRender.Pdf" Version="1.3.3" />
+    <!-- Opt-in script fonts: referenced by the tests that render CJK, Arabic and Devanagari; an application adds the ones it needs. -->
+    <PackageVersion Include="RecursiveAI.OneRender.Fonts.Cjk" Version="1.3.3" />
+    <PackageVersion Include="RecursiveAI.OneRender.Fonts.Noto.Arabic" Version="1.3.3" />
+    <PackageVersion Include="RecursiveAI.OneRender.Fonts.Noto.Devanagari" Version="1.3.3" />
     <PackageVersion Include="RecursiveAI.OneOffice.Documents" Version="0.1.0-preview.2" />
     <!-- Schema validation of tracked-changes output in the Word tests (a released Microsoft library, run through its public validator). -->
     <PackageVersion Include="DocumentFormat.OpenXml" Version="3.5.1" />

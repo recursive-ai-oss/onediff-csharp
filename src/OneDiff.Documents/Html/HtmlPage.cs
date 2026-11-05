@@ -12,7 +12,7 @@ internal static class HtmlPage
 {
     public const string Ink = "#1a1a1a";
 
-    public static void Begin(HtmlOut o, Comparison c, RedlineStyle style, bool sideBySide)
+    public static void Begin(HtmlOut o, Comparison c, RedlineStyle style, bool sideBySide, bool print = false, string paper = "A4")
     {
         string title = TitleOf(c, style);
         o.Raw("<!DOCTYPE html>\n<html");
@@ -22,16 +22,16 @@ internal static class HtmlPage
         o.Raw(">\n<title>");
         o.Text(title);
         o.Raw("</title>\n<style>\n");
-        o.Raw(Css(style, sideBySide));
+        o.Raw(Css(style, sideBySide, print, paper));
         o.Raw("</style>\n</head>\n<body class=\"");
         o.Raw(sideBySide ? "sbs" : "inline");
         o.Raw("\">\n");
         Header(o, c, style, title);
     }
 
-    public static void End(HtmlOut o, Comparison c, RedlineStyle style)
+    public static void End(HtmlOut o, Comparison c, RedlineStyle style, bool print = false)
     {
-        Ledger(o, c);
+        Ledger(o, c, print);
         Notes(o, c);
         if (style.Footer)
         {
@@ -261,7 +261,7 @@ internal static class HtmlPage
         o.Raw("</span> ");
     }
 
-    private static void Ledger(HtmlOut o, Comparison c)
+    private static void Ledger(HtmlOut o, Comparison c, bool print)
     {
         o.Raw("<section class=\"ledger\" aria-labelledby=\"ledger-h\">\n<h2 id=\"ledger-h\">Differences not shown</h2>\n");
         ChangeLedger ledger = c.Ledger;
@@ -293,9 +293,10 @@ internal static class HtmlPage
                 continue;
             }
 
-            o.Raw("<details><summary>");
+            // A page for printing has no controls to open a closed section with, so the locations are written out.
+            o.Raw(print ? "<div class=\"det\"><p class=\"sum\">" : "<details><summary>");
             o.Text(Capitalize(Humanize(LedgerCategoryNames.NameOf(e.Category))));
-            o.Raw(": where</summary>\n<ul>\n");
+            o.Raw(print ? ": where</p>\n<ul>\n" : ": where</summary>\n<ul>\n");
             int n = 0;
             foreach (LedgerLocation l in e.Locations)
             {
@@ -316,7 +317,7 @@ internal static class HtmlPage
                 o.Raw(" more</li>\n");
             }
 
-            o.Raw("</ul>\n</details>\n");
+            o.Raw(print ? "</ul>\n</div>\n" : "</ul>\n</details>\n");
         }
 
         o.Raw("</section>\n");
@@ -386,24 +387,42 @@ internal static class HtmlPage
 
     // ---- style sheet ----
 
-    private static string Css(RedlineStyle s, bool sideBySide)
+    private static string Css(RedlineStyle s, bool sideBySide, bool print, string paper)
     {
         var b = new StringBuilder(4096);
         b.Append("*{box-sizing:border-box}\n");
-        b.Append("body{margin:0 auto;max-width:").Append(sideBySide ? "none" : "56rem").Append(";padding:1.5rem 1.5rem 3rem ").Append(sideBySide ? "1.5rem" : "2.5rem")
-            .Append(";font:16px/1.55 system-ui,-apple-system,\"Segoe UI\",Roboto,\"Helvetica Neue\",Arial,\"Noto Sans\",sans-serif;color:").Append(Ink).Append(";background:#fff}\n");
+        if (print)
+        {
+            // Paper: the page rule sets size, margins and the running page number; the body has no width of its own and uses only the
+            // fonts the renderer carries, so the result does not depend on the machine. The left padding leaves room for change bars
+            // inside the page area, because a renderer clips each page to it.
+            b.Append("@page{size:").Append(paper).Append(sideBySide ? " landscape" : "").Append(";margin:18mm 16mm 20mm 16mm;@bottom-center{content:counter(page) \" / \" counter(pages);font:8pt \"Liberation Sans\",sans-serif;color:#555}}\n");
+            b.Append("body{margin:0;padding:0 .25rem 0 .7rem;font:10pt/1.5 \"Liberation Sans\",Arial,Helvetica,sans-serif;color:").Append(Ink).Append(";background:#fff}\n");
+        }
+        else
+        {
+            b.Append("body{margin:0 auto;max-width:").Append(sideBySide ? "none" : "56rem").Append(";padding:1.5rem 1.5rem 3rem ").Append(sideBySide ? "1.5rem" : "2.5rem")
+                .Append(";font:16px/1.55 system-ui,-apple-system,\"Segoe UI\",Roboto,\"Helvetica Neue\",Arial,\"Noto Sans\",sans-serif;color:").Append(Ink).Append(";background:#fff}\n");
+        }
+
+        if (print)
+        {
+            b.Append("h1,h2{break-after:avoid;page-break-after:avoid}\n");
+        }
+
         b.Append("h1{font-size:1.5rem;margin:0 0 .75rem}h2{font-size:1.15rem;margin:1.75rem 0 .5rem}\n");
         b.Append("dl.meta{display:grid;grid-template-columns:max-content 1fr;gap:.2rem 1rem;margin:.5rem 0 1rem}dl.meta dt{font-weight:600}dl.meta dd{margin:0;overflow-wrap:anywhere}\n");
         b.Append("code{font:.85em ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow-wrap:anywhere}\n");
         b.Append("table.counts{border-collapse:collapse;margin:.5rem 0 1rem}table.counts th,table.counts td{border:1px solid #bbb;padding:.2rem .7rem;text-align:left}table.counts td{text-align:right}\n");
         b.Append(".legend{margin:.5rem 0 1.25rem;font-size:.9rem}.lg-label{font-weight:600}\n");
         b.Append(".cover{break-after:page;page-break-after:always}\n");
-        b.Append(".blk{margin:.15rem 0}.t{margin:.2rem 0;white-space:pre-wrap;overflow-wrap:anywhere}\n");
+        // On paper each text block takes its direction from its first strong character, as a reader of Arabic or Hebrew expects.
+        b.Append(".blk{margin:.15rem 0}.t{margin:.2rem 0;white-space:pre-wrap;overflow-wrap:anywhere").Append(print ? ";unicode-bidi:plaintext" : "").Append("}\n");
         b.Append(".lbl{float:left;min-width:3rem;padding-right:.5rem;color:#444}.k-listitem>.t{margin-left:3.5rem}\n");
         b.Append(".kl{font-size:.8rem;color:#555;text-transform:uppercase;letter-spacing:.04em}\n");
         if (s.ChangeBars)
         {
-            b.Append(".bar{border-left:3px solid ").Append(Color(s.ChangeBarColor)).Append(";margin-left:-.9rem;padding-left:calc(.9rem - 3px)}\n");
+            b.Append(".bar{border-left:3px solid ").Append(Color(s.ChangeBarColor)).Append(print ? ";margin-left:-.7rem;padding-left:calc(.7rem - 3px)}\n" : ";margin-left:-.9rem;padding-left:calc(.9rem - 3px)}\n");
         }
 
         Mark(b, "ins,.lg-ins", s.Insertion);
@@ -412,14 +431,20 @@ internal static class HtmlPage
         Mark(b, ".mv.to,.lg-mt", s.MoveTo);
         Mark(b, ".fmt,.lg-fm", s.Formatting);
         b.Append(".gl{font-weight:600;margin-right:.1em}.mvlink{text-decoration:none;font-weight:600}\n");
-        b.Append(".sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}\n");
+        b.Append(print ? ".sr{display:none}\n" : ".sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}\n");
         b.Append(".pbrk,.sep{font-size:.85em}.tag{font-size:.7rem;font-weight:600;text-transform:uppercase;border:1px solid currentColor;border-radius:2px;padding:0 .25em;margin-right:.3em;white-space:nowrap}\n");
         b.Append(".ctl{font-size:.8em;border:1px solid #888;border-radius:2px;padding:0 .15em;margin:0 .1em;color:#444}\n");
+        if (print)
+        {
+            // A control mark inside a marked change takes that change's colour, so a printed page tells an inserted one from a deleted one.
+            b.Append("ins .ctl,del .ctl,.mv .ctl,.fmt .ctl{color:inherit}\n");
+        }
+
         b.Append(".attrs{font-size:.85rem;color:#333;margin:.1rem 0}.ae{display:block}\n");
         b.Append("table.blk{border-collapse:collapse;margin:.4rem 0}table.blk td{border:1px solid #bbb;padding:.2rem .5rem;vertical-align:top}\n");
         b.Append("td.self{border:0}\n");
         b.Append("h3{font-size:1rem;margin:1rem 0 .25rem}.gcount{font-weight:400;color:#444}ul.occ{margin:.25rem 0 .75rem;columns:2}ul.occ li{break-inside:avoid}\n");
-        b.Append(".ledger summary{cursor:pointer}.ledger ul{margin:.25rem 0 .75rem}\n");
+        b.Append(print ? ".ledger .sum{font-weight:600;margin:.4rem 0 0}.ledger ul{margin:.25rem 0 .75rem}\n" : ".ledger summary{cursor:pointer}.ledger ul{margin:.25rem 0 .75rem}\n");
         b.Append("footer{margin-top:2.5rem;border-top:1px solid #bbb;padding-top:.5rem;font-size:.85rem;color:#333}\n");
         if (sideBySide)
         {
@@ -429,9 +454,23 @@ internal static class HtmlPage
             {
                 b.Append(".sbs .bar{margin-left:0;padding-left:.4rem}\n");
             }
+
+            if (print)
+            {
+                // Observed with OneRender 1.3.3: when a table row whose cells differ in height is cut at page breaks, a line at a later
+                // cut is lost, although the table is inside the page area (a 40-line cell beside a 100-line cell loses the 97th line).
+                // A row that is kept whole when it fits on a page loses none, so on paper each row is a two-column grid that is not cut
+                // unless it is taller than a page. The elements stay a table's, so the tags are unchanged; the column headings no longer
+                // repeat on each page.
+                b.Append("table.sbs,table.sbs>thead,table.sbs>tbody{display:block}table.sbs tr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}table.sbs td,table.sbs th{width:auto}table.sbs td+td,table.sbs th+th{border-left:0}table.sbs tr{break-inside:avoid;page-break-inside:avoid}\n");
+            }
         }
 
-        b.Append("@media print{body{max-width:none;padding:0 0 0 1.5rem}a{color:inherit}.ledger details{display:block}}\n");
+        if (!print)
+        {
+            b.Append("@media print{body{max-width:none;padding:0 0 0 1.5rem}a{color:inherit}.ledger details{display:block}}\n");
+        }
+
         return b.ToString();
     }
 
