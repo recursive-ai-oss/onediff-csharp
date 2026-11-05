@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Change report: original.txt + alice.txt, bob.txt, carol.txt</title>
+<style>
+body { font: 16px/1.5 system-ui, sans-serif; color: #1a1a1a; margin: 2rem auto; max-width: 62rem; padding: 0 1rem; }
+h1 { font-size: 1.6rem; margin-bottom: 0; } .sub { color: #444; margin-top: 0.2rem; }
+h2 { font-size: 1.2rem; margin-top: 2rem; border-bottom: 1px solid #bbb; } h3 { font-size: 1rem; }
+table { border-collapse: collapse; margin: 0.5rem 0 1rem; } th, td { border: 1px solid #bbb; padding: 0.25rem 0.6rem; text-align: left; vertical-align: top; }
+table.counts td.n { text-align: right; } table.items { width: 100%; }
+ins { color: #0000cc; text-decoration: underline double; } del { color: #b00000; text-decoration: line-through; }
+.conflict { border-left: 0.35rem solid #c05000; padding-left: 0.8rem; margin: 1rem 0; } .flag { color: #8a3b00; font-weight: 600; }</style>
+</head>
+<body>
+<h1>Change report</h1>
+<p class="sub">original.txt + alice.txt, bob.txt, carol.txt</p>
+<table class="counts">
+<thead><tr><th scope="col">Reviewers</th><th scope="col">Changes attributed</th></tr></thead>
+<tbody>
+<tr><td>alice.txt</td><td class="n">3</td></tr>
+<tr><td>bob.txt</td><td class="n">3</td></tr>
+<tr><td>carol.txt</td><td class="n">2</td></tr>
+</tbody>
+</table>
+<table class="counts">
+<thead><tr><th scope="col">Made by</th><th scope="col">Changes</th></tr></thead>
+<tbody>
+<tr><td>1 reviewer</td><td class="n">4</td></tr>
+<tr><td>2 reviewers</td><td class="n">2</td></tr>
+</tbody>
+</table>
+<h2>Conflicts</h2>
+<p>Each conflict lists every reviewer's version. None is preferred.</p>
+<section class="conflict" data-conflict="0">
+<h3>Conflict 1: overlapping edits (alice.txt, bob.txt, carol.txt)</h3>
+<table class="items">
+<thead><tr><th scope="col">Where</th><th scope="col">Kind</th><th scope="col">Change</th><th scope="col">By</th></tr></thead>
+<tbody>
+<tr data-item="1" data-conflict="0"><td>¶2</td><td>replace</td><td><strong>Duration 45 d → 60 d</strong> <del>45</del> <ins>60</ins></td><td>alice.txt, carol.txt <span class="flag">conflict 1</span></td></tr>
+<tr data-item="2" data-conflict="0"><td>¶2</td><td>replace</td><td><strong>Duration 45 d → 30 d</strong> <del>45</del> <ins>30</ins></td><td>bob.txt <span class="flag">conflict 1</span></td></tr>
+</tbody>
+</table>
+</section>
+<h2>original.txt + alice.txt, bob.txt, carol.txt</h2>
+<p>6 changes, 6 substantive.</p>
+<table class="counts">
+<thead><tr><th scope="col">Kind</th><th scope="col">Changes</th></tr></thead>
+<tbody>
+<tr><td>delete</td><td class="n">1</td></tr>
+<tr><td>replace</td><td class="n">5</td></tr>
+</tbody>
+</table>
+<table class="counts">
+<thead><tr><th scope="col">Type</th><th scope="col">Changes</th></tr></thead>
+<tbody>
+<tr><td>none</td><td class="n">2</td></tr>
+<tr><td>amount</td><td class="n">1</td></tr>
+<tr><td>duration</td><td class="n">3</td></tr>
+</tbody>
+</table>
+<h3>Substantive changes</h3>
+<table class="items">
+<thead><tr><th scope="col">Where</th><th scope="col">Kind</th><th scope="col">Change</th><th scope="col">By</th></tr></thead>
+<tbody>
+<tr data-item="0"><td>¶1</td><td>replace</td><td><strong>Duration 30 d → 14 d</strong> <del>30</del> <ins>14</ins></td><td>alice.txt, bob.txt</td></tr>
+<tr data-item="1" data-conflict="0"><td>¶2</td><td>replace</td><td><strong>Duration 45 d → 60 d</strong> <del>45</del> <ins>60</ins></td><td>alice.txt, carol.txt <span class="flag">conflict 1</span></td></tr>
+<tr data-item="2" data-conflict="0"><td>¶2</td><td>replace</td><td><strong>Duration 45 d → 30 d</strong> <del>45</del> <ins>30</ins></td><td>bob.txt <span class="flag">conflict 1</span></td></tr>
+<tr data-item="3"><td>¶4</td><td>replace</td><td><strong>Amount USD 100000 → USD 250000</strong> <del>10</del> <ins>25</ins></td><td>bob.txt</td></tr>
+<tr data-item="4"><td>¶5</td><td>replace</td><td><del>England</del> <ins>Scotland</ins></td><td>alice.txt</td></tr>
+<tr data-item="5"><td>¶6</td><td>delete</td><td><del>6. Notices. Notices must be sent in writing to the addresses set out above.</del> </td><td>carol.txt</td></tr>
+</tbody>
+</table>
+</body>
+</html>

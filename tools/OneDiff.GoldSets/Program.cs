@@ -18,12 +18,17 @@ internal static class Program
         OneDiff.GoldSets generate --out DIR [--role eval|dev|train] [--seed N] [--docs-per-lang N] [--langs en,de,...] [--verify]
         OneDiff.GoldSets score --data DIR --out FILE [--settings legal] [--oracle-alignment] [--cmp DIR | --changes DIR] [--blocks DIR] [--save-cmp DIR] [--pipeline NAME] [--jobs N] [--limit N] [--ids FILE] [--resamples N]
         OneDiff.GoldSets check-split --a DIR --b DIR
+        OneDiff.GoldSets generate-combine --out DIR [--seed N] [--docs-per-lang N] [--langs en,de,...]
+        OneDiff.GoldSets score-combine --data DIR --out FILE [--jobs N] [--limit N] [--resamples N]
 
           generate    writes DIR/pairs/<id>.docs.json and <id>.labels.json for the documents of the chosen role, split.json (every
                       document and its role), manifest.json and manifest.sha256 (the set hash). Same seed, same bytes.
           score       compares every pair with the reference pipeline (or reads DIR/<id>.cmp.json from --cmp, or the tracked-changes
                       readings DIR/<id>.changes.json from --changes) and writes the rows. Comparisons made from rendered files (PDF, DOCX)
                       and other tools' output are mapped to the gold nodes through DIR/<id>.blocks.json (--blocks); --changes needs it.
+          generate-combine writes the combine set: for each eval document 2, 3 and 4 reviewers' copies of it with exact labels (cases/<id>.json).
+          score-combine runs the combination over a combine set and reports invertibility, attribution, sharing and conflict rows.
+          digest-combine hashes the combination outputs of the first N cases (--data DIR --count N); time-combine times a 100-page combine.
           check-split exits 1 when the two directories contain the same base document.
         """;
 
@@ -48,6 +53,10 @@ internal static class Program
                 "generate" => Generate(opt),
                 "score" => Score(opt),
                 "check-split" => CheckSplit(opt),
+                "generate-combine" => CombineSet.Generate(opt),
+                "score-combine" => CombineSet.Score(opt),
+                "digest-combine" => CombineSet.Digest(opt),
+                "time-combine" => CombineSet.Time(opt),
                 "explain" => Explain(opt),
                 "real-gate" => RealGate(opt),
                 _ => Fail("unknown command " + args[0]),

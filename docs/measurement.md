@@ -178,3 +178,20 @@ ONEDIFF_DOCX_BENCH=<bench-pairs folder> bench/run-docx-bench.sh OUT
 ```
 
 The engine's row is one more `[Benchmark]` method in `DocxBench` with the same shape (open both, compare, save). The out-of-process tools' wall time per pair is in their `runs.jsonl` and is information only, since it includes process start.
+
+### Combine and chain
+
+The combine set is built by `OneDiff.GoldSets generate-combine --out DIR` (seed 20261104, same shuffle as the synthetic set, so the originals are its eval documents; nothing in it trains a model) and scored by `score-combine --data DIR --out FILE [--jobs N] [--resamples N] [--explain CASE]`. `tools/run-combine-gate.sh set|sweep OUT` runs the whole gate on the worker through the queue.
+
+**The set.** `combine-v1`, sha256 `5c55ebb558a267e2264c7f84401b79d7d9208ed29bcb29157192abbb92def406`: for each of the 210 eval originals (30 per language, seven languages), three cases with 2, 3 and 4 reviewers. A reviewer makes one to three edits of the span-bearing types (term swap, value amount/date/duration/percentage, clause rewrite, sentence delete, paragraph delete). A case's plan is `shared` (some reviewers replay one random stream, so they make the same edits), `conflict` (some reviewers replay the stream that picks the target but draw their own new value, so they edit the same place differently), `shared+conflict` (four reviewers: two pairs) or `independent`. Insertions are left out of the scored rows (their place in the original is not a span) and are covered by the property sweep.
+
+**Gold.** Derived from the labels, not from the plan, so a replay that diverged is still exact. A gold edit is a unit's old spans with its new text; reviewers who made exactly that edit form its reviewer set (shared when there are two or more). The spans are narrowed to the characters that really change (a character diff of the old span and the new text, each range widened to whole words except in Han and kana). Two gold edits of different reviewers conflict by the library's overlap rule (shared character, a point strictly inside a range, the same point) and are chained into gold conflict components. The reference and label changes that a deleted paragraph causes are not labelled; they are left out of the predicted side too.
+
+**Rows** (documents are the resampling unit: all cases of one original together):
+
+- *attribution accuracy*: of the gold edits, the share for which every predicted edit that overlaps it and names one of its reviewers names exactly its reviewer set;
+- *shared-edit merge recall / precision*: the same test over gold edits with two or more reviewers / the share of predicted edits with two or more reviewers that equal the reviewer set of a gold shared edit they overlap;
+- *conflict recall*: the share of gold conflict components touched by a predicted conflict at two or more of their edits; *conflict precision*: the share of predicted conflicts (not made only of cascade changes) that touch two gold edits of one component;
+- *invertible rate*: the share of cases whose combination verifies (`Check()` empty, no error diagnostic) at fallback level 0 with every reviewer's comparison at level 0.
+
+**Gates.** The seeded property sweeps are the tests `RandomReviewersAlwaysVerify` (1 to 4 reviewers per random document tree, with shared mutations replayed from one stream; `ONEDIFF_COMBINE_CASES`, `ONEDIFF_COMBINE_SEED`) and `RandomChainsAlwaysVerify` (3 to 5 steps; `ONEDIFF_CHAIN_CASES`, `ONEDIFF_CHAIN_SEED`). The cross-machine digest is `digest-combine --data DIR --count 20`: it hashes the combination JSON and report page of the first 20 cases, twice. Timing is `time-combine`: a combine of 4 reviewers on a 100-page synthetic contract. Results: `results/combine-v1-eval.md`.

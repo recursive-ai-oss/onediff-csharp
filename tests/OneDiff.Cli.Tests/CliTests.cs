@@ -234,6 +234,26 @@ public sealed class CliTests : IDisposable
         Assert.Equal(1, Run(Theirs, "merge", o, b, "-").Code);
     }
 
+
+    // ---- combine and chain
+
+    [Fact]
+    public void CombineAndChainWriteReports()
+    {
+        string orig = File_("orig.txt", "Pay within 30 days of the invoice.\n\nThe supplier delivers the goods.\n");
+        string alice = File_("alice.txt", "Pay within 60 days of the invoice.\n\nThe supplier delivers the goods.\n");
+        string bob = File_("bob.txt", "Pay within 10 days of the invoice.\n\nThe supplier delivers the goods.\n");
+        string html = Path.Combine(dir, "combined.html"), json = Path.Combine(dir, "combined.json");
+        Assert.Equal(0, Run("", "combine", orig, alice, bob, "-o", html).Code);
+        Assert.Contains("class=\"conflict\"", File.ReadAllText(html), StringComparison.Ordinal);
+        Assert.Equal(0, Run("", "combine", orig, alice, bob, "-o", json).Code);
+        Assert.StartsWith("{\"schema\":\"onediff.combination\"", File.ReadAllText(json), StringComparison.Ordinal);
+        Assert.Equal(2, Run("", "combine", orig, alice).Code);
+        Assert.Equal(2, Run("", "combine", orig, "-o", html).Code);
+        string chain = Path.Combine(dir, "chain.html");
+        Assert.Equal(0, Run("", "chain", orig, alice, bob, "-o", chain).Code);
+        Assert.Contains("net:", File.ReadAllText(chain), StringComparison.Ordinal);
+    }
 }
 
 internal static class ResultExtensions

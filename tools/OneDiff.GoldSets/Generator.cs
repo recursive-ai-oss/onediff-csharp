@@ -47,7 +47,7 @@ internal sealed class PairMaker
 {
     private readonly Lexicon lex;
     private readonly DocBuilder db;
-    private readonly Rng r;
+    private Rng r;
     private readonly GDoc oldDoc;
     private readonly GDoc newDoc;
     private readonly Dictionary<int, Piece> oldPieces = [];
@@ -81,6 +81,12 @@ internal sealed class PairMaker
     }
 
     public IReadOnlyList<string> Applied => applied;
+
+    /// <summary>Continues with another random stream (the combine set replays one stream on several makers to make identical edits).</summary>
+    public void UseRng(Rng next) => r = next;
+
+    /// <summary>When set, the new value of a term swap or value edit is drawn from this stream while the target is still chosen by the main one (two makers then edit the same place differently).</summary>
+    public Rng? ValueRng { get; set; }
 
     private int NewUnit(string type, string group = "", Typed? typed = null)
     {
@@ -169,7 +175,7 @@ internal sealed class PairMaker
         string[] pool = piece.Kind switch { PK.Modal => lex.Modal, PK.Adverb => lex.Adverb, _ => lex.Jurisdictions };
         string[] others = [.. pool.Where(x => x != piece.Text)];
         string old = piece.Text;
-        piece.Text = r.Pick(others);
+        piece.Text = (ValueRng ?? r).Pick(others);
         int u = NewUnit("term-swap", "", new Typed(piece.Kind.ToString().ToLowerInvariant(), old, piece.Text));
         piece.Unit = u;
         MarkOld(piece, u);
@@ -197,10 +203,10 @@ internal sealed class PairMaker
         (Block blk, Piece piece) = r.Pick(cands);
         SlotVal v = kind switch
         {
-            PK.Amount => db.NewAmount(r, piece.Canon),
-            PK.Date => db.NewDate(r, piece.Canon),
-            PK.Duration => db.NewDuration(r, piece.Canon),
-            _ => db.NewPercent(r, piece.Canon),
+            PK.Amount => db.NewAmount(ValueRng ?? r, piece.Canon),
+            PK.Date => db.NewDate(ValueRng ?? r, piece.Canon),
+            PK.Duration => db.NewDuration(ValueRng ?? r, piece.Canon),
+            _ => db.NewPercent(ValueRng ?? r, piece.Canon),
         };
         string typedKind = kind switch { PK.Amount => "amount", PK.Date => "date", PK.Duration => "duration", _ => "percentage" };
         var typed = new Typed(typedKind, piece.Canon, v.Canon);

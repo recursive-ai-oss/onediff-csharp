@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Change report: v1.txt → v4.txt</title>
+<style>
+body { font: 16px/1.5 system-ui, sans-serif; color: #1a1a1a; margin: 2rem auto; max-width: 62rem; padding: 0 1rem; }
+h1 { font-size: 1.6rem; margin-bottom: 0; } .sub { color: #444; margin-top: 0.2rem; }
+h2 { font-size: 1.2rem; margin-top: 2rem; border-bottom: 1px solid #bbb; } h3 { font-size: 1rem; }
+table { border-collapse: collapse; margin: 0.5rem 0 1rem; } th, td { border: 1px solid #bbb; padding: 0.25rem 0.6rem; text-align: left; vertical-align: top; }
+table.counts td.n { text-align: right; } table.items { width: 100%; }
+ins { color: #0000cc; text-decoration: underline double; } del { color: #b00000; text-decoration: line-through; }
+.conflict { border-left: 0.35rem solid #c05000; padding-left: 0.8rem; margin: 1rem 0; } .flag { color: #8a3b00; font-weight: 600; }</style>
+</head>
+<body>
+<h1>Change report</h1>
+<p class="sub">v1.txt → v4.txt</p>
+<h2>step 1: v1.txt → v2.txt</h2>
+<p>1 change, 1 substantive.</p>
+<table class="counts">
+<thead><tr><th scope="col">Kind</th><th scope="col">Changes</th></tr></thead>
+<tbody>
+<tr><td>replace</td><td class="n">1</td></tr>
+</tbody>
+</table>
+<table class="counts">
+<thead><tr><th scope="col">Type</th><th scope="col">Changes</th></tr></thead>
+<tbody>
+<tr><td>duration</td><td class="n">1</td></tr>
+</tbody>
+</table>
+<h3>Substantive changes</h3>
+<table class="items">
+<thead><tr><th scope="col">Where</th><th scope="col">Kind</th><th scope="col">Change</th><th scope="col">Step</th></tr></thead>
+<tbody>
+<tr data-item="0"><td>¶1</td><td>replace</td><td><strong>Duration 30 d → 21 d</strong> <del>30</del> <ins>21</ins></td><td>1</td></tr>
+</tbody>
+</table>
+<h2>step 2: v2.txt → v3.txt</h2>
+<p>2 changes, 2 substantive.</p>
+<table class="counts">
+<thead><tr><th scope="col">Kind</th><th scope="col">Changes</th></tr></thead>
+<tbody>
+<tr><td>replace</td><td class="n">2</td></tr>
+</tbody>
+</table>
+<table class="counts">
+<thead><tr><th scope="col">Type</th><th scope="col">Changes</th></tr></thead>
+<tbody>
+<tr><td>amount</td><td class="n">1</td></tr>
+<tr><td>duration</td><td class="n">1</td></tr>
+</tbody>
+</table>
+<h3>Substantive changes</h3>
+<table class="items">
+<thead><tr><th scope="col">Where</th><th scope="col">Kind</th><th scope="col">Change</th><th scope="col">Step</th></tr></thead>
+<tbody>
+<tr data-item="0"><td>¶1</td><td>replace</td><td><strong>Duration 21 d → 14 d</strong> <del>2</del> <ins>4</ins></td><td>2</td></tr>
+<tr data-item="1"><td>¶4</td><td>replace</td><td><strong>Amount USD 100000 → USD 250000</strong> <del>10</del> <ins>25</ins></td><td>2</td></tr>
+</tbody>
+</table>
+<h2>step 3: v3.txt → v4.txt</h2>
+<p>1 change, 1 substantive.</p>
+<table class="counts">
+<thead><tr><th scope="col">Kind</th><th scope="col">Changes</th></tr></thead>
+<tbody>
+<tr><td>replace</td><td class="n">1</td></tr>
+</tbody>
+</table>
+<table class="counts">
+<thead><tr><th scope="col">Type</th><th scope="col">Changes</th></tr></thead>
+<tbody>
+<tr><td>none</td><td class="n">1</td></tr>
+</tbody>
+</table>
+<h3>Substantive changes</h3>
+<table class="items">
+<thead><tr><th scope="col">Where</th><th scope="col">Kind</th><th scope="col">Change</th><th scope="col">Step</th></tr></thead>
+<tbody>
+<tr data-item="0"><td>¶5</td><td>replace</td><td><del>England</del> <ins>Scotland</ins></td><td>3</td></tr>
+</tbody>
+</table>
+<h2>net: v1.txt → v4.txt</h2>
+<p>3 changes, 3 substantive.</p>
+<table class="counts">
+<thead><tr><th scope="col">Kind</th><th scope="col">Changes</th></tr></thead>
+<tbody>
+<tr><td>replace</td><td class="n">3</td></tr>
+</tbody>
+</table>
+<table class="counts">
+<thead><tr><th scope="col">Type</th><th scope="col">Changes</th></tr></thead>
+<tbody>
+<tr><td>none</td><td class="n">1</td></tr>
+<tr><td>amount</td><td class="n">1</td></tr>
+<tr><td>duration</td><td class="n">1</td></tr>
+</tbody>
+</table>
+<h3>Substantive changes</h3>
+<table class="items">
+<thead><tr><th scope="col">Where</th><th scope="col">Kind</th><th scope="col">Change</th><th scope="col">Step</th></tr></thead>
+<tbody>
+<tr data-item="0"><td>¶1</td><td>replace</td><td><strong>Duration 30 d → 14 d</strong> <del>30</del> <ins>14</ins></td><td>1, 2</td></tr>
+<tr data-item="1"><td>¶4</td><td>replace</td><td><strong>Amount USD 100000 → USD 250000</strong> <del>10</del> <ins>25</ins></td><td>2</td></tr>
+<tr data-item="2"><td>¶5</td><td>replace</td><td><del>England</del> <ins>Scotland</ins></td><td>3</td></tr>
+</tbody>
+</table>
+</body>
+</html>
