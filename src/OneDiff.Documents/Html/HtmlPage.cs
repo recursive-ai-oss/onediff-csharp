@@ -76,7 +76,7 @@ internal static class HtmlPage
             Def(o, "Revised", NameOrDefault(c.Provenance.NewName, "(unnamed)"));
             Def(o, "Settings", c.Settings.Name);
             string hidden = Capitalize(string.Join(", ", c.Settings.Hidden.ToArray().Select(x => Humanize(LedgerCategoryNames.NameOf(x)))));
-            Def(o, "Hidden into the list below", hidden.Length == 0 ? "nothing" : hidden);
+            Def(o, "Not marked (listed below)", hidden.Length == 0 ? "nothing" : hidden);
             Def(o, "Completeness", Completeness(c));
             o.Raw("</dl>\n<h2>Changes by type</h2>\n");
             Counts(o, c);

@@ -24,7 +24,7 @@ namespace OneDiff.Pdf.Tests;
 /// </summary>
 internal static class RenderedGate
 {
-    /// <summary>Note is the small grey text under a block that lists its attribute changes ("list.label: old → new"); and the grey list label before a block (#444); neither is document text.</summary>
+    /// <summary>Note is the small grey text under a block that lists its attribute changes ("List number: old → new"); and the grey list label before a block (#444); neither is document text.</summary>
     internal enum Cls { Plain, Ins, Del, MoveFrom, MoveTo, Fmt, Note }
 
     /// <summary>The blackline with a colour of its own for each kind of mark (the preset's two moves share one).</summary>

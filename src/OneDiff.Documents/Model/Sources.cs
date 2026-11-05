@@ -178,11 +178,11 @@ public static class DocumentSources
         }
 
         // Binary formats that a package we know of reads: say which, instead of reading them as text.
-        string? hint = FormatHints.PackageFor(input.Content.Span);
+        string? hint = FormatHints.MessageFor(input.Content.Span);
         if (hint is not null)
         {
             throw new NotSupportedException(
-                $"no document source is registered for this input, which looks like {hint}. Reference that package and call its Register method once at startup.");
+                $"No document source is registered for this input, which looks like {hint}");
         }
 
         foreach (IDocumentSource s in BuiltIn)

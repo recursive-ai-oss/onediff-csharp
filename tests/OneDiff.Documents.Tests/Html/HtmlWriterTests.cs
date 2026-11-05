@@ -112,7 +112,8 @@ public class HtmlWriterTests
         AssertPages(c);
         string html = HtmlRedline.Inline(c);
         Assert.Contains("class=\"fmt\"", html, StringComparison.Ordinal);
-        Assert.Contains("list.label", html, StringComparison.Ordinal);
+        Assert.Contains("data-key=\"list.label\"", html, StringComparison.Ordinal);
+        Assert.Contains("List number: 1.1 \u2192 1.2", html, StringComparison.Ordinal);
     }
 
     [Fact]

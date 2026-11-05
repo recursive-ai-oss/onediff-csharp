@@ -42,7 +42,7 @@ Text inside `p.t`:
 | `<span class="ctl" data-cp=hex>` | a control character or unpaired surrogate HTML cannot carry |
 | `<span class="sr">`, `<span class="gl">`, `<span class="tag">` | hidden screen-reader label, glyph, type tag: not document text |
 
-Deleted blocks and the old place of moved blocks appear as `div.blk.ghost` (with `data-old`) where they used to be: before the next kept block, and ahead of blocks inserted just before it, so a removed block reads before its replacement. Attribute changes (style, list label, hashes) are `div.attrs > span.ae[data-change data-key data-old data-new]` under the block. Hidden content (comments, properties under the Legal settings) is not drawn; it is in the ledger section.
+Deleted blocks and the old place of moved blocks appear as `div.blk.ghost` (with `data-old`) where they used to be: before the next kept block, and ahead of blocks inserted just before it, so a removed block reads before its replacement. Attribute changes (style, list label, hashes) are `div.attrs > span.ae[data-change data-key data-old data-new]` under the block, shown as a label and unquoted values (`List number: 1.5 → 1.2`, `(none)` for a missing side); the machine-readable key and values stay in the attributes. Hidden content (comments, properties under the Legal settings) is not drawn; it is in the ledger section.
 
 A change that belongs to a link whose other side the settings hide is a ledger entry, not an element.
 
@@ -88,7 +88,7 @@ PdfRedline.Register();                               // once at startup; each ad
 Redline.Create("a.pdf", "b.pdf", "out.pdf");
 ```
 
-Without that call the failure names the package: `no output form is registered for '.pdf'. Reference RecursiveAI.OneDiff.Pdf and call its Register method once at startup.`, and an unreadable PDF input says it looks like a PDF and names the same package. Code that wants no global state uses `CompareDocument.From(input, source)`, `Comparison.Of(oldDocument, newDocument)` and a form's `Write` directly. A module initializer was rejected: it would run only after the adapter assembly is touched, which is exactly what `Redline.Create("a.pdf", …)` does not do, and library module initializers are discouraged for trimming and AOT.
+Without that call the failure names the package: `No output form is registered for '.pdf'. Reference RecursiveAI.OneDiff.Pdf and call its Register method once at startup.`, and an unreadable PDF input says it looks like a PDF and names the same package. Code that wants no global state uses `CompareDocument.From(input, source)`, `Comparison.Of(oldDocument, newDocument)` and a form's `Write` directly. A module initializer was rejected: it would run only after the adapter assembly is touched, which is exactly what `Redline.Create("a.pdf", …)` does not do, and library module initializers are discouraged for trimming and AOT.
 
 When no style is given: the form's `PreferredStyle` (side-by-side: `SideBySide`) if the settings' style is still the default blackline, otherwise the settings' style.
 

@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Fixed
+
+- `RecursiveAI.OneDiff.Documents`: an unsupported Office input or output (DOCX, XLSX, PPTX) now says that support is coming in a 1.x release and suggests exporting the documents to PDF and comparing the PDFs, instead of naming packages that are not on nuget.org yet; the message starts with a capital letter.
+- `RecursiveAI.OneDiff.Documents`: attribute changes in HTML and the rendered PDF redline show a readable label and unquoted values (`List number: 1.5 → 1.2`) instead of the internal key; `data-key`, `data-old` and `data-new` and the JSON are unchanged.
+- `RecursiveAI.OneDiff.Documents`: the cover-page line "Hidden into the list below" reads "Not marked (listed below)".
+
 ## [1.0.0] - 2026-11-05
 
 The first stable release of `RecursiveAI.OneDiff`, `RecursiveAI.OneDiff.Documents`, `RecursiveAI.OneDiff.Pdf`, `RecursiveAI.OneDiff.Ocr` and the `onediff` tool (`RecursiveAI.OneDiff.Tool`). Results: [docs/results.md](docs/results.md).

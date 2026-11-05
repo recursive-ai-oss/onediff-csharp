@@ -170,16 +170,19 @@ public sealed class SampleTests : IDisposable
     }
 
     [Fact]
-    public void AnOfficeFileWithoutTheWordPackageNamesThePackage()
+    public void AnOfficeFileSaysSupportIsComing()
     {
         // The first bytes of a zip-based Office file are enough to say which package is missing.
         string a = Write("v1.docx", [(byte)'P', (byte)'K', 3, 4, 0, 0, 0, 0]);
         NotSupportedException e = Assert.Throws<NotSupportedException>(() => Comparison.Of(a, a));
-        Assert.Contains("RecursiveAI.OneDiff.Word", e.Message, StringComparison.Ordinal);
-        Assert.Contains("Register", e.Message, StringComparison.Ordinal);
+        Assert.StartsWith("No document source", e.Message, StringComparison.Ordinal);
+        Assert.Contains("coming in a 1.x release", e.Message, StringComparison.Ordinal);
+        Assert.Contains("export the documents to PDF", e.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("OneDiff.Word", e.Message, StringComparison.Ordinal);
 
         string t = TextPair().Old;
         e = Assert.Throws<NotSupportedException>(() => Redline.Create(t, t, P("out.docx")));
-        Assert.Contains("RecursiveAI.OneDiff.Word", e.Message, StringComparison.Ordinal);
+        Assert.Contains("coming in a 1.x release", e.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("OneDiff.Word", e.Message, StringComparison.Ordinal);
     }
 }

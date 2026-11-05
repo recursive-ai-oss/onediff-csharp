@@ -161,11 +161,49 @@ internal sealed class PieceWriter(HtmlOut o, RedlineStyle style, RedlineView vie
             }
 
             o.Raw("><span class=\"sr\"> attribute changed: </span>");
-            o.Text(e.Key + ": " + (e.OldValue is null ? "(none)" : "\u201C" + e.OldValue + "\u201D") + " \u2192 " + (e.NewValue is null ? "(none)" : "\u201C" + e.NewValue + "\u201D"));
+            o.Text(AttributeLabel(e.Key) + ": " + (e.OldValue ?? "(none)") + " \u2192 " + (e.NewValue ?? "(none)"));
             o.Raw("</span>");
         }
 
         o.Raw("</div>");
+    }
+
+    /// <summary>The label a reader sees for an attribute key; the key itself stays in <c>data-key</c>.</summary>
+    internal static string AttributeLabel(string key) => key switch
+    {
+        "list.label" => "List number",
+        "list.level" => "List level",
+        "list.format" => "List format",
+        "para.style" => "Paragraph style",
+        "para.align" => "Alignment",
+        "para.indent" => "Indent",
+        "para.spacing" => "Spacing",
+        "para.keep" => "Keep with next",
+        "run.bold" => "Bold",
+        "run.italic" => "Italic",
+        "run.underline" => "Underline",
+        "run.strike" => "Strikethrough",
+        "run.font" => "Font",
+        "run.size" => "Font size",
+        "run.color" => "Font color",
+        "run.highlight" => "Highlight",
+        "run.caps" => "Capitals",
+        "run.vert" => "Superscript or subscript",
+        "run.link" => "Link",
+        "run.hidden" => "Hidden text",
+        "section.page" => "Page setup",
+        "field.code" => "Field code",
+        "prop.name" => "Property",
+        "hash.content" => "Content",
+        "hash.perceptual" => "Image appearance",
+        _ => ReadableKey(key),
+    };
+
+    /// <summary>A readable form of a key with no label of its own: separators become spaces and the first letter is capitalized.</summary>
+    private static string ReadableKey(string key)
+    {
+        string t = key.Replace('.', ' ').Replace('_', ' ').Replace('-', ' ').Trim();
+        return t.Length == 0 ? "Attribute" : char.ToUpperInvariant(t[0]) + t[1..];
     }
 
     /// <summary>The link that jumps between the two places of a moved block.</summary>

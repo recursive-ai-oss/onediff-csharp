@@ -64,8 +64,8 @@ public static class Redline
         string? advice = FormatHints.PackageForExtension(ext);
         throw new NotSupportedException(
             ext.Length == 0
-                ? "the output path has no extension; name the form explicitly."
-                : $"no output form is registered for '{ext}'. " + (advice ?? "Name the form explicitly, or register one with Redline.Register."));
+                ? "The output path has no extension; name the form explicitly."
+                : $"No output form is registered for '{ext}'. " + (advice ?? "Name the form explicitly, or register one with Redline.Register."));
     }
 
     /// <summary>Compares two files and writes the redline to <paramref name="outputPath"/> in the form its extension selects.</summary>

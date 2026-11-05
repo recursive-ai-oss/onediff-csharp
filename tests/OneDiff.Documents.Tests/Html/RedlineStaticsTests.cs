@@ -83,7 +83,9 @@ public class RedlineStaticsTests : IDisposable
     {
         string a = Write("a.txt", "x");
         var ex = Assert.Throws<NotSupportedException>(() => Redline.Create(a, a, Path.Combine(dir, "out.docx")));
-        Assert.Contains("RecursiveAI.OneDiff.Word", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("coming in a 1.x release", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("RecursiveAI.OneDiff.Pdf", ex.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("OneDiff.Word", ex.Message, StringComparison.Ordinal);
         ex = Assert.Throws<NotSupportedException>(() => Redline.FormFor("out.pdf"));
         Assert.Contains("RecursiveAI.OneDiff.Pdf", ex.Message, StringComparison.Ordinal);
         ex = Assert.Throws<NotSupportedException>(() => Redline.FormFor("out"));
