@@ -65,7 +65,7 @@ public sealed class RenderedPdfRedline : RedlineForm
     /// <param name="style">The look; see <see cref="RedlineForm.ResolveStyle"/>.</param>
     /// <param name="cancellationToken">Observed while laying out and writing.</param>
     /// <exception cref="ArgumentNullException">An argument is null.</exception>
-    /// <exception cref="InvalidOperationException">The document needs more pages than the renderer allows (100,000).</exception>
+    /// <exception cref="InvalidOperationException">The document needs more pages than the renderer allows (100,000), or more glyphs than its page list holds (several million characters).</exception>
     /// <exception cref="OperationCanceledException">The token was cancelled; the output is then incomplete.</exception>
     public override void Write(Comparison comparison, Stream output, RedlineStyle style, CancellationToken cancellationToken = default) =>
         Render(comparison, output, style, cancellationToken);
@@ -77,7 +77,7 @@ public sealed class RenderedPdfRedline : RedlineForm
     /// <param name="cancellationToken">Observed while laying out and writing.</param>
     /// <returns>The page count and the renderer's notes. A character that no font the renderer has covers is not drawn (its text stays in the file, so it can still be extracted and searched) and is noted with the opt-in font package that would draw it.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="comparison"/> or <paramref name="output"/> is null.</exception>
-    /// <exception cref="InvalidOperationException">The document needs more pages than the renderer allows (100,000).</exception>
+    /// <exception cref="InvalidOperationException">The document needs more pages than the renderer allows (100,000), or more glyphs than its page list holds (several million characters).</exception>
     /// <exception cref="OperationCanceledException">The token was cancelled; the output is then incomplete.</exception>
     public RenderedPdfResult Render(Comparison comparison, Stream output, RedlineStyle? style = null, CancellationToken cancellationToken = default)
     {
@@ -99,6 +99,12 @@ public sealed class RenderedPdfRedline : RedlineForm
             }
 
             return new RenderedPdfResult(r.PageCount, notes.MoveToImmutable());
+        }
+        catch (OneRender.Painting.DisplayListLimitException e)
+        {
+            // The renderer's hard limit on the glyphs of one page list (a redline of several million characters): say so, and name the
+            // forms that have no such limit.
+            throw new InvalidOperationException("the redline is larger than the renderer can lay out (" + e.Message + "); save it as HTML, JSON or markup on the original pages instead", e);
         }
         catch (PdfRenderException e)
         {
