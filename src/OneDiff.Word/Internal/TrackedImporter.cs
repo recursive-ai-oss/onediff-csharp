@@ -43,6 +43,9 @@ internal sealed class TrackedImporter
     /// <summary>Problems found while importing (a relationship that could not be copied, ...).</summary>
     public List<string> Problems { get; } = [];
 
+    /// <summary>How many comment references were left out of copies (a comment cannot be added by a tracked change).</summary>
+    public int CommentsDropped { get; private set; }
+
     public void Fix(MarkupNode copy, string fromPart, string toPart)
     {
         var drop = new List<MarkupNode>();
@@ -56,6 +59,11 @@ internal sealed class TrackedImporter
                 switch (ln)
                 {
                     case "commentRangeStart" or "commentRangeEnd" or "commentReference" or "bookmarkStart" or "bookmarkEnd":
+                        if (ln == "commentReference")
+                        {
+                            CommentsDropped++;
+                        }
+
                         drop.Add(e);
                         continue;
                     case "pStyle" or "rStyle" or "tblStyle":
@@ -518,13 +526,26 @@ internal sealed class TrackedImporter
         }
 
         Note created = (footnote ? to.Doc.Footnotes : to.Doc.Endnotes).Add("");
-        string newId = created.Id.ToString(CultureInfo.InvariantCulture);
+        MarkupNode target = created.Container.Node;
+        MarkupNode parent = target.Parent;
+
+        // The numbering of the notes part can hand out an id a copied note already took, so the id is chosen from what is in the part.
+        long used = 0;
+        var taken = new HashSet<long>();
+        foreach (MarkupNode c in Wx.ChildElements(parent))
+        {
+            if (c != target && Wx.Attr(c, "id") is { } cid && long.TryParse(cid, NumberStyles.None, CultureInfo.InvariantCulture, out long cn))
+            {
+                taken.Add(cn);
+                used = Math.Max(used, cn);
+            }
+        }
+
+        string newId = (taken.Contains(created.Id) ? used + 1 : created.Id).ToString(CultureInfo.InvariantCulture);
         string wp = to.Prefix;
         string xml = src.Container.Node.OuterXml;
         xml = SetAttr(xml, wp + ":id", id, newId);
-        MarkupNode target = created.Container.Node;
         string partName = footnote ? "/word/footnotes.xml" : "/word/endnotes.xml";
-        MarkupNode parent = target.Parent;
         target.ReplaceWithXml(Wx.Bytes(xml));
         MarkupNode fresh = default;
         foreach (MarkupNode c in Wx.ChildElements(parent))

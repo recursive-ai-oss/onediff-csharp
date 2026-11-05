@@ -119,6 +119,15 @@ internal sealed partial class TrackedWriter : IDisposable
 
         FixTailMarks();
         RenumberRevisions();
+        foreach (string part in b.PartNames)
+        {
+            MarkupNode root = b.Root(part);
+            if (!root.IsNull)
+            {
+                Wx.DeclareOnRoot(root);
+            }
+        }
+
         using var ms = new MemoryStream();
         b.Doc.SaveAs(ms, OfficeFormat.Docx);
         return ms.ToArray();
@@ -457,7 +466,13 @@ internal sealed partial class TrackedWriter : IDisposable
             try
             {
                 FineEdits(bid, did, bp, dp, link);
-                PropertyChange(bp, dp, "pPr", "pPrChange", ["rPr", "sectPr", "pPrChange"], insertAtStart: true);
+                if (!move)
+                {
+                    // A moved paragraph exists twice (moved from, moved to), each with its own properties, so it needs no property
+                    // change; and rejecting one next to a paragraph-mark revision would not resolve the mark (a gap in OneOffice).
+                    PropertyChange(bp, dp, "pPr", "pPrChange", ["rPr", "sectPr", "pPrChange"], insertAtStart: true);
+                }
+
             }
             catch (Exception ex) when (ex is ReplaceNeeded or ArgumentException or InvalidOperationException)
             {
@@ -623,7 +638,7 @@ internal sealed partial class TrackedWriter : IDisposable
         string donorXml = "";
         if (dl > 0)
         {
-            donorXml = Harvest(scratch, dh, dhl, donorInserted: !baseIsNew);
+            donorXml = Harvest(scratch, bp, dh, dhl, donorInserted: !baseIsNew);
         }
 
         if (baseIsNew)
@@ -653,7 +668,7 @@ internal sealed partial class TrackedWriter : IDisposable
     }
 
     /// <summary>The donor's runs for a stretch of its paragraph, as deleted (or inserted) content with the real author.</summary>
-    private string Harvest(MarkupNode scratch, int offset, int length, bool donorInserted)
+    private string Harvest(MarkupNode scratch, MarkupNode basePara, int offset, int length, bool donorInserted)
     {
         d.Marker.DeleteText(scratch, offset, length);
         var sb = new StringBuilder();
@@ -666,6 +681,22 @@ internal sealed partial class TrackedWriter : IDisposable
             }
 
             harvested.Add(w);
+            StripEdgeObjects(w, keep: false);
+            // The runs of a hyperlink (or smart tag) sit inside that element, and their link is part of what reject-all must give back, so
+            // the harvested revision keeps a shallow copy of each wrapper; relationships are mapped once per wrapper.
+            MarkupNode top = w;
+            var wrappers = new List<MarkupNode>();
+            while (!top.Parent.IsNull && !Wx.Is(top.Parent, "p"))
+            {
+                top = top.Parent;
+                wrappers.Add(top);
+            }
+
+            if (fixedTops.Add(top))
+            {
+                importer.Fix(top, d.PartNameOf(scratch), b.PartNameOf(basePara));
+            }
+
             string xml = w.OuterXml;
             if (donorInserted)
             {
@@ -674,13 +705,22 @@ internal sealed partial class TrackedWriter : IDisposable
                 xml = Wx.Rename(xml, wp, "delInstrText", "instrText");
             }
 
-            sb.Append(WithAuthor(xml));
+            xml = WithAuthor(xml);
+            foreach (MarkupNode wrap in wrappers)
+            {
+                string open = wrap.OuterXml;
+                open = open[..(open.IndexOf('>', StringComparison.Ordinal) + 1)];
+                xml = open + xml + "</" + wrap.Name + ">";
+            }
+
+            sb.Append(xml);
         }
 
         return sb.ToString();
     }
 
     private readonly HashSet<MarkupNode> harvested = [];
+    private readonly HashSet<MarkupNode> fixedTops = [];
 
     /// <summary>Puts revision XML into a base paragraph at a paragraph offset.</summary>
     private void PlaceAt(MarkupNode bp, int offset, string xml)
@@ -698,6 +738,30 @@ internal sealed partial class TrackedWriter : IDisposable
             throw new ReplaceNeeded("the insertion point was not found");
         }
 
+        MarkupNode parent = marker.Parent;
+        if (!parent.IsNull && (Wx.Is(parent, "hyperlink") || Wx.Is(parent, "smartTag")))
+        {
+            // The other document's runs are not part of this hyperlink, so it is split around them.
+            var before = new StringBuilder();
+            var after = new StringBuilder();
+            bool seen = false;
+            for (MarkupNode c = parent.FirstChild; !c.IsNull; c = c.NextSibling)
+            {
+                if (c == marker)
+                {
+                    seen = true;
+                    continue;
+                }
+
+                (seen ? after : before).Append(c.OuterXml);
+            }
+
+            string whole = parent.OuterXml;
+            string open = whole[..(whole.IndexOf('>', StringComparison.Ordinal) + 1)], close = "</" + parent.Name + ">";
+            parent.ReplaceWithXml(Wx.Bytes((before.Length > 0 ? open + before + close : "") + xml + (after.Length > 0 ? open + after + close : "")));
+            return;
+        }
+
         marker.ReplaceWithXml(Wx.Bytes(xml));
     }
 
@@ -705,7 +769,99 @@ internal sealed partial class TrackedWriter : IDisposable
     private void MarkRange(MarkupNode bp, int offset, int length)
     {
         b.Marker.DeleteText(bp, offset, length);
+        foreach (MarkupNode w in new List<MarkupNode>(MarkerElements(bp, "del")))
+        {
+            StripEdgeObjects(w, keep: true);
+        }
+
         ConvertMarkers(bp, toInserted: baseIsNew);
+    }
+
+    /// <summary>
+    /// Objects (pictures, text boxes, note references) have no text, so an edit that starts or ends next to one takes its run into the
+    /// revision. Edits never include an object (those paragraphs are replaced as a whole), so the object runs at either end of a
+    /// revision are put back outside it (<paramref name="keep"/>) or left out of the copy (not <paramref name="keep"/>).
+    /// </summary>
+    private static void StripEdgeObjects(MarkupNode wrapper, bool keep)
+    {
+        while (true)
+        {
+            MarkupNode first = FirstElement(wrapper);
+            if (first.IsNull || !IsObjectRun(first))
+            {
+                break;
+            }
+
+            if (keep)
+            {
+                wrapper.InsertXmlBefore(Wx.Bytes(first.OuterXml));
+            }
+
+            first.Remove();
+        }
+
+        while (true)
+        {
+            MarkupNode last = wrapper.LastChild;
+            while (!last.IsNull && last.Kind != MarkupNodeKind.Element)
+            {
+                last = last.PreviousSibling;
+            }
+
+            if (last.IsNull || !IsObjectRun(last))
+            {
+                break;
+            }
+
+            if (keep)
+            {
+                wrapper.InsertXmlAfter(Wx.Bytes(last.OuterXml));
+            }
+
+            last.Remove();
+        }
+    }
+
+    private static bool IsObjectRun(MarkupNode e)
+    {
+        if (!Wx.Is(e, "r"))
+        {
+            return false;
+        }
+
+        bool obj = false;
+        foreach (MarkupNode d in Wx.Descendants(e))
+        {
+            if (!Wx.InMain(d))
+            {
+                continue;
+            }
+
+            switch (d.LocalNameString)
+            {
+                case "drawing" or "pict" or "object" or "footnoteReference" or "endnoteReference":
+                    obj = true;
+                    break;
+                case "t" or "delText" or "tab" or "br" or "cr" or "noBreakHyphen" or "sym" or "fldChar" or "instrText" or "delInstrText":
+                    // Text inside a drawing or text box belongs to the object, not to the run.
+                    bool inside = false;
+                    for (MarkupNode a = d.Parent; !a.IsNull && a != e; a = a.Parent)
+                    {
+                        inside |= Wx.Is(a, "txbxContent") || Wx.Is(a, "drawing") || Wx.Is(a, "pict") || Wx.Is(a, "object");
+                    }
+
+                    if (!inside)
+                    {
+                        return false;
+                    }
+
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        return obj;
     }
 
     // ------------------------------------------------------------------------------------------------------------------ properties
@@ -1074,14 +1230,15 @@ internal sealed partial class TrackedWriter : IDisposable
                 continue;
             }
 
-            MarkupNode next = Wx.NextElement(p);
-            if (!next.IsNull && Wx.Is(next, "p"))
+            MarkupNode pPr = Wx.Child(p, "pPr");
+            if (!Wx.Child(pPr, "sectPr").IsNull)
             {
+                TailNote(inserted, "the paragraph holds a section break, which keeps its mark");
                 continue;
             }
 
-            MarkupNode pPr = Wx.Child(p, "pPr");
-            if (!Wx.Child(pPr, "sectPr").IsNull)
+            MarkupNode next = Wx.NextElement(p);
+            if (!next.IsNull && Wx.Is(next, "p"))
             {
                 continue;
             }
@@ -1089,12 +1246,12 @@ internal sealed partial class TrackedWriter : IDisposable
             if (local is "ins" or "del" && merged.Add(p))
             {
                 MarkupNode o = Wx.PreviousElement(p);
-                while (!o.IsNull && Wx.Is(o, "p") && marked.TryGetValue(o, out bool oi) && (oi == inserted || !IsPlainMark(o, !inserted)))
+                while (!o.IsNull && Wx.Is(o, "p") && marked.TryGetValue(o, out bool oi) && oi == inserted)
                 {
                     o = Wx.PreviousElement(o);
                 }
 
-                if (!o.IsNull && Wx.Is(o, "p") && marked.TryGetValue(o, out bool opposite) && opposite != inserted && Wx.Child(Wx.Child(o, "pPr"), "sectPr").IsNull)
+                if (!o.IsNull && Wx.Is(o, "p") && marked.TryGetValue(o, out bool opposite) && opposite != inserted && IsPlainMark(o, !inserted) && Wx.Child(Wx.Child(o, "pPr"), "sectPr").IsNull)
                 {
                     MergeTail(p, o, inserted);
                     marked.Remove(o);
@@ -1109,8 +1266,9 @@ internal sealed partial class TrackedWriter : IDisposable
                 q = Wx.PreviousElement(q);
             }
 
-            if (q.IsNull || !Wx.Is(q, "p") || marked.ContainsKey(q) || HasMarkRevision(q) || !Wx.Child(Wx.Child(q, "pPr"), "sectPr").IsNull)
+            if (q.IsNull || !Wx.Is(q, "p") || marked.ContainsKey(q) || HasMarkRevision(q) || !Wx.Child(Wx.Child(q, "pPr"), "sectPr").IsNull || !Wx.Child(Wx.Child(q, "pPr"), "pPrChange").IsNull)
             {
+                TailNote(inserted, q.IsNull || !Wx.Is(q, "p") ? "no untracked paragraph before it in the same container to take its mark" : "the paragraph before it cannot take its mark (it is tracked or holds a section break)");
                 continue;
             }
 
@@ -1119,6 +1277,13 @@ internal sealed partial class TrackedWriter : IDisposable
     }
 
     private readonly HashSet<MarkupNode> merged = [];
+
+    /// <summary>
+    /// Records a paragraph mark that has to go on one resolution but cannot: the paragraph before a table or content control, at the end
+    /// of a container, or holding a section break keeps its mark, so an empty paragraph is left behind (see <see cref="FixTailMarks"/>).
+    /// </summary>
+    private void TailNote(bool inserted, string why) =>
+        Note(inserted ? "paragraph-mark-reject" : "paragraph-mark-accept", "an emptied paragraph is left after " + (inserted ? "reject-all" : "accept-all") + ": " + why);
 
     /// <summary>True when the paragraph's mark carries a plain insertion (<paramref name="inserted"/>) or deletion mark.</summary>
     private static bool IsPlainMark(MarkupNode p, bool inserted)

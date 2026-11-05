@@ -22,7 +22,7 @@ public class TrackedChangesTests
         WordBuildOn on = Environment.GetEnvironmentVariable("ONEDIFF_TRACKED_BUILD") == "old" ? WordBuildOn.Old : WordBuildOn.New;
         string logDir = Environment.GetEnvironmentVariable("ONEDIFF_TRACKED_LOG") ?? "";
         var lines = new List<string>();
-        int failures = 0, crashes = 0;
+        int failures = 0, crashes = 0, allowed = 0;
         for (int s = first; s < first + pairs; s++)
         {
             var (o, nw, ob, nb) = Pair(s);
@@ -32,8 +32,10 @@ public class TrackedChangesTests
                 {
                     Comparison c = Comparison.Of(o, nw, settings);
                     using var ms = new MemoryStream();
-                    new DocxRedline { BuildOn = on }.Create(c, ms);
-                    List<string> p = TrackedGate.Problems(o, nw, ms.ToArray(), settings, on, detail: logDir.Length > 0);
+                    var res = new DocxRedline { BuildOn = on }.Create(c, ms);
+                    var filtered = new List<string>();
+                    List<string> p = TrackedGate.Problems(o, nw, ms.ToArray(), settings, on, res.NotCarried, detail: logDir.Length > 0, filtered: filtered);
+                    allowed += filtered.Count;
                     if (p.Count > 0)
                     {
                         failures++;
@@ -55,7 +57,7 @@ public class TrackedChangesTests
             }
         }
 
-        string summary = $"tracked sweep: pairs={pairs} first={first} build={on} failures={failures} crashes={crashes}";
+        string summary = $"tracked sweep: pairs={pairs} first={first} build={on} failures={failures} crashes={crashes} emptyParagraphsAllowed={allowed}";
         lines.Insert(0, summary);
         if (Environment.GetEnvironmentVariable("ONEDIFF_TRACKED_OUT") is { Length: > 0 } path)
         {
@@ -88,13 +90,15 @@ public class TrackedDebug
         string dir = Environment.GetEnvironmentVariable("ONEDIFF_TRACKED_DEBUG_DIR") ?? Path.Combine(Path.GetTempPath(), "onediff-tracked-debug");
         Directory.CreateDirectory(dir);
         File.WriteAllBytes(dir + "/out.docx", ms.ToArray());
+        File.WriteAllBytes(dir + "/o.docx", DocFactory.Build(o));
+        File.WriteAllBytes(dir + "/n.docx", DocFactory.Build(n));
         File.WriteAllBytes(dir + "/acc.docx", TrackedGate.Resolve(ms.ToArray(), true));
         File.WriteAllBytes(dir + "/rej.docx", TrackedGate.Resolve(ms.ToArray(), false));
         File.WriteAllText(dir + "/old.txt", Dump(oldDoc));
         File.WriteAllText(dir + "/new.txt", Dump(newDoc));
         File.WriteAllText(dir + "/acc.txt", Dump(source.Read(DocumentInput.FromBytes(File.ReadAllBytes(dir + "/acc.docx"), "a.docx"))));
         File.WriteAllText(dir + "/rej.txt", Dump(source.Read(DocumentInput.FromBytes(File.ReadAllBytes(dir + "/rej.docx"), "r.docx"))));
-        File.WriteAllText(dir + "/problems.txt", string.Join("\n", TrackedGate.Problems(oldDoc, newDoc, ms.ToArray(), c.Settings, WordBuildOn.New, detail: true)));
+        File.WriteAllText(dir + "/problems.txt", string.Join("\n", TrackedGate.Problems(oldDoc, newDoc, ms.ToArray(), c.Settings, WordBuildOn.New, res.NotCarried, detail: true)));
         File.WriteAllText(dir + "/notes.txt", string.Join("\n", res.NotCarried.Select(x => x.Category + ": " + x.Message)) + "\n" + string.Join("\n", c.Changes.Select(x => $"{x.Kind} link={x.LinkId} old={string.Join(",", x.Old.Nodes)} new={string.Join(",", x.New.Nodes)} edits=" + string.Join(";", x.Edits.Select(e => $"[{e.OldStart}+{e.OldLength}->{e.NewStart}+{e.NewLength} '{e.OldText.Replace("\t", "<T>")}'->'{e.NewText.Replace("\t", "<T>")}']")))));
     }
 }

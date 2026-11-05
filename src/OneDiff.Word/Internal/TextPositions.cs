@@ -65,10 +65,18 @@ internal static class TextPositions
 
         int chosen = -1, chosenRaw = 0, chosenOffset = 0, chosenLength = 0;
         bool chosenPlaceholder = false;
+        int previousEnd = 0;
         for (int i = 0; i < node.Segments.Length; i++)
         {
             AnchoredSpan s = node.Segments[i];
             int rs = ToRaw(node, settings, false, s.Start, true);
+            if (i > 0 && rs < previousEnd)
+            {
+                // A fold that merged characters of two runs (a space and the tab after it) puts the later run's segment at the start
+                // of the fold, but the earlier run's anchor already covers the characters up to there.
+                rs = previousEnd;
+            }
+
             if (isStart ? rs > rawPosition : rs >= rawPosition)
             {
                 break;
@@ -78,6 +86,8 @@ internal static class TextPositions
             {
                 return false;
             }
+
+            previousEnd = rs + length;
 
             chosen = i;
             chosenRaw = rs;

@@ -326,6 +326,11 @@ internal sealed partial class TrackedWriter
             return;
         }
 
+        int before = importer.CommentsDropped;
         importer.Fix(copy, d.PartNameOf(donorElement), b.PartNameOf(copy));
+        if (importer.CommentsDropped != before)
+        {
+            Note("comments", "a comment anchored in content that exists on one side only is not carried");
+        }
     }
 }
