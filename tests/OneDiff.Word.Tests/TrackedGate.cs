@@ -66,18 +66,21 @@ internal static class TrackedGate
             // Likewise a block content control that exists on one side only (its wrapper cannot be tracked) shifts the blocks around it.
             bool blockControlSkew = !notCarried.IsDefault && notCarried.Any(x => x.Category == "content-control" && x.Message.StartsWith("a block content control", StringComparison.Ordinal));
             bool commentsDiffer = !notCarried.IsDefault && notCarried.Any(x => x.Category == "comments");
+            // The blocks of a block content control that exists on one side only (its wrapper is not carried) are not carried either.
+            var lonelyGot = new HashSet<int>(c.Changes.Where(x => x.Kind == ChangeKind.Delete).SelectMany(x => x.Old.Nodes).Where(n => NotCarriedNode(got, n) && got[n].Kind == NodeKind.ContentControl));
+            var lonelyWant = new HashSet<int>(c.Changes.Where(x => x.Kind == ChangeKind.Insert).SelectMany(x => x.New.Nodes).Where(n => NotCarriedNode(want, n) && want[n].Kind == NodeKind.ContentControl));
             var cross = new List<(string What, string Text, bool IsInsert)>();
             foreach (Change ch in c.Changes)
             {
                 bool carried = true;
                 foreach (int n in ch.Old.Nodes)
                 {
-                    carried &= !NotCarriedNode(got, n) && !Under(got, n);
+                    carried &= !NotCarriedNode(got, n) && !Under(got, n) && !UnderAny(got, n, lonelyGot);
                 }
 
                 foreach (int n in ch.New.Nodes)
                 {
-                    carried &= !NotCarriedNode(want, n) && !Under(want, n);
+                    carried &= !NotCarriedNode(want, n) && !Under(want, n) && !UnderAny(want, n, lonelyWant);
                 }
 
                 // A block content control cannot be added or removed as a tracked change, so blocks inside one show as moved.
@@ -87,8 +90,9 @@ internal static class TrackedGate
                     carried = false;
                 }
 
-                // An emptied list item left behind (above) takes a number, so the items after it are numbered one higher.
-                if (leftovers && ch.Kind == ChangeKind.Attribute && ch.AttributeEdits.Length > 0 && ch.AttributeEdits.All(a => a.Key == "list.label"))
+                // An emptied list item left behind (above), or blocks kept in another order around a wrapper or section break that is not carried,
+                // change the numbers the items get.
+                if ((leftovers || blockControlSkew || sectionsDiffer) && ch.Kind == ChangeKind.Attribute && ch.AttributeEdits.Length > 0 && ch.AttributeEdits.All(a => a.Key == "list.label"))
                 {
                     filtered?.Add((accept ? "accept" : "reject") + ": list numbering shifted by a left-over empty item");
                     continue;
@@ -127,11 +131,22 @@ internal static class TrackedGate
                     }
                 }
 
-                if (sectionsDiffer && ch.Kind is ChangeKind.Insert or ChangeKind.Delete && ch.Edits.Length == 0
-                    && (ch.Kind == ChangeKind.Insert ? ch.New.Text : ch.Old.Text) is { Length: > 0 } t)
+                if (sectionsDiffer && ch.Kind is ChangeKind.Insert or ChangeKind.Delete && ch.Edits.Length == 0)
                 {
-                    cross.Add((what, t, ch.Kind == ChangeKind.Insert));
-                    continue;
+                    bool ins = ch.Kind == ChangeKind.Insert;
+                    CompareDocument doc = ins ? want : got;
+                    var nodes = ins ? ch.New.Nodes : ch.Old.Nodes;
+                    if (!nodes.IsDefaultOrEmpty)
+                    {
+                        Node first = doc[nodes[0]];
+                        string? key = first.Kind is NodeKind.Paragraph or NodeKind.ListItem ? "P:" + first.Text
+                            : first.Parent >= 0 ? "O:" + first.Kind + ":" + doc[first.Parent].Text : null;
+                        if (key is { Length: > 3 } && !key.EndsWith(':'))
+                        {
+                            cross.Add((what, key, ins));
+                            continue;
+                        }
+                    }
                 }
 
                 problems.Add(what);
@@ -167,6 +182,19 @@ internal static class TrackedGate
         for (int p = d[node].Parent; p >= 0; p = d[p].Parent)
         {
             if (NotCarriedNode(d, p) && d[p].Kind == NodeKind.ContentControl)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool UnderAny(CompareDocument d, int node, HashSet<int> ancestors)
+    {
+        for (int p = d[node].Parent; p >= 0; p = d[p].Parent)
+        {
+            if (ancestors.Contains(p))
             {
                 return true;
             }

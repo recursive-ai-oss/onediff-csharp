@@ -645,7 +645,7 @@ internal sealed partial class TrackedWriter : IDisposable
         {
             if (donorXml.Length > 0)
             {
-                PlaceAt(bp, bh, donorXml);
+                PlaceAt(bp, bh, donorXml, leadingObjects);
             }
 
             if (bl > 0)
@@ -657,7 +657,7 @@ internal sealed partial class TrackedWriter : IDisposable
         {
             if (donorXml.Length > 0)
             {
-                PlaceAt(bp, bh + bhl, donorXml);
+                PlaceAt(bp, bh + bhl, donorXml, leadingObjects);
             }
 
             if (bl > 0)
@@ -671,6 +671,7 @@ internal sealed partial class TrackedWriter : IDisposable
     private string Harvest(MarkupNode scratch, MarkupNode basePara, int offset, int length, bool donorInserted)
     {
         d.Marker.DeleteText(scratch, offset, length);
+        leadingObjects = false;
         var sb = new StringBuilder();
         var found = new List<MarkupNode>(MarkerElements(scratch, "del"));
         foreach (MarkupNode w in found)
@@ -681,7 +682,7 @@ internal sealed partial class TrackedWriter : IDisposable
             }
 
             harvested.Add(w);
-            StripEdgeObjects(w, keep: false);
+            leadingObjects |= StripEdgeObjects(w, keep: false);
             // The runs of a hyperlink (or smart tag) sit inside that element, and their link is part of what reject-all must give back, so
             // the harvested revision keeps a shallow copy of each wrapper; relationships are mapped once per wrapper.
             MarkupNode top = w;
@@ -721,9 +722,10 @@ internal sealed partial class TrackedWriter : IDisposable
 
     private readonly HashSet<MarkupNode> harvested = [];
     private readonly HashSet<MarkupNode> fixedTops = [];
+    private bool leadingObjects;
 
     /// <summary>Puts revision XML into a base paragraph at a paragraph offset.</summary>
-    private void PlaceAt(MarkupNode bp, int offset, string xml)
+    private void PlaceAt(MarkupNode bp, int offset, string xml, bool afterObjects)
     {
         b.Marker.InsertText(bp, offset, "x");
         MarkupNode marker = default;
@@ -736,6 +738,77 @@ internal sealed partial class TrackedWriter : IDisposable
         if (marker.IsNull)
         {
             throw new ReplaceNeeded("the insertion point was not found");
+        }
+
+        // Text of the paragraph cannot lie inside an inline content control (its text is a separate node), so a point at the edge of
+        // one belongs outside it.
+        MarkupNode content = marker.Parent;
+        if (!content.IsNull && Wx.Is(content, "sdtContent") && !content.Parent.IsNull && Wx.Is(content.Parent.Parent, "p"))
+        {
+            MarkupNode sdt = content.Parent;
+            if (Wx.NextElement(marker).IsNull)
+            {
+                sdt.InsertXmlAfter(Wx.Bytes(xml));
+                marker.Remove();
+                return;
+            }
+
+            if (Wx.PreviousElement(marker).IsNull)
+            {
+                sdt.InsertXmlBefore(Wx.Bytes(xml));
+                marker.Remove();
+                return;
+            }
+        }
+
+        // The same holds for a simple field, whose runs are its result.
+        if (!marker.Parent.IsNull && Wx.Is(marker.Parent, "fldSimple"))
+        {
+            MarkupNode field = marker.Parent;
+            if (Wx.PreviousElement(marker).IsNull)
+            {
+                field.InsertXmlBefore(Wx.Bytes(xml));
+            }
+            else
+            {
+                field.InsertXmlAfter(Wx.Bytes(xml));
+            }
+
+            marker.Remove();
+            return;
+        }
+
+        // A field's result is part of the field object, so a point at its edge belongs before its start or after its end.
+        if (FieldEdge(marker, out MarkupNode beforeRun, out bool atStart))
+        {
+            if (atStart)
+            {
+                beforeRun.InsertXmlBefore(Wx.Bytes(xml));
+            }
+            else
+            {
+                beforeRun.InsertXmlAfter(Wx.Bytes(xml));
+            }
+
+            marker.Remove();
+            return;
+        }
+
+        if (afterObjects)
+        {
+            // The other document has an object just before this text, and the matching object here sits at the same point.
+            MarkupNode last = marker;
+            while (!Wx.NextElement(last).IsNull && IsObjectRun(Wx.NextElement(last)))
+            {
+                last = Wx.NextElement(last);
+            }
+
+            if (last != marker)
+            {
+                last.InsertXmlAfter(Wx.Bytes(xml));
+                marker.Remove();
+                return;
+            }
         }
 
         MarkupNode parent = marker.Parent;
@@ -765,6 +838,69 @@ internal sealed partial class TrackedWriter : IDisposable
         marker.ReplaceWithXml(Wx.Bytes(xml));
     }
 
+    /// <summary>
+    /// Finds whether a marker sits inside a complex field (ECMA-376 §17.16.18: begin, instruction, separate, result, end) of the same
+    /// paragraph level. When it does, <paramref name="run"/> is the run to put the new content before (the field's begin, when the
+    /// marker is at the start of the result) or after (the field's end, when it is at the end).
+    /// </summary>
+    private static bool FieldEdge(MarkupNode marker, out MarkupNode run, out bool atStart)
+    {
+        run = default;
+        atStart = true;
+        var siblings = new List<MarkupNode>(Wx.ChildElements(marker.Parent));
+        int at = siblings.IndexOf(marker);
+        int depth = 0, outerBegin = -1;
+        for (int i = 0; i < at; i++)
+        {
+            string? t = FieldCharType(siblings[i]);
+            if (t == "begin")
+            {
+                if (depth++ == 0)
+                {
+                    outerBegin = i;
+                }
+            }
+            else if (t == "end" && depth > 0)
+            {
+                depth--;
+            }
+        }
+
+        if (depth == 0 || outerBegin < 0)
+        {
+            return false;
+        }
+
+        // At the end of the result when the next run closes the field; otherwise at its start.
+        if (at + 1 < siblings.Count && FieldCharType(siblings[at + 1]) == "end" && depth == 1 && FieldCharType(siblings[at - 1]) != "separate")
+        {
+            run = siblings[at + 1];
+            atStart = false;
+            return true;
+        }
+
+        run = siblings[outerBegin];
+        return true;
+    }
+
+    private static string? FieldCharType(MarkupNode e)
+    {
+        if (!Wx.Is(e, "r"))
+        {
+            return null;
+        }
+
+        foreach (MarkupNode c in Wx.ChildElements(e))
+        {
+            if (Wx.Is(c, "fldChar"))
+            {
+                return Wx.Attr(c, "fldCharType");
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>Marks a stretch of base text as inserted (base is new) or deleted (base is old).</summary>
     private void MarkRange(MarkupNode bp, int offset, int length)
     {
@@ -782,8 +918,9 @@ internal sealed partial class TrackedWriter : IDisposable
     /// revision. Edits never include an object (those paragraphs are replaced as a whole), so the object runs at either end of a
     /// revision are put back outside it (<paramref name="keep"/>) or left out of the copy (not <paramref name="keep"/>).
     /// </summary>
-    private static void StripEdgeObjects(MarkupNode wrapper, bool keep)
+    private static bool StripEdgeObjects(MarkupNode wrapper, bool keep)
     {
+        bool leading = false;
         while (true)
         {
             MarkupNode first = FirstElement(wrapper);
@@ -792,6 +929,7 @@ internal sealed partial class TrackedWriter : IDisposable
                 break;
             }
 
+            leading = true;
             if (keep)
             {
                 wrapper.InsertXmlBefore(Wx.Bytes(first.OuterXml));
@@ -820,6 +958,8 @@ internal sealed partial class TrackedWriter : IDisposable
 
             last.Remove();
         }
+
+        return leading;
     }
 
     private static bool IsObjectRun(MarkupNode e)
