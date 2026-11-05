@@ -1,12 +1,12 @@
 #!/bin/bash
 # Compare a scan set with the OCR source and score it against the labelled set it was made from; the same pairs read from the digital
 # PDFs give the side-by-side rows.  Usage: score-scan.sh <name> <labelled set dir> <scan set dir> <digital pdf-v1 dir> <ids file> [jobs]
-# Everything is written under $HOME/onediff/u25/out/<name>. Heavy: submit it through the machine's job queue.
+# Everything is written under $HOME/onediff/scan/out/<name>. Heavy: submit it through the machine's job queue.
 set -u
 NAME=$1; DATA=$2; SCAN=$3; DIGITAL=$4; IDS=$5; JOBS=${6:-4}
 export PATH=$HOME/dotnet10:$PATH DOTNET_ROOT=$HOME/dotnet10 DOTNET_PROCESSOR_COUNT=$JOBS DOTNET_CLI_TELEMETRY_OPTOUT=1
-A=${ONEDIFF_ARTIFACTS:-$HOME/onediff/u25/art}/bin
-OUT=$HOME/onediff/u25/out/$NAME; mkdir -p "$OUT"
+A=${ONEDIFF_ARTIFACTS:-$HOME/onediff/scan/art}/bin
+OUT=$HOME/onediff/scan/out/$NAME; mkdir -p "$OUT"
 SC="dotnet $A/OneDiff.GoldSets.Scan/release/OneDiff.GoldSets.Scan.dll"
 GS="dotnet $A/OneDiff.GoldSets/release/OneDiff.GoldSets.dll"
 uptime > "$OUT/load-before.txt"
