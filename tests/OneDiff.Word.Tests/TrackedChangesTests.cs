@@ -94,6 +94,7 @@ public class TrackedDebug
         File.WriteAllBytes(dir + "/n.docx", DocFactory.Build(n));
         File.WriteAllBytes(dir + "/acc.docx", TrackedGate.Resolve(ms.ToArray(), true));
         File.WriteAllBytes(dir + "/rej.docx", TrackedGate.Resolve(ms.ToArray(), false));
+        File.WriteAllText(dir + "/segs.txt", string.Join("\n", newDoc.Nodes.Where(x => x.Kind is NodeKind.Paragraph or NodeKind.ListItem && x.Segments.Length > 0 && x.Text.EndsWith("term ", StringComparison.Ordinal)).Select(x => $"node {x.Id} '{x.Text.Replace("\t", "<T>")}' folds=" + string.Join(";", x.Folds.Select(f => f.Start + "+" + f.Length + ":" + f.Category + ":" + f.Original.Length)) + " segs=" + string.Join(";", x.Segments.Select(sg => sg.Start + "+" + sg.Length + "@" + sg.Anchor.Reference[(sg.Anchor.Reference.IndexOf('#', StringComparison.Ordinal) + 1)..])))));
         File.WriteAllText(dir + "/old.txt", Dump(oldDoc));
         File.WriteAllText(dir + "/new.txt", Dump(newDoc));
         File.WriteAllText(dir + "/acc.txt", Dump(source.Read(DocumentInput.FromBytes(File.ReadAllBytes(dir + "/acc.docx"), "a.docx"))));

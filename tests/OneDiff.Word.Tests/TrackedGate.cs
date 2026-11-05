@@ -54,11 +54,13 @@ internal static class TrackedGate
             // the writer lists each such paragraph, and only as many empty-paragraph differences as it listed are let through.
             string category = accept ? "paragraph-mark-accept" : "paragraph-mark-reject";
             int allowance = notCarried.IsDefault ? 0 : notCarried.Count(x => x.Category == category);
+            bool leftovers = allowance > 0;
             byte[] resolved = Resolve(output, accept);
             CompareDocument got = source.Read(DocumentInput.FromBytes(resolved, accept ? "accepted.docx" : "rejected.docx"));
             CompareDocument want = accept ? newDoc : oldDoc;
             Comparison c = Comparison.Of(got, want, settings);
-            bool sectionsDiffer = got.Nodes.Count(n => n.Kind == NodeKind.Section) != want.Nodes.Count(n => n.Kind == NodeKind.Section);
+            bool sectionsDiffer = got.Nodes.Count(n => n.Kind == NodeKind.Section) != want.Nodes.Count(n => n.Kind == NodeKind.Section)
+                || (!notCarried.IsDefault && notCarried.Any(x => x.Category == "section" || x.Message.Contains("section break", StringComparison.Ordinal)));
             // A paragraph that sits in another section on one side (the break between them is not carried) shows as a delete and an insert
             // of the same text; such a pair is let through, and a delete or insert without its partner is still a problem.
             // Likewise a block content control that exists on one side only (its wrapper cannot be tracked) shifts the blocks around it.
@@ -83,6 +85,13 @@ internal static class TrackedGate
                 if (ch.Kind == ChangeKind.Move && ch.Edits.Length == 0 && (sectionsDiffer || blockControlSkew || ch.Old.Nodes.Any(n => InBlockControl(got, n)) || ch.New.Nodes.Any(n => InBlockControl(want, n))))
                 {
                     carried = false;
+                }
+
+                // An emptied list item left behind (above) takes a number, so the items after it are numbered one higher.
+                if (leftovers && ch.Kind == ChangeKind.Attribute && ch.AttributeEdits.Length > 0 && ch.AttributeEdits.All(a => a.Key == "list.label"))
+                {
+                    filtered?.Add((accept ? "accept" : "reject") + ": list numbering shifted by a left-over empty item");
+                    continue;
                 }
 
                 if (!carried)

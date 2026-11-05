@@ -87,7 +87,8 @@ internal static class TextPositions
                 return false;
             }
 
-            previousEnd = rs + length;
+            // An object's placeholder is one character of the node text however much text the object holds.
+            previousEnd = rs + (s.Length == 1 && node.Text[s.Start] == '\uFFFC' ? 1 : length);
 
             chosen = i;
             chosenRaw = rs;
