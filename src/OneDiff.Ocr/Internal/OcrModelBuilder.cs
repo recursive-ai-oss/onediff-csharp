@@ -49,6 +49,9 @@ internal sealed class OcrModelBuilder(OcrSourceOptions options, CompareDocumentB
     /// <summary>The gap between two lines of one block, in line heights, above which the second starts a new paragraph.</summary>
     private const double ParagraphGap = 0.9;
 
+    /// <summary>A line narrower than this share of the block's widest line is short: it ended early, as a heading or the last line of a paragraph does.</summary>
+    private const double ShortLine = 0.6;
+
     private readonly List<TokenRange> tokenScratch = [];
     private OcrPiece? open;
     private long characters;
@@ -148,6 +151,7 @@ internal sealed class OcrModelBuilder(OcrSourceOptions options, CompareDocumentB
 
         // The gaps between the block's lines: with enough of them, a paragraph gap must also stand out from the usual one, so that
         // double-spaced running text is not cut at every line.
+        double widest = block.Lines.Max(static l => l.Bounds.Width);
         double[] gaps = [.. block.Lines.Skip(1).Select((l, k) => block.Lines[k].Bounds.Bottom - l.Bounds.Top)];
         for (int i = 0; i < block.Lines.Count; i++)
         {
@@ -164,9 +168,15 @@ internal sealed class OcrModelBuilder(OcrSourceOptions options, CompareDocumentB
                 }
             }
 
-            // A marker starts the block, or follows a line that ended a sentence. Inside running text a line that begins with a number
-            // ("11. Juni 2026") is a date that the line break put first, not a list item.
-            if (options.ReadListItems && IsMarkerLine(line) && (i == 0 || (open is not null && PdfText.EndsSentence(open.LastLineText))))
+            // A clause number ("2.3") at the start of a line starts a paragraph, whatever the spacing.
+            if (options.ReadListItems && i > 0 && IsClauseNumberLine(line))
+            {
+                Flush();
+            }
+
+            // A marker starts the block, or follows a line that ended a sentence or a short line (a heading). Inside running text a
+            // line that begins with a number ("11. Juni 2026") is a date that the line break put first, not a list item.
+            if (options.ReadListItems && IsMarkerLine(line) && (i == 0 || (open is not null && (PdfText.EndsSentence(open.LastLineText) || block.Lines[i - 1].Bounds.Width < ShortLine * widest))))
             {
                 Flush();
                 open = new OcrPiece(NodeKind.ListItem, line.Words[0].Text);
@@ -183,6 +193,36 @@ internal sealed class OcrModelBuilder(OcrSourceOptions options, CompareDocumentB
     {
         double[] sorted = [.. values.Order()];
         return sorted[sorted.Length / 2];
+    }
+
+    /// <summary>Whether a line starts with a multi-level number such as 1.1 or 2.3.4 and goes on with text: the number of a clause.</summary>
+    private static bool IsClauseNumberLine(LineData line)
+    {
+        if (line.Words.Count < 2)
+        {
+            return false;
+        }
+
+        string w = line.Words[0].Text.TrimEnd('.');
+        int dots = 0, digits = 0;
+        foreach (char c in w)
+        {
+            if (c == '.')
+            {
+                dots++;
+                digits = 0;
+            }
+            else if (char.IsAsciiDigit(c) && ++digits <= 3)
+            {
+                continue;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        return dots >= 1 && w.Length >= 3 && w[^1] != '.';
     }
 
     private static bool IsMarkerLine(LineData line) => line.Words.Count > 1 && PdfText.IsListMarker(line.Words[0].Text);

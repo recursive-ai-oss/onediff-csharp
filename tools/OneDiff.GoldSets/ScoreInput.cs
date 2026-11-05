@@ -24,7 +24,8 @@ internal enum SKind
 /// <param name="Kind">How it takes part in the rows.</param>
 /// <param name="Extent">The intervals it covers.</param>
 /// <param name="Flagged">Whether the comparison marked it as a possible OCR error.</param>
-internal sealed record SChange(int Id, SKind Kind, List<Iv> Extent, bool Flagged = false);
+/// <param name="Note">A short description for diagnosis, or null.</param>
+internal sealed record SChange(int Id, SKind Kind, List<Iv> Extent, bool Flagged = false, string? Note = null);
 
 /// <summary>A correspondence of content blocks by gold node id. Kind is match, move, split or merge.</summary>
 internal sealed record SLink(string Kind, int[] Old, int[] New);
@@ -87,7 +88,7 @@ internal sealed class ScoreInput
                 Sides(ch.New, true, nd, ivs);
             }
 
-            changes.Add(new SChange(ch.Id, kind, ivs, ch.PossibleOcrError));
+            changes.Add(new SChange(ch.Id, kind, ivs, ch.PossibleOcrError, Describe(ch)));
         }
 
         return new ScoreInput
@@ -141,7 +142,7 @@ internal sealed class ScoreInput
                 ivs.Add(new Iv(v.IsNew, map.Id(v.Node), map.Position(v.Node, v.Start, atEnd: false), map.Position(v.Node, v.End, atEnd: true)));
             }
 
-            changes.Add(new SChange(ch.Id, ch.Kind, ivs, ch.Flagged));
+            changes.Add(new SChange(ch.Id, ch.Kind, ivs, ch.Flagged, ch.Note));
         }
 
         return new ScoreInput
@@ -156,6 +157,13 @@ internal sealed class ScoreInput
             Passed = plain.Passed,
             FallbackLevel = plain.FallbackLevel,
         };
+    }
+
+    private static string Describe(Change ch)
+    {
+        static string Cut(string t) => t.Length <= 70 ? t : t[..70] + "...";
+        string conf = ch.OcrConfidence is double c ? c.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) : "-";
+        return $"{ch.Kind} conf={conf}{(ch.PossibleOcrError ? " FLAG" : "")} [{Cut(ch.Old.Text)}] -> [{Cut(ch.New.Text)}]";
     }
 
     /// <summary>Maps a change side (a range of the nodes' joined text) back to intervals of single nodes.</summary>

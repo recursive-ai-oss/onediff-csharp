@@ -409,6 +409,7 @@ internal static class Program
 
         File.WriteAllLines(outFile + ".missed.txt", results.Where(r => r.Counts.Missed.Count > 0).OrderBy(r => r.Labels.Id, StringComparer.Ordinal).Select(r => r.Labels.Id + " " + string.Join(" | ", r.Counts.Missed)));
         File.WriteAllLines(outFile + ".align.txt", results.Where(r => r.Counts.AlignErrors.Count > 0).OrderBy(r => r.Labels.Id, StringComparer.Ordinal).Select(r => r.Labels.Id + " " + string.Join(" ; ", r.Counts.AlignErrors.Order(StringComparer.Ordinal))));
+        File.WriteAllLines(outFile + ".noise.txt", results.Where(r => r.Counts.Noise.Count > 0).OrderBy(r => r.Labels.Id, StringComparer.Ordinal).SelectMany(r => r.Counts.Noise.Select(n => r.Labels.Id + " " + n)));
         File.WriteAllLines(outFile + ".semantic.txt", results.Where(r => r.Counts.SemDiag.Count > 0).OrderBy(r => r.Labels.Id, StringComparer.Ordinal).SelectMany(r => r.Counts.SemDiag));
         var rows = new List<MetricRow>();
         void Scope(string name, Func<PairLabels, bool> pick)

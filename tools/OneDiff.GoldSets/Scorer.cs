@@ -33,6 +33,9 @@ internal sealed class Counts
     /// <summary>The changed sentences no change touched, for diagnosis; not summed.</summary>
     public List<string> Missed { get; } = [];
 
+    /// <summary>The changes no gold unit explains, for diagnosis; not summed.</summary>
+    public List<string> Noise { get; } = [];
+
     /// <summary>Semantic misses for diagnosis (typing, values, groups, substantive); not summed.</summary>
     public List<string> SemDiag { get; } = [];
 
@@ -286,6 +289,11 @@ internal static class PairScorer
                 : perChange.TryGetValue(ch.Id, out List<Iv>? mine) && mine.Any(v => goldUnitIvs.Values.Any(u => u.Any(g => g.IsNew == v.IsNew && g.Node == v.Node && v.Start < g.End && v.End > g.Start)));
             c.ChangesTotal++;
             c.ChangesSpurious += explained ? 0 : 1;
+            if (!explained && ch.Note is not null)
+            {
+                c.Noise.Add(ch.Note);
+            }
+
             c.ChangesFlagged += ch.Flagged ? 1 : 0;
             c.FlaggedSpurious += ch.Flagged && !explained ? 1 : 0;
         }
