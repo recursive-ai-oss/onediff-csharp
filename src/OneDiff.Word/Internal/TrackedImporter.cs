@@ -575,19 +575,7 @@ internal sealed class TrackedImporter
         MarkupNode target = created.Container.Node;
         MarkupNode parent = target.Parent;
 
-        // The numbering of the notes part can hand out an id a copied note already took, so the id is chosen from what is in the part.
-        long used = 0;
-        var taken = new HashSet<long>();
-        foreach (MarkupNode c in Wx.ChildElements(parent))
-        {
-            if (c != target && Wx.Attr(c, "id") is { } cid && long.TryParse(cid, NumberStyles.None, CultureInfo.InvariantCulture, out long cn))
-            {
-                taken.Add(cn);
-                used = Math.Max(used, cn);
-            }
-        }
-
-        string newId = (taken.Contains(created.Id) ? used + 1 : created.Id).ToString(CultureInfo.InvariantCulture);
+        string newId = created.Id.ToString(CultureInfo.InvariantCulture);
         string wp = to.Prefix;
         string xml = src.Container.Node.OuterXml;
         xml = SetAttr(xml, wp + ":id", id, newId);

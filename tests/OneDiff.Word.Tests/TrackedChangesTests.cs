@@ -1,5 +1,7 @@
 using OneDiff.Documents;
 using OneDiff.Documents.Model;
+using OneDiff.Documents.Pipeline;
+using OneDiff.Word.Internal;
 
 namespace OneDiff.Word.Tests;
 
@@ -22,7 +24,7 @@ public class TrackedChangesTests
         WordBuildOn on = Environment.GetEnvironmentVariable("ONEDIFF_TRACKED_BUILD") == "old" ? WordBuildOn.Old : WordBuildOn.New;
         string logDir = Environment.GetEnvironmentVariable("ONEDIFF_TRACKED_LOG") ?? "";
         var lines = new List<string>();
-        int failures = 0, crashes = 0, allowed = 0, schemaFailures = 0;
+        int failures = 0, crashes = 0, allowed = 0, schemaFailures = 0, markEntries = 0;
         bool schema = Environment.GetEnvironmentVariable("ONEDIFF_TRACKED_SCHEMA") == "1";
         for (int s = first; s < first + pairs; s++)
         {
@@ -38,6 +40,7 @@ public class TrackedChangesTests
                     var filtered = new List<string>();
                     List<string> p = TrackedGate.Problems(o, nw, ms.ToArray(), settings, on, res.NotCarried, detail: logDir.Length > 0, filtered: filtered);
                     allowed += filtered.Count;
+                    markEntries += res.NotCarried.Count(x => x.Category.StartsWith("paragraph-mark", StringComparison.Ordinal));
                     if (schema)
                     {
                         baseline ??= [.. SchemaCheck.Signatures(ob), .. SchemaCheck.Signatures(nb)];
@@ -70,7 +73,7 @@ public class TrackedChangesTests
             }
         }
 
-        string summary = $"tracked sweep: pairs={pairs} first={first} build={on} failures={failures} crashes={crashes} filteredAsNotCarried={allowed} schemaFailures={schemaFailures}";
+        string summary = $"tracked sweep: pairs={pairs} first={first} build={on} failures={failures} crashes={crashes} filteredAsNotCarried={allowed} schemaFailures={schemaFailures} paragraphMarkEntries={markEntries}";
         lines.Insert(0, summary);
         if (Environment.GetEnvironmentVariable("ONEDIFF_TRACKED_OUT") is { Length: > 0 } path)
         {
@@ -78,6 +81,39 @@ public class TrackedChangesTests
         }
 
         Assert.True(failures + crashes + schemaFailures == 0, string.Join("\n", lines.Take(8)));
+    }
+}
+
+public class TrackedTextBoxTests
+{
+    private static DocSpec Doc(string box) => new(
+        Para.Of("Intro paragraph that stays."),
+        new Para(new T("The terms are in "), new Box(box), new T(" the box.")),
+        Para.Of("Closing paragraph."));
+
+    [Theory]
+    [InlineData(WordBuildOn.New)]
+    [InlineData(WordBuildOn.Old)]
+    public void EditedTextBoxIsTrackedInPlace(WordBuildOn on)
+    {
+        byte[] ob = DocFactory.Build(Doc("Payment within thirty days")), nb = DocFactory.Build(Doc("Payment within sixty days"));
+        var source = new WordDocumentSource();
+        CompareDocument o = source.Read(DocumentInput.FromBytes(ob, "o.docx")), n = source.Read(DocumentInput.FromBytes(nb, "n.docx"));
+        Comparison c = Comparison.Of(o, n, CompareSettings.Legal);
+        var trace = new List<string>();
+        TrackedWriter.Trace = trace.Add;
+        try
+        {
+            using var ms = new MemoryStream();
+            DocxRedlineResult res = new DocxRedline { BuildOn = on }.Create(c, ms);
+            Assert.Empty(TrackedGate.Problems(o, n, ms.ToArray(), c.Settings, on, res.NotCarried));
+        }
+        finally
+        {
+            TrackedWriter.Trace = null;
+        }
+
+        Assert.DoesNotContain(trace, t => t.StartsWith("replace", StringComparison.Ordinal));
     }
 }
 
@@ -99,7 +135,11 @@ public class TrackedDebug
         CompareDocument oldDoc = source.Read(DocumentInput.FromBytes(DocFactory.Build(o), "o.docx")), newDoc = source.Read(DocumentInput.FromBytes(DocFactory.Build(n), "n.docx"));
         Comparison c = Comparison.Of(oldDoc, newDoc, Environment.GetEnvironmentVariable("ONEDIFF_TRACKED_SETTINGS") == "strict" ? CompareSettings.Strict : CompareSettings.Legal);
         using var ms = new MemoryStream();
+        var traceLines = new List<string>();
+        TrackedWriter.Trace = traceLines.Add;
         var res = new DocxRedline { BuildOn = Environment.GetEnvironmentVariable("ONEDIFF_TRACKED_BUILD") == "old" ? WordBuildOn.Old : WordBuildOn.New }.Create(c, ms);
+        TrackedWriter.Trace = null;
+        File.WriteAllLines(Path.Combine(Environment.GetEnvironmentVariable("ONEDIFF_TRACKED_DEBUG_DIR") ?? ".", "trace.txt"), traceLines);
         string dir = Environment.GetEnvironmentVariable("ONEDIFF_TRACKED_DEBUG_DIR") ?? Path.Combine(Path.GetTempPath(), "onediff-tracked-debug");
         Directory.CreateDirectory(dir);
         File.WriteAllBytes(dir + "/out.docx", ms.ToArray());

@@ -204,6 +204,7 @@ public static partial class ComparisonJson
                 CollapseCascades = Bool(s, "collapseCascades"),
                 TypedChanges = Bool(s, "typedChanges"),
                 Seed = Member(s, "seed").GetUInt64(),
+                OcrConfidenceThreshold = Opt(s, "ocrConfidenceThreshold") is not null ? Num(s, "ocrConfidenceThreshold") : CompareSettings.DefaultOcrConfidenceThreshold,
                 Style = style,
             };
             settings.Validate();
@@ -326,6 +327,8 @@ public static partial class ComparisonJson
                 OldValue = Opt(c, "oldValue") is JsonElement ov2 ? ReadValue(ov2) : null,
                 NewValue = Opt(c, "newValue") is JsonElement nv2 ? ReadValue(nv2) : null,
                 IsSubstantive = Opt(c, "substantive") is not JsonElement sub || sub.ValueKind != JsonValueKind.False,
+                OcrConfidence = Opt(c, "ocrConfidence") is not null ? Num(c, "ocrConfidence") : null,
+                PossibleOcrError = Opt(c, "possibleOcrError") is JsonElement poe && poe.ValueKind == JsonValueKind.True,
             };
         }
 

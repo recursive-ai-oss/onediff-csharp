@@ -134,26 +134,6 @@ internal static class Wx
     ];
 
     /// <summary>
-    /// Declares on a part's root element every well-known prefix the part uses and the root does not declare. Revisions are resolved
-    /// by moving serialized fragments, which can only be read back when the prefixes they use are in scope at the destination, and
-    /// the copies made here carry their declarations on their own top element only.
-    /// </summary>
-    public static void DeclareOnRoot(MarkupNode root)
-    {
-        string whole = root.OuterXml;
-        int gt = TagEnd(whole, 0);
-        string tag = gt < 0 ? whole : whole[..(gt + 1)];
-        foreach (KeyValuePair<string, string> kv in KnownPrefixes)
-        {
-            if (!tag.Contains("xmlns:" + kv.Key + "=", StringComparison.Ordinal) && whole.Contains("<" + kv.Key + ":", StringComparison.Ordinal)
-                || !tag.Contains("xmlns:" + kv.Key + "=", StringComparison.Ordinal) && whole.Contains(" " + kv.Key + ":", StringComparison.Ordinal))
-            {
-                root.SetAttribute("xmlns:" + kv.Key, kv.Value);
-            }
-        }
-    }
-
-    /// <summary>
     /// UTF-8 bytes of XML to be inserted into a document, with a declaration added to each top-level element for every well-known prefix
     /// it uses and does not declare: a node serialized on its own does not repeat the declarations it inherited from its ancestors.
     /// </summary>

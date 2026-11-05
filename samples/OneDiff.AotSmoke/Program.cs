@@ -3,6 +3,7 @@ using OneDiff.Documents.Combine;
 using OneDiff.Documents.Model;
 using OneDiff.Documents.Serialization;
 using OneDiff.Nlp;
+using OneDiff.Ocr;
 using OneDiff.Pdf;
 using OneDiff.Word;
 using OnePdf;
@@ -44,6 +45,7 @@ internal static class Program
         failures += CheckDocuments();
         failures += CheckSemantics();
         failures += CheckNlp();
+        failures += CheckScan();
         failures += CheckPdf();
         failures += CheckWord();
         failures += CheckReconstructedDocx();
@@ -77,6 +79,52 @@ internal static class Program
         }
 
         return failures;
+    }
+
+    /// <summary>
+    /// Scans under NativeAOT: two pages are drawn to pixels, read through the OCR engine from a PNG and from a PDF made of the same
+    /// pixels, compared, flagged and marked on the page.
+    /// </summary>
+    private static int CheckScan()
+    {
+        int failures = 0;
+        byte[] oldPng = Draw(MakePdf(["The supplier shall deliver within thirty days.", "Payment is due in sixty days."]));
+        byte[] newPng = Draw(MakePdf(["The supplier shall deliver within forty days.", "Payment is due in sixty days."]));
+        var source = new OcrDocumentSource();
+        CompareDocument a = source.Read(DocumentInput.FromBytes(oldPng, "old.png")), b = source.Read(DocumentInput.FromBytes(newPng, "new.png"));
+        Comparison c = Comparison.Of(a, b, CompareSettings.Legal with { OcrConfidenceThreshold = 1.0 });
+        if (c.Verification.FallbackLevel != 0 || !c.Check().IsEmpty || c.Changes.IsEmpty || c.Changes.Any(x => x.OcrConfidence is null || !x.PossibleOcrError))
+        {
+            Console.Error.WriteLine("scan: comparison failed verification or carries no confidence");
+            failures++;
+        }
+
+        if (ComparisonJson.Read(ComparisonJson.Write(c)).Changes.Count(x => x.PossibleOcrError) != c.Changes.Length)
+        {
+            Console.Error.WriteLine("scan: the JSON lost the OCR flags");
+            failures++;
+        }
+
+        using var marked = new MemoryStream();
+        PdfRedline.OnPages.Write(c, marked, RedlineStyle.SideBySide);
+        using PdfDocument back = PdfDocument.Open(marked.ToArray());
+        if (!back.Pages[0].Annotations.Any(x => x.Subtype is "Highlight" or "Caret"))
+        {
+            Console.Error.WriteLine("scan: no mark on the page");
+            failures++;
+        }
+
+        return failures;
+    }
+
+    /// <summary>The first page of a PDF drawn at 200 dpi, as PNG bytes.</summary>
+    private static byte[] Draw(byte[] pdf)
+    {
+        var load = new OneImage.LoadOptions { Configuration = new OneImage.ImageConfiguration().Add(new OneImage.Pdf.PdfFormat(new OneImage.Pdf.PdfRenderOptions { Dpi = 200 })) };
+        OneImage.Image doc = OneImage.Image.Load(pdf, load);
+        using var ms = new MemoryStream();
+        doc.Frames[0].ToImage().Save(ms, OneImage.PngFormat.Instance);
+        return ms.ToArray();
     }
 
     /// <summary>Combine and chain under NativeAOT: attribution, a conflict, the report page, both JSON forms and the checks.</summary>

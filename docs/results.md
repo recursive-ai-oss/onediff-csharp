@@ -29,17 +29,17 @@ The merge-file re-run also repeated the minimality and validity gates (9,483 / 9
 
 ## Fuzzing (text core parsers)
 
-A seeded mutation runner (`fuzz/OneDiff.Fuzz`, no coverage feedback): inputs are mutations of patches the library writes plus hostile cases. A crash is an exception, a broken invariant, or an input slower than 3 s. 600 s per target, seed 1, seven targets side by side, one core each, on the text-core build used for the speed rows below (37d53ec); the parsers, appliers and change-list reader have not changed since.
+A seeded mutation runner (`fuzz/OneDiff.Fuzz`, no coverage feedback): inputs are mutations of patches the library writes plus hostile cases, and for the change-list reader mutations of valid comparisons. A crash is an exception, a broken invariant, or an input slower than 3 s. 600 s per target, seed 1, on the release build (9989a33), one process per target on the arm64 machine (Apple M2, 6 cores reserved, load 2.8 before and 6.6 after).
 
 | Target | Duration | Executions | Crashes |
 |---|---|---|---|
-| unified-parse | 600 s | 273,494,302 | 0 |
-| unified-apply | 600 s | 228,075,994 | 0 |
-| dmp-parse | 600 s | 293,566,965 | 0 |
-| dmp-apply | 600 s | 256,863,028 | 0 |
-| unified-roundtrip | 600 s | 67,533,673 | 0 |
-| dmp-roundtrip | 600 s | 8,743,643 | 0 |
-| comparison-json (change-list reader) | 600 s | 29,836,303 | 0 |
+| unified-parse | 600 s | 409,599,563 | 0 |
+| unified-apply | 600 s | 367,589,317 | 0 |
+| dmp-parse | 600 s | 510,064,214 | 0 |
+| dmp-apply | 600 s | 462,174,804 | 0 |
+| unified-roundtrip | 600 s | 90,294,084 | 0 |
+| dmp-roundtrip | 600 s | 9,180,084 | 0 |
+| comparison-json (change-list reader) | 600 s | 37,034,877 | 0 |
 
 ## NativeAOT
 

@@ -2,6 +2,9 @@ using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Running;
 using Docxodus;
 using OfficeIMO.Word;
+using OneDiff.Documents;
+using OneDiff.Documents.Model;
+using OneDiff.Word;
 
 namespace OneDiff.Bench.Docx;
 
@@ -11,8 +14,7 @@ namespace OneDiff.Bench.Docx;
 /// n8 about forty pages and n24 about a hundred and twenty. Every tool runs with its default settings, one thread, and the same
 /// input files. Set ONEDIFF_DOCX_BENCH to the folder holding n1, n8 and n24.
 /// <para>
-/// The engine's own row goes in this class next to the others once its Word package exists: one more method with the same
-/// shape (open both, compare in deterministic mode, save).
+/// OneDiff is the same shape: read both files through the Word source, compare, write the tracked-changes document.
 /// </para>
 /// </summary>
 [MemoryDiagnoser]
@@ -42,6 +44,19 @@ public class DocxBench
         {
             File.Delete(output);
         }
+    }
+
+    [Benchmark]
+    public long OneDiff()
+    {
+        var source = new WordDocumentSource();
+        Comparison c = Comparison.Of(source.Read(DocumentInput.FromBytes(File.ReadAllBytes(old), "old.docx")), source.Read(DocumentInput.FromBytes(File.ReadAllBytes(current), "new.docx")));
+        using (FileStream fs = File.Create(output))
+        {
+            new DocxRedline().Create(c, fs);
+        }
+
+        return new FileInfo(output).Length;
     }
 
     [Benchmark]

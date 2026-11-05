@@ -158,6 +158,20 @@ public sealed record Change(
     /// otherwise, and for a change nobody has classified yet. Filter with <c>comparison.Changes.Where(c =&gt; c.IsSubstantive)</c>.
     /// </summary>
     public bool IsSubstantive { get; init; } = true;
+
+    /// <summary>
+    /// The lowest confidence, in [0, 1], of the recognized words this change's edits touch on either side, or null when none of them
+    /// came from an OCR source (their anchors are not <see cref="AnchorKind.OcrWords"/>) or the change has no text edit. Set by
+    /// classification.
+    /// </summary>
+    public double? OcrConfidence { get; init; }
+
+    /// <summary>
+    /// True when <see cref="OcrConfidence"/> is below <see cref="CompareSettings.OcrConfidenceThreshold"/>: a word of the change was read
+    /// with so little confidence that the difference may be a recognition error. The change is shown like any other; the flag only
+    /// adds a warning. Set by classification.
+    /// </summary>
+    public bool PossibleOcrError { get; init; }
 }
 
 /// <summary>What a <see cref="ChangeGroup"/> collects.</summary>
