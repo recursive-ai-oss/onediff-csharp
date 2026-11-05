@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <PublishToNuGet>true</PublishToNuGet>
     <AssemblyName>OneDiff.Documents</AssemblyName>
     <Description>Text diff and document comparison for .NET. The document engine: a compare model with source anchors, staged alignment, diff, grouping, classification and verification, a change ledger, and a versioned JSON form, with a completeness check on every comparison.</Description>
     <EnablePackageValidation>true</EnablePackageValidation>

@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <PublishToNuGet>true</PublishToNuGet>
     <OutputType>Exe</OutputType>
     <!-- Not named onediff: the runtime matches assembly names without regard to case, so that would shadow the OneDiff library. The command is still onediff (ToolCommandName). -->
     <AssemblyName>OneDiff.Cli</AssemblyName>

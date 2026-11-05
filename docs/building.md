@@ -16,7 +16,7 @@ Some packages depend on a prerelease of another Recursive AI library (OnePDF, On
 1. Copy `docs/nuget-local.config.example` to `NuGet.Config` in the repository root (the path is not tracked).
 2. Set `ONEDIFF_PREVIEW_FEED` to the folder (or feed URL).
 
-Only the sister-library packages named in that file come from the preview source; everything else comes from nuget.org. Once the previews are published, the pins move to the released versions and none of this is needed.
+Only the sister-library packages named in that file come from the preview source; everything else comes from nuget.org. Once the previews are published, the pins move to the released versions and none of this is needed. The OnePDF and OneFont pins are two properties at the top of `Directory.Packages.props`, `OnePdfVersion` and `OneFontVersion`; moving them to the released `1.18.0` and `1.4.0` is a two-line change (the CI selector reads them too).
 
 ## CI
 
@@ -34,7 +34,11 @@ Hosted runners cannot restore a prerelease that is not on nuget.org, so `plan` r
 
 ## Releases
 
-A package ships when its project is under `src/` and `IsPackable` is true: `Directory.Build.props` makes everything non-packable, `src/Directory.Build.props` makes projects under `src/` packable, and a project whose package has no content yet sets `IsPackable` to false until it does. That is the one list of what ships; `.github/workflows/release.yml` packs the solution and checks that it produced exactly one package per packable project.
+A package **packs** when its project is under `src/` and `IsPackable` is true: `Directory.Build.props` makes everything non-packable, `src/Directory.Build.props` makes projects under `src/` packable, and a project whose package has no content yet sets `IsPackable` to false until it does. A local `dotnet pack OneDiff.slnx` packs all of them.
+
+A package is **published to nuget.org** only when its project also sets `PublishToNuGet` to true (`src/Directory.Build.props` sets it to false). That is the one list of what the release publishes: the packages whose dependencies are all on nuget.org. `.github/workflows/release.yml` builds and tests the solution that restores without prerelease packages, packs each published project, and checks that it produced exactly one package per project marked `PublishToNuGet`. A package joins a release by setting the property; it must not depend on a prerelease.
+
+Each package has its own `PACKAGE.md` beside its project; it is the readme shown on nuget.org, so its links are absolute.
 
 All packages and the tool share one version, `<Version>` in `Directory.Build.props`. The workflow runs when a `vX.Y.Z[-suffix]` tag is pushed and has three jobs:
 
