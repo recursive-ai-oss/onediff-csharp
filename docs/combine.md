@@ -83,7 +83,7 @@ C101–C104 and C109 together say that the changes attributed to reviewer *k* ar
 1. one of its changes concerns a block the net change's old blocks became (followed forward through the steps' alignments), or that the net change's new blocks came from (followed backward);
 2. one of those blocks is deleted or created in that step (a block removed with its parent has no change of its own);
 3. for a net move: the step moved anything (moving one block changes the relative order of the others, so the net comparison may show a different block as moved);
-4. otherwise (the net comparison paired interchangeable blocks, say empty cells, differently from the steps): the steps that made a change of the same kind, and failing that any step that changed anything.
+4. otherwise (the net comparison paired interchangeable blocks, say empty cells, differently from the steps): the steps that made a change of the same kind, and failing that any step that changed anything or reordered blocks (identical blocks, such as empty cells, can swap places with no change to show).
 
 The grain is the block: two edits to one paragraph in different steps are both attributed to both steps in the net view; the step comparisons say exactly which step made which edit.
 

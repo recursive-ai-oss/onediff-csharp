@@ -214,7 +214,7 @@ public sealed class ComparisonChain
             {
                 for (int s = 0; s < Steps.Length; s++)
                 {
-                    if (!Steps[s].Comparison.Changes.IsEmpty)
+                    if (!Steps[s].Comparison.Changes.IsEmpty || Steps[s].Comparison.Alignment.Links.Any(l => !l.OldNodes.SequenceEqual(l.NewNodes)))
                     {
                         touched.Add(s);
                     }
