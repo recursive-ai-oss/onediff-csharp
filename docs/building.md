@@ -2,6 +2,16 @@
 
 ## Building
 
+On a fresh clone, build the projects that restore from nuget.org alone (the released packages, their tests, the tool, samples, bench and fuzz):
+
+```
+python3 tools/ci/select-solution.py > /dev/null   # writes OneDiff.Hosted.slnf and names the projects it leaves out
+dotnet build OneDiff.Hosted.slnf -c Release
+dotnet test --solution OneDiff.Hosted.slnf -c Release --no-build
+```
+
+This is what CI builds when no preview feed is configured. The whole solution, `OneDiff.slnx`, also holds the packages that ship later in 1.x (`.Word`, `.Nlp` and the rest); building it stops at restore until the sister-library previews they need can be restored (next section). With those configured:
+
 ```
 dotnet build OneDiff.slnx -c Release
 dotnet test --solution OneDiff.slnx -c Release --no-build

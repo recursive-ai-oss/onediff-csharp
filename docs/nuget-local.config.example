@@ -16,9 +16,6 @@
       <package pattern="*" />
     </packageSource>
     <packageSource key="sister-previews">
-      <package pattern="RecursiveAI.OnePdf" />
-      <package pattern="RecursiveAI.OnePdf.*" />
-      <package pattern="RecursiveAI.OneFont" />
       <package pattern="RecursiveAI.OneDocument" />
       <package pattern="RecursiveAI.OneDocument.*" />
       <package pattern="RecursiveAI.OneArchive" />

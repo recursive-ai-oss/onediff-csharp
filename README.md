@@ -31,7 +31,7 @@ dotnet tool install --global RecursiveAI.OneDiff.Tool   # the `onediff` command
 | `RecursiveAI.OneDiff.Ocr` | Reads scanned PDFs and images through `RecursiveAI.OneOcr`, with each word's confidence; differences that may be recognition errors are flagged. |
 | `RecursiveAI.OneDiff.Tool` | The `onediff` tool: `diff`, `patch`, `merge`, `compare`, `combine`, `chain`. |
 
-Coming in later releases: Word documents in and tracked-changes DOCX out (`RecursiveAI.OneDiff.Word`, in this repository and not in the first release), spreadsheets, slides, and the OneNLP value recognizer (`RecursiveAI.OneDiff.Nlp`). Until then a Word file is refused with a message that names the package.
+Coming in later releases: Word documents in and tracked-changes DOCX out (`RecursiveAI.OneDiff.Word`, in this repository and not in the first release), spreadsheets, slides, and the OneNLP value recognizer (`RecursiveAI.OneDiff.Nlp`). Until then a Word, Excel or PowerPoint file is refused with a `NotSupportedException` saying that support is coming in a 1.x release and suggesting that you export the documents to PDF and compare the PDFs.
 
 ## The happy path
 
@@ -101,9 +101,12 @@ Start at [docs/index.md](docs/index.md). The pages that matter first:
 ## Building
 
 ```
-dotnet build -c Release
-dotnet test --solution OneDiff.slnx -c Release
+python3 tools/ci/select-solution.py > /dev/null   # writes OneDiff.Hosted.slnf: every project that restores from nuget.org
+dotnet build OneDiff.Hosted.slnf -c Release
+dotnet test --solution OneDiff.Hosted.slnf -c Release --no-build
 ```
+
+The whole solution (`OneDiff.slnx`) also holds the packages that ship later in 1.x, which need sister-library previews; see [docs/building.md](docs/building.md).
 
 Build output goes outside the checkout; set `ONEDIFF_ARTIFACTS` to choose where. See [docs/building.md](docs/building.md).
 

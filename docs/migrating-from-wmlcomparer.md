@@ -8,8 +8,8 @@ Reading and writing Word files is in `RecursiveAI.OneDiff.Word`, which ships aft
 
 | Task | At 1.0, without `.Word` | With `.Word` |
 |---|---|---|
-| Compare two `.docx` files | **Not possible.** The input is recognized by its first bytes and the call throws `NotSupportedException`: "no document source is registered for this input, which looks like an Office Open XML or other zip-based document (packages RecursiveAI.OneDiff.Word, …). Reference that package and call its Register method once at startup." | `WordRedline.Register()` once, then `Comparison.Of("v1.docx", "v2.docx")` |
-| Write a `.docx` with tracked changes | Not possible: asking for a `.docx` output names the package in the exception. | `comparison.SaveAs("redline.docx")` |
+| Compare two `.docx` files | **Not possible.** The input is recognized by its first bytes and the call throws `NotSupportedException`: "No document source is registered for this input, which looks like an Office Open XML or other zip-based document. Support for Office documents (DOCX, XLSX and PPTX) is coming in a 1.x release. Meanwhile, export the documents to PDF and compare the PDFs (with RecursiveAI.OneDiff.Pdf)." Exporting both files to PDF and comparing those works today. | `WordRedline.Register()` once, then `Comparison.Of("v1.docx", "v2.docx")` |
+| Write a `.docx` with tracked changes | Not possible: asking for a `.docx` output throws, saying DOCX output is coming in a 1.x release and suggesting the PDF route meanwhile. | `comparison.SaveAs("redline.docx")` |
 | Compare `.docx` against a PDF, write HTML, JSON or a PDF redline | Not possible (the `.docx` side cannot be read). | Works: `.Word` and `.Pdf` registered together. |
 | Compare PDFs, text or scans; HTML, JSON, rendered-redline and on-page-markup outputs | Works. | Works. |
 
