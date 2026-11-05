@@ -125,7 +125,7 @@ internal static class RuleGrouper
         while (true)
         {
             var kept = new HashSet<RegionEdit>(pinned.Values.SelectMany(static v => v));
-            units = BuildUnits(diff.Edits.Where(e => !kept.Contains(e)), a, b);
+            units = BuildUnits(diff.Edits.Where(e => !kept.Contains(e)), a, b, link, al);
             pinUnits.Clear();
             foreach (KeyValuePair<long, List<RegionEdit>> kv in pinned)
             {
@@ -169,7 +169,7 @@ internal static class RuleGrouper
     }
 
     /// <summary>The change units for some of a link's edits: values widened, units joined, formatting units added, sorted by position.</summary>
-    private static List<Unit> BuildUnits(IEnumerable<RegionEdit> edits, string a, string b)
+    private static List<Unit> BuildUnits(IEnumerable<RegionEdit> edits, string a, string b, AlignmentLink link, Alignment al)
     {
         var units = new List<Unit>();
         var formatEdits = new List<RegionEdit>();
@@ -193,7 +193,7 @@ internal static class RuleGrouper
         Stabilize(units, formatEdits);
         if (units.Count > 1)
         {
-            units = JoinByStructure(units, a, b);
+            units = JoinByStructure(units, a, b, link, al);
             Stabilize(units, formatEdits);
         }
 
@@ -301,7 +301,7 @@ internal static class RuleGrouper
 
     // ---- sentences, clauses, density ----
 
-    private static List<Unit> JoinByStructure(List<Unit> units, string a, string b)
+    private static List<Unit> JoinByStructure(List<Unit> units, string a, string b, AlignmentLink link, Alignment al)
     {
         int[] oldBounds = Boundaries(a), newBounds = Boundaries(b);
         var result = new List<Unit>();
@@ -316,7 +316,7 @@ internal static class RuleGrouper
                 continue;
             }
 
-            JoinClause(units, start, i, a, b, oldBounds, newBounds, result);
+            JoinClause(units, start, i, a, b, oldBounds, newBounds, result, link, al);
             start = i;
         }
 
@@ -324,7 +324,7 @@ internal static class RuleGrouper
     }
 
     /// <summary>One clause's units: all of them when enough of it changed, otherwise the ones close to each other.</summary>
-    private static void JoinClause(List<Unit> units, int from, int to, string a, string b, int[] oldBounds, int[] newBounds, List<Unit> output)
+    private static void JoinClause(List<Unit> units, int from, int to, string a, string b, int[] oldBounds, int[] newBounds, List<Unit> output, AlignmentLink link, Alignment al)
     {
         if (to - from >= 2)
         {
@@ -347,16 +347,38 @@ internal static class RuleGrouper
             int ns = ClauseStart(newBounds, first.NewFrom, floorNew), ne = ClauseEnd(newBounds, last.NewTo, ceilNew);
             int total = HalfWords(a.AsSpan(os, oe - os)) + HalfWords(b.AsSpan(ns, ne - ns));
             double share = total == 0 ? 0 : (double)changed / total;
-            if (share >= WholeClauseShare || (to - from >= 3 && share >= ScatteredShare))
+            bool rulesWhole = share >= WholeClauseShare || (to - from >= 3 && share >= ScatteredShare);
+            if (ClauseProbe.Hook is { } hook)
             {
-                var whole = new Unit { OldFrom = os, OldTo = oe, NewFrom = ns, NewTo = ne };
-                for (int i = from; i < to; i++)
+                var rulesJoin = new bool[to - from - 1];
+                for (int i = from + 1; i < to; i++)
                 {
-                    whole.Edits.AddRange(units[i].Edits);
+                    rulesJoin[i - from - 1] = GapHalfWords(a, units[i - 1].OldTo, units[i].OldFrom) <= LocalGapHalfWords || GapHalfWords(b, units[i - 1].NewTo, units[i].NewFrom) <= LocalGapHalfWords;
                 }
 
-                SortEdits(whole.Edits);
-                output.Add(whole);
+                var spans = new ClauseUnit[to - from];
+                for (int i = from; i < to; i++)
+                {
+                    spans[i - from] = new ClauseUnit(units[i].OldFrom, units[i].OldTo, units[i].NewFrom, units[i].NewTo, [.. units[i].Edits.Select(static e => new ClauseEdit(e.OldStart, e.OldEnd, e.NewStart, e.NewEnd, e.IsFormatOnly))]);
+                }
+
+                ClauseAnswer? answer = hook(new ClauseQuery(al.Old, al.New, link, a, b, os, oe, ns, ne, spans, rulesWhole, rulesJoin));
+                if (answer is { } given && given.Join.Length == to - from - 1)
+                {
+                    if (given.Whole)
+                    {
+                        AddWhole(units, from, to, os, oe, ns, ne, output);
+                        return;
+                    }
+
+                    JoinBy(units, from, to, given.Join, output);
+                    return;
+                }
+            }
+
+            if (rulesWhole)
+            {
+                AddWhole(units, from, to, os, oe, ns, ne, output);
                 return;
             }
         }
@@ -373,6 +395,37 @@ internal static class RuleGrouper
             {
                 output.Add(cur);
                 cur = nx;
+            }
+        }
+
+        output.Add(cur);
+    }
+
+    private static void AddWhole(List<Unit> units, int from, int to, int os, int oe, int ns, int ne, List<Unit> output)
+    {
+        var whole = new Unit { OldFrom = os, OldTo = oe, NewFrom = ns, NewTo = ne };
+        for (int i = from; i < to; i++)
+        {
+            whole.Edits.AddRange(units[i].Edits);
+        }
+
+        SortEdits(whole.Edits);
+        output.Add(whole);
+    }
+
+    private static void JoinBy(List<Unit> units, int from, int to, bool[] join, List<Unit> output)
+    {
+        Unit cur = units[from];
+        for (int i = from + 1; i < to; i++)
+        {
+            if (join[i - from - 1])
+            {
+                cur.Absorb(units[i]);
+            }
+            else
+            {
+                output.Add(cur);
+                cur = units[i];
             }
         }
 

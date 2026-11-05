@@ -9,7 +9,7 @@ set -u
 MODE=$1
 OUT=$2
 SET=${3:-$HOME/onediff/eval/combine-v1}
-export PATH=$HOME/dotnet10:$PATH DOTNET_ROOT=$HOME/dotnet10 DOTNET_PROCESSOR_COUNT=4 ONEDIFF_ARTIFACTS=${ONEDIFF_ARTIFACTS:-$HOME/onediff/u24/art-$MODE}
+export PATH=$HOME/dotnet10:$PATH DOTNET_ROOT=$HOME/dotnet10 DOTNET_PROCESSOR_COUNT=4 ONEDIFF_ARTIFACTS=${ONEDIFF_ARTIFACTS:-$HOME/onediff/combine/art-$MODE}
 mkdir -p "$OUT"
 uptime > "$OUT/load-before-$MODE.txt"
 G=$ONEDIFF_ARTIFACTS/bin/OneDiff.GoldSets/release/OneDiff.GoldSets.dll

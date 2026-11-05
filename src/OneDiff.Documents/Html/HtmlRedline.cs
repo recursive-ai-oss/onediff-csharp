@@ -56,6 +56,19 @@ public static class HtmlRedline
     public static void WriteSideBySide(Comparison comparison, Stream output, RedlineStyle? style = null, CancellationToken cancellationToken = default) =>
         WriteStream(comparison, output, style, sideBySide: true, cancellationToken);
 
+    /// <summary>
+    /// The page for a renderer that lays out paper (the PDF writers): the same marks and furniture, with a style sheet that needs
+    /// no browser. Page size, margins and the page number come from an <c>@page</c> rule, text uses only the fonts a renderer
+    /// carries, the text-for-screen-readers spans are left out, and the closed sections of the ledger are written open.
+    /// </summary>
+    internal static string Static(Comparison comparison, RedlineStyle? style, bool sideBySide, string paper, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(comparison);
+        using var sw = new StringWriter { NewLine = "\n" };
+        Write(comparison, sw, style ?? comparison.Settings.Style, sideBySide, cancellationToken, print: true, paper: paper);
+        return sw.ToString();
+    }
+
     private static void WriteStream(Comparison comparison, Stream output, RedlineStyle? style, bool sideBySide, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(comparison);
@@ -65,13 +78,13 @@ public static class HtmlRedline
         sw.Flush();
     }
 
-    private static void Write(Comparison comparison, TextWriter writer, RedlineStyle? style, bool sideBySide, CancellationToken ct)
+    private static void Write(Comparison comparison, TextWriter writer, RedlineStyle? style, bool sideBySide, CancellationToken ct, bool print = false, string paper = "A4")
     {
         ArgumentNullException.ThrowIfNull(comparison);
         RedlineStyle s = style ?? RedlineStyle.Blackline;
         var o = new HtmlOut(writer);
         RedlineView view = RedlineView.Build(comparison, ct);
-        HtmlPage.Begin(o, comparison, s, sideBySide);
+        HtmlPage.Begin(o, comparison, s, sideBySide, print, paper);
         if (sideBySide)
         {
             using var w = new SideBySideWriter(o, view, s, ct);
@@ -82,6 +95,6 @@ public static class HtmlRedline
             new InlineWriter(o, view, s, ct).Write();
         }
 
-        HtmlPage.End(o, comparison, s);
+        HtmlPage.End(o, comparison, s, print);
     }
 }

@@ -25,8 +25,11 @@ solution = "OneDiff.slnx"
 def prerelease_pins():
     text = (root / "Directory.Packages.props").read_text(encoding="utf-8")
     pins = set()
+    # Versions may name a property (<OnePdfVersion>), so the pins can be changed in one line each.
+    props = dict(re.findall(r"<(\w+Version)>([^<]+)</\1>", text))
     for m in re.finditer(r'<PackageVersion\s+Include="([^"]+)"\s+Version="([^"]+)"', text):
         name, version = m.groups()
+        version = re.sub(r"\$\((\w+)\)", lambda v: props.get(v.group(1), v.group(0)), version)
         # Our own packages are built here; only sister libraries can be missing from nuget.org.
         if name.startswith("RecursiveAI.") and not name.startswith("RecursiveAI.OneDiff") and "-" in version:
             pins.add(name)

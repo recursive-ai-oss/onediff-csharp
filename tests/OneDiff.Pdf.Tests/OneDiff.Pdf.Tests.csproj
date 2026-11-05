@@ -19,10 +19,18 @@
     <PackageReference Include="RecursiveAI.OnePdf.Layout" />
     <PackageReference Include="RecursiveAI.OnePdf.Fonts" />
     <PackageReference Include="RecursiveAI.OnePdf.Hyphenation" />
+    <!-- Script fonts for the rendered-redline tests: the renderer draws only scripts whose fonts the application references. -->
+    <PackageReference Include="RecursiveAI.OneRender.Fonts.Cjk" />
+    <PackageReference Include="RecursiveAI.OneRender.Fonts.Noto.Arabic" />
+    <PackageReference Include="RecursiveAI.OneRender.Fonts.Noto.Devanagari" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="../../src/OneDiff.Pdf/OneDiff.Pdf.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../Shared/SamplePair.cs" Link="Shared/SamplePair.cs" />
   </ItemGroup>
 
 </Project>

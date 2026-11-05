@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <PublishToNuGet>true</PublishToNuGet>
     <AssemblyName>OneDiff.Documents</AssemblyName>
     <Description>Text diff and document comparison for .NET. The document engine: a compare model with source anchors, staged alignment, diff, grouping, classification and verification, a change ledger, and a versioned JSON form, with a completeness check on every comparison.</Description>
     <EnablePackageValidation>true</EnablePackageValidation>
@@ -8,11 +9,27 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="OneDiff.Documents.Tests" />
+    <InternalsVisibleTo Include="OneDiff.Pdf" />
+    <InternalsVisibleTo Include="OneDiff.Pdf.Tests" />
+    <InternalsVisibleTo Include="OneDiff.GoldSets" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="../OneDiff/OneDiff.csproj" />
     <PackageReference Include="RecursiveAI.OneFont" />
   </ItemGroup>
+
+  <!-- The library version is written into the assembly as a constant from the one Version property, so the provenance of a comparison
+       cannot drift from the package version and nothing reads it at run time. -->
+  <Target Name="WriteBuildVersion" BeforeTargets="CoreCompile" Inputs="$(MSBuildProjectFullPath)" Outputs="$(IntermediateOutputPath)BuildVersion.g.cs">
+    <PropertyGroup>
+      <BuildVersionFile>$(IntermediateOutputPath)BuildVersion.g.cs</BuildVersionFile>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(BuildVersionFile)" Lines="namespace OneDiff.Documents%3B;internal static class BuildVersion { internal const string Value = &quot;$(Version)&quot;%3B }" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <ItemGroup>
+      <Compile Include="$(BuildVersionFile)" />
+      <FileWrites Include="$(BuildVersionFile)" />
+    </ItemGroup>
+  </Target>
 
 </Project>

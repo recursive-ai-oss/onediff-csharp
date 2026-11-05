@@ -87,14 +87,30 @@ public sealed class PdfRedline : RedlineForm
     /// <summary>The password of an encrypted input, or null.</summary>
     public string? Password { get; init; }
 
+    /// <summary>The rendered redline, inline layout: a new PDF laid out from the comparison (cover page, marks in the text, ledger, footer), whatever the inputs were. Same as <see cref="RenderedPdfRedline.Inline"/>.</summary>
+    public static RenderedPdfRedline Rendered => RenderedPdfRedline.Inline;
+
+    /// <summary>The rendered redline, side-by-side layout on a landscape page. Same as <see cref="RenderedPdfRedline.SideBySideLayout"/>.</summary>
+    public static RenderedPdfRedline RenderedSideBySide => RenderedPdfRedline.SideBySideLayout;
+
     /// <summary>
-    /// Registers the PDF source and this markup as the output form of <c>.pdf</c> files, process-wide, so that
-    /// <c>Redline.Create("a.pdf", "b.pdf", "out.pdf")</c> works. Safe to call more than once.
+    /// The form <see cref="Register"/> selects for <c>.pdf</c>: markup on the original pages when the comparison's new document was read
+    /// from a PDF (<see cref="OnPages"/>), a <see cref="Rendered"/> redline otherwise (plain text, or any other kind of input).
+    /// </summary>
+    public static RedlineForm Auto { get; } = new AutoPdfRedline();
+
+    /// <summary>True when the comparison's new document was read from a PDF by <see cref="PdfDocumentSource"/> in this process, so that <see cref="OnPages"/> can mark it.</summary>
+    internal static bool CanMark(Comparison comparison) => PdfOrigins.TryGet(comparison.New, out _);
+
+    /// <summary>
+    /// Registers the PDF source and the <see cref="Auto"/> form as the output form of <c>.pdf</c> files, process-wide, so that
+    /// <c>Redline.Create("a.pdf", "b.pdf", "out.pdf")</c> marks the new PDF's pages and <c>Redline.Create("a.txt", "b.txt", "out.pdf")</c>
+    /// renders a redline. Safe to call more than once.
     /// </summary>
     public static void Register()
     {
         Redline.Register(new PdfDocumentSource());
-        Redline.Register(OnPages);
+        Redline.Register(Auto);
     }
 
     /// <summary>
@@ -162,7 +178,8 @@ public sealed class PdfRedline : RedlineForm
         ArgumentNullException.ThrowIfNull(Author);
         CompareDocument doc = markNew ? comparison.New : comparison.Old;
         string hash = Convert.ToHexStringLower(SHA256.HashData(pdfBytes.Span));
-        if (!string.Equals(hash, doc.SourceHash, StringComparison.OrdinalIgnoreCase))
+        string expected = PdfOrigins.TryGet(doc, out PdfOrigin known) && known.Sha256 is not null ? known.Sha256 : doc.SourceHash;
+        if (!string.Equals(hash, expected, StringComparison.OrdinalIgnoreCase))
         {
             throw new ArgumentException($"the PDF is not the {(markNew ? "new" : "old")} input of the comparison (the hashes differ)", nameof(pdfBytes));
         }

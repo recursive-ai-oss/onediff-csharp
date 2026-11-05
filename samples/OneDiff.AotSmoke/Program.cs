@@ -2,6 +2,8 @@ using OneDiff.Documents;
 using OneDiff.Documents.Combine;
 using OneDiff.Documents.Model;
 using OneDiff.Documents.Serialization;
+using OneDiff.Nlp;
+using OneDiff.Ocr;
 using OneDiff.Pdf;
 using OneDiff.Word;
 using OnePdf;
@@ -42,6 +44,8 @@ internal static class Program
 
         failures += CheckDocuments();
         failures += CheckSemantics();
+        failures += CheckNlp();
+        failures += CheckScan();
         failures += CheckPdf();
         failures += CheckWord();
         failures += CheckRedline();
@@ -49,6 +53,77 @@ internal static class Program
 
         Console.Out.WriteLine(failures == 0 ? "ok" : "FAILED");
         return failures == 0 ? 0 : 1;
+    }
+
+    /// <summary>The OneNLP value recognizer under NativeAOT: written-out values typed in a comparison, the built-in fallback, and a stable result.</summary>
+    private static int CheckNlp()
+    {
+        int failures = 0;
+        CompareSettings settings = CompareSettings.Legal.UseOneNlp();
+        CompareDocument a = CompareDocument.FromText("Payment is due within thirty days of the invoice.\nThe cap on its liability is forty-two thousand dollars.\nThe fee is 18.000 EUR.", "old");
+        CompareDocument b = CompareDocument.FromText("Payment is due within two months of the invoice.\nThe cap on its liability is $50,000.\nThe fee is 20.000 EUR.", "new");
+        Comparison c = Comparison.Of(a, b, settings);
+        string[] values = [.. c.Changes.Select(x => x.Type + " " + x.OldValue?.Canonical + ">" + x.NewValue?.Canonical)];
+        string[] want = ["Duration 30 d>2 mo", "Amount USD 42000>USD 50000", "Amount EUR 18000>EUR 20000"];
+        if (!values.AsSpan().SequenceEqual(want) || !c.Verification.Passed || c.Verification.FallbackLevel != 0 || !c.Check().IsEmpty)
+        {
+            Console.Error.WriteLine("nlp: unexpected values " + string.Join("; ", values));
+            failures++;
+        }
+
+        if (!ComparisonJson.Write(c).AsSpan().SequenceEqual(ComparisonJson.Write(Comparison.Of(a, b, settings))))
+        {
+            Console.Error.WriteLine("nlp: JSON differs between runs");
+            failures++;
+        }
+
+        return failures;
+    }
+
+    /// <summary>
+    /// Scans under NativeAOT: two pages are drawn to pixels, read through the OCR engine from a PNG and from a PDF made of the same
+    /// pixels, compared, flagged and marked on the page.
+    /// </summary>
+    private static int CheckScan()
+    {
+        int failures = 0;
+        byte[] oldPng = Draw(MakePdf(["The supplier shall deliver within thirty days.", "Payment is due in sixty days."]));
+        byte[] newPng = Draw(MakePdf(["The supplier shall deliver within forty days.", "Payment is due in sixty days."]));
+        var source = new OcrDocumentSource();
+        CompareDocument a = source.Read(DocumentInput.FromBytes(oldPng, "old.png")), b = source.Read(DocumentInput.FromBytes(newPng, "new.png"));
+        Comparison c = Comparison.Of(a, b, CompareSettings.Legal with { OcrConfidenceThreshold = 1.0 });
+        if (c.Verification.FallbackLevel != 0 || !c.Check().IsEmpty || c.Changes.IsEmpty || c.Changes.Any(x => x.OcrConfidence is null || !x.PossibleOcrError))
+        {
+            Console.Error.WriteLine("scan: comparison failed verification or carries no confidence");
+            failures++;
+        }
+
+        if (ComparisonJson.Read(ComparisonJson.Write(c)).Changes.Count(x => x.PossibleOcrError) != c.Changes.Length)
+        {
+            Console.Error.WriteLine("scan: the JSON lost the OCR flags");
+            failures++;
+        }
+
+        using var marked = new MemoryStream();
+        PdfRedline.OnPages.Write(c, marked, RedlineStyle.SideBySide);
+        using PdfDocument back = PdfDocument.Open(marked.ToArray());
+        if (!back.Pages[0].Annotations.Any(x => x.Subtype is "Highlight" or "Caret"))
+        {
+            Console.Error.WriteLine("scan: no mark on the page");
+            failures++;
+        }
+
+        return failures;
+    }
+
+    /// <summary>The first page of a PDF drawn at 200 dpi, as PNG bytes.</summary>
+    private static byte[] Draw(byte[] pdf)
+    {
+        var load = new OneImage.LoadOptions { Configuration = new OneImage.ImageConfiguration().Add(new OneImage.Pdf.PdfFormat(new OneImage.Pdf.PdfRenderOptions { Dpi = 200 })) };
+        OneImage.Image doc = OneImage.Image.Load(pdf, load);
+        using var ms = new MemoryStream();
+        doc.Frames[0].ToImage().Save(ms, OneImage.PngFormat.Instance);
+        return ms.ToArray();
     }
 
     /// <summary>Combine and chain under NativeAOT: attribution, a conflict, the report page, both JSON forms and the checks.</summary>
@@ -330,6 +405,27 @@ internal static class Program
             if (registered.Pages[0].Annotations.Count(x => x.Subtype is "Highlight" or "Caret") != result.Marks.Length)
             {
                 Console.Error.WriteLine("pdf: Register + Redline.Create did not write the markup");
+                failures++;
+            }
+
+            // The rendered redline: text files in, a tagged PDF out, by the .pdf extension; and a PDF pair rendered by naming the form.
+            string ta = Path.Combine(dir, "a.txt"), tb = Path.Combine(dir, "b.txt"), tr = Path.Combine(dir, "rendered.pdf");
+            File.WriteAllText(ta, "The supplier shall deliver within thirty days.\n\nPayment is due in sixty days.");
+            File.WriteAllText(tb, "The supplier shall deliver within forty days.\n\nPayment is due in sixty days.");
+            Redline.Create(ta, tb, tr);
+            byte[] rendered = File.ReadAllBytes(tr);
+            using PdfDocument renderedDoc = PdfDocument.Open(rendered);
+            string text = renderedDoc.ExtractText().Select(p => p.Text).Aggregate("", (x, y) => x + y);
+            if (!renderedDoc.IsTagged || renderedDoc.Language != "en" || !text.Contains("forty", StringComparison.Ordinal) || !text.Contains("thirty", StringComparison.Ordinal))
+            {
+                Console.Error.WriteLine("pdf: the rendered redline is not a tagged PDF holding both texts");
+                failures++;
+            }
+
+            Comparison pdfPair = Comparison.Of(pa, pb);
+            if (!pdfPair.ToBytes(PdfRedline.Rendered).AsSpan().StartsWith("%PDF-"u8) || !pdfPair.ToBytes(PdfRedline.RenderedSideBySide).AsSpan().StartsWith("%PDF-"u8))
+            {
+                Console.Error.WriteLine("pdf: a PDF pair did not render");
                 failures++;
             }
         }
