@@ -22,6 +22,9 @@ internal sealed class Counts
     /// <summary>The changed sentences no change touched, for diagnosis; not summed.</summary>
     public List<string> Missed { get; } = [];
 
+    /// <summary>The link keys that differ from the gold links ("gold" = missed, "pred" = not in the gold), for diagnosis; not summed.</summary>
+    public List<string> AlignErrors { get; } = [];
+
     public void Add(Counts o)
     {
         for (int i = 0; i < 6; i++)
@@ -163,11 +166,13 @@ internal static class PairScorer
             else
             {
                 c.Fn[t]++;
+                c.AlignErrors.Add("gold " + k);
             }
         }
 
         foreach (string k in pred.Where(k => !gold.Contains(k)))
         {
+            c.AlignErrors.Add("pred " + k);
             c.Fp[TypeIndex(k[..k.IndexOf('|', StringComparison.Ordinal)])]++;
         }
 

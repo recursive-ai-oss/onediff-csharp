@@ -336,6 +336,7 @@ internal static class Program
         });
 
         File.WriteAllLines(outFile + ".missed.txt", results.Where(r => r.Counts.Missed.Count > 0).OrderBy(r => r.Labels.Id, StringComparer.Ordinal).Select(r => r.Labels.Id + " " + string.Join(" | ", r.Counts.Missed)));
+        File.WriteAllLines(outFile + ".align.txt", results.Where(r => r.Counts.AlignErrors.Count > 0).OrderBy(r => r.Labels.Id, StringComparer.Ordinal).Select(r => r.Labels.Id + " " + string.Join(" ; ", r.Counts.AlignErrors.Order(StringComparer.Ordinal))));
         var rows = new List<MetricRow>();
         void Scope(string name, Func<PairLabels, bool> pick)
         {
@@ -412,6 +413,15 @@ internal static class Program
         foreach (Unit u in labels.Units)
         {
             Console.WriteLine($"  #{u.Id} {u.Type} {u.Group} old=[{string.Join("; ", u.Old.Select(s => $"{s.Node}:{s.Start}+{s.Len} '{Clip(cmp.Old[s.Node].Text, s.Start, s.Len)}'"))}] new=[{string.Join("; ", u.New.Select(s => $"{s.Node}:{s.Start}+{s.Len} '{Clip(cmp.New[s.Node].Text, s.Start, s.Len)}'"))}]");
+        }
+
+        if (opt.ContainsKey("links"))
+        {
+            Console.WriteLine("links (not same-position matches of unchanged text):");
+            foreach (AlignmentLink l in cmp.Alignment.Links)
+            {
+                Console.WriteLine($"  {l.Kind} {l.Origin} [{string.Join(",", l.OldNodes)}] -> [{string.Join(",", l.NewNodes)}] {l.Score:F2}");
+            }
         }
 
         Console.WriteLine("engine changes:");
