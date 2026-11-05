@@ -426,6 +426,59 @@ internal static class Bootstrap
         return result;
     }
 
+    /// <summary>
+    /// Paired bootstrap: the same resampled documents are taken from both sets of per-document counts, and each metric's difference
+    /// (second minus first) is taken on each resample. Returns both values and the difference with its 95% percentile interval.
+    /// </summary>
+    public static (double A, double B, double Diff, double Lo, double Hi)[] RunPaired(IReadOnlyList<Counts> a, IReadOnlyList<Counts> b, IReadOnlyList<Metric> metrics)
+    {
+        var ta = new Counts();
+        var tb = new Counts();
+        foreach (Counts d in a)
+        {
+            ta.Add(d);
+        }
+
+        foreach (Counts d in b)
+        {
+            tb.Add(d);
+        }
+
+        var diffs = metrics.Select(_ => new List<double>(Resamples)).ToArray();
+        var rng = new Rng(Seed);
+        for (int r = 0; r < Resamples && a.Count > 0; r++)
+        {
+            var sa = new Counts();
+            var sb = new Counts();
+            for (int i = 0; i < a.Count; i++)
+            {
+                int k = rng.Next(a.Count);
+                sa.Add(a[k]);
+                sb.Add(b[k]);
+            }
+
+            for (int m = 0; m < metrics.Count; m++)
+            {
+                double d = metrics[m](sb) - metrics[m](sa);
+                if (!double.IsNaN(d))
+                {
+                    diffs[m].Add(d);
+                }
+            }
+        }
+
+        var result = new (double, double, double, double, double)[metrics.Count];
+        for (int m = 0; m < metrics.Count; m++)
+        {
+            List<double> v = diffs[m];
+            v.Sort();
+            double va = metrics[m](ta), vb = metrics[m](tb);
+            result[m] = Resamples == 0 || v.Count < Resamples * 0.9 ? (va, vb, vb - va, double.NaN, double.NaN) : (va, vb, vb - va, v[(int)Math.Floor(0.025 * (v.Count - 1))], v[(int)Math.Ceiling(0.975 * (v.Count - 1))]);
+        }
+
+        return result;
+    }
+
     public static double F1(long tp, long fp, long fn) => tp + fp + fn == 0 ? double.NaN : 2.0 * tp / (2.0 * tp + fp + fn);
 
     public static double Precision(long tp, long fp) => tp + fp == 0 ? double.NaN : (double)tp / (tp + fp);
@@ -437,8 +490,8 @@ internal sealed record MetricRow(string Set, string SetHash, string Scope, strin
 
 internal static class Report
 {
-    /// <summary>All metric rows for a group of pairs (already grouped by document).</summary>
-    public static IEnumerable<MetricRow> Rows(string set, string setHash, string scope, IReadOnlyList<Counts> docs, string pipeline)
+    /// <summary>The metrics of every row, by name.</summary>
+    public static List<(string Name, Bootstrap.Metric M)> Definitions()
     {
         var defs = new List<(string Name, Bootstrap.Metric M)>();
         for (int i = 0; i < 6; i++)
@@ -479,6 +532,14 @@ internal static class Report
         defs.Add(("pairs.renamechain", c => c.RenChain));
         defs.Add(("verify.pass", c => c.Pairs == 0 ? double.NaN : (double)c.Passed / c.Pairs));
         defs.Add(("verify.fallback", c => c.Pairs == 0 ? double.NaN : (double)c.Fallbacks / c.Pairs));
+
+        return defs;
+    }
+
+    /// <summary>All metric rows for a group of pairs (already grouped by document).</summary>
+    public static IEnumerable<MetricRow> Rows(string set, string setHash, string scope, IReadOnlyList<Counts> docs, string pipeline)
+    {
+        List<(string Name, Bootstrap.Metric M)> defs = Definitions();
         int pairs = (int)docs.Sum(d => d.Pairs);
         (double Value, double Lo, double Hi)[] res = Bootstrap.RunAll(docs, [.. defs.Select(d => d.M)]);
         for (int i = 0; i < defs.Count; i++)
