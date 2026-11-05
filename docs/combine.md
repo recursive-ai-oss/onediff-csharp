@@ -47,6 +47,8 @@ Claims of **different reviewers** conflict when they cannot all be applied to th
 | Attr × Attr, same node and key | different values | `Attribute` |
 | Insert × Insert | the same place, different content | `Insert` |
 
+**Derived claims never conflict.** A list label (`para.label`) that changed, a change of type numbering, and a reference rewritten to follow a renumbering (type reference, not substantive) are consequences of other changes: two reviewers who deleted different clauses renumber the same later clause differently, and merging both deletions gives a third number that neither chose. These changes are attributed and merged like any other and never flagged; the changes that cause them are the ones that conflict, when they do. (The reference rule needs `TypedChanges`; list labels do not.)
+
 A point at the edge of a range does not conflict with it; two edits on different words of one paragraph do not conflict. Text × Structure, Text × Attr, Text × Moved, and a moved node's inner edits against its move do not conflict: they commute.
 
 A *conflict* is a connected component of conflicting combined changes, with at least two changes of at least two reviewers. Its `Kind` is the most serious (lowest in the table above, by enum order) of its pairs; `Reviewers` lists those involved. Conflicts are numbered in the order of their first change. **Every conflicting version is shown; none is preferred.** A change shared by reviewers A and B that overlaps a change of C puts A's, B's and C's versions in one conflict.

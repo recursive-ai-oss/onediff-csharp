@@ -48,6 +48,9 @@ internal sealed class Claim
     /// <summary>What the claim makes of the content: new text and formatting, attribute value, kind of structure change.</summary>
     public string Effect { get; init; } = "";
 
+    /// <summary>The claim is a consequence of other changes (a list label or a reference renumbered because something before it was added or removed): it is attributed and merged like any other, but never conflicts, because merging the causes gives a third value that no reviewer chose.</summary>
+    public bool Derived { get; init; }
+
     public bool Same(Claim o) =>
         Kind == o.Kind && Start == o.Start && End == o.End && string.Equals(Key, o.Key, StringComparison.Ordinal)
         && string.Equals(Effect, o.Effect, StringComparison.Ordinal) && Nodes.AsSpan().SequenceEqual(o.Nodes.AsSpan());
@@ -73,6 +76,7 @@ internal static class Claims
     {
         var list = new List<Claim>();
         ImmutableArray<int> old = c.Old.Nodes.IsDefault ? [] : c.Old.Nodes;
+        bool derived = c.Type == ChangeType.Numbering || (c.Type == ChangeType.Reference && !c.IsSubstantive);
         foreach (RegionEdit e in c.Edits)
         {
             string runs = RunsKey(e.NewRuns);
@@ -83,12 +87,13 @@ internal static class Claims
                 Start = e.OldStart,
                 End = e.OldEnd,
                 Effect = (e.IsFormatOnly ? "fmt|" : "txt|") + e.NewText + "|" + runs,
+                Derived = derived,
             });
         }
 
         foreach (AttributeEdit a in c.AttributeEdits)
         {
-            list.Add(new Claim { Kind = ClaimKind.Attr, Nodes = [a.OldNode], Key = a.Key, Effect = a.NewValue ?? "\u0000null" });
+            list.Add(new Claim { Kind = ClaimKind.Attr, Nodes = [a.OldNode], Key = a.Key, Effect = a.NewValue ?? "\u0000null", Derived = derived || string.Equals(a.Key, FormatKeys.ListLabel, StringComparison.Ordinal) });
         }
 
         switch (c.Kind)
@@ -209,7 +214,7 @@ internal static class ClaimRules
 {
     public static ConflictKind? Test(Claim a, Claim b)
     {
-        if (a.Same(b))
+        if (a.Same(b) || a.Derived || b.Derived)
         {
             return null;
         }

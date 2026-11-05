@@ -96,6 +96,32 @@ public class CombineTests
         }
     }
 
+    private static CompareDocument Items(params (string Label, string Text)[] items)
+    {
+        var b = new CompareDocumentBuilder(DocumentKind.Flowing);
+        b.Begin(NodeKind.Section);
+        foreach ((string label, string text) in items)
+        {
+            b.Add(NodeKind.ListItem, new NodeContent { Text = text, Attributes = FormatSet.Of(FormatKeys.ListLabel, label) });
+        }
+
+        b.End();
+        return b.Build();
+    }
+
+    [Fact]
+    public void RenumberingCausedByDifferentDeletionsIsNotAConflict()
+    {
+        CompareDocument original = Items(("1.", "Alpha clause about delivery."), ("2.", "Beta clause about payment."), ("3.", "Gamma clause about notices."));
+        CompareDocument a = Items(("1.", "Beta clause about payment."), ("2.", "Gamma clause about notices."));
+        CompareDocument b = Items(("1.", "Gamma clause about notices."));
+        Combination c = Combination.Of(original, [a, b]);
+        Assert.Empty(c.Check());
+        Assert.Equal(0, c.Verification.FallbackLevel);
+        Assert.Empty(c.Conflicts);
+        Assert.Contains(c.Changes, x => x.Change.Kind == ChangeKind.Delete && x.Reviewers.Length == 2);
+    }
+
     [Fact]
     public void ACorruptedAttributionFailsTheCheck()
     {

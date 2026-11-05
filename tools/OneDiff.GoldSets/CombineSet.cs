@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Text.Json;
+using OneDiff;
 using OneDiff.Documents;
 using OneDiff.Documents.Combine;
 using OneDiff.Documents.Model;
@@ -314,6 +315,10 @@ internal static class CombineSet
     {
         public required string Key;
         public required List<Span> Old;
+
+        /// <summary>Where the text really changes: the unit's old spans diffed against its new text and widened to whole words (a rewrite that keeps a number does not claim the number).</summary>
+        public List<Span> Changed = [];
+
         public SortedSet<int> Reviewers = [];
     }
 
@@ -323,7 +328,107 @@ internal static class CombineSet
     private const int AttrTotal = 0, AttrOk = 1, SharedGold = 2, SharedFound = 3, SharedPred = 4, SharedPredOk = 5, ConflictGold = 6, ConflictFound = 7, ConflictPred = 8, ConflictPredOk = 9,
         Cases = 10, CasesClean = 11, Reviewers = 12, Changes = 13, Conflicts = 14, SharedChanges = 15, N = 16;
 
-    private static bool Overlaps(Span a, int node, int start, int end) => a.Node == node && a.Start < end && start < a.Start + a.Len;
+    public static string? Explain { get; set; }
+
+    private static readonly System.Collections.Concurrent.ConcurrentBag<string> Misses = [];
+
+    /// <summary>The spans of the original that really change: the old text diffed with the new text by characters, each changed range widened to whole words (not in Han, kana), overlapping ranges joined. A single old span only; several keep their spans.</summary>
+    private static List<Span> Effective(DocFile original, List<Span> old, string newText)
+    {
+        if (old.Count != 1)
+        {
+            return old;
+        }
+
+        Span sp = old[0];
+        string text = original.Nodes[sp.Node].Text;
+        string oldPart = text.Substring(sp.Start, sp.Len);
+        var ranges = new List<(int S, int E)>();
+        TextDiff d = OneDiff.Diff.Text(oldPart, newText, OneDiff.Tokenization.TokenKind.Character);
+        ReadOnlySpan<OneDiff.Tokenization.TokenRange> ot = d.OldTokens;
+        foreach (Edit e in d.Script.Edits)
+        {
+            if (e.Kind == EditKind.Equal)
+            {
+                continue;
+            }
+
+            int s = e.OldLength == 0 ? (e.OldStart < ot.Length ? ot[e.OldStart].Start : oldPart.Length) : ot[e.OldStart].Start;
+            int en = e.OldLength == 0 ? s : ot[e.OldStart + e.OldLength - 1].End;
+            ranges.Add((s, en));
+        }
+
+        static bool Word(char c) => char.IsLetterOrDigit(c) && !(c >= '\u3040' && c <= '\u30FF') && !(c >= '\u3400' && c <= '\u9FFF');
+        for (int i = 0; i < ranges.Count; i++)
+        {
+            (int s, int e) = ranges[i];
+            while (s > 0 && s < oldPart.Length && Word(oldPart[s - 1]) && Word(oldPart[s]))
+            {
+                s--;
+            }
+
+            while (e > 0 && e < oldPart.Length && Word(oldPart[e - 1]) && Word(oldPart[e]))
+            {
+                e++;
+            }
+
+            ranges[i] = (s, e);
+        }
+
+        var merged = new List<(int S, int E)>();
+        foreach ((int s, int e) in ranges.OrderBy(r => r.S).ThenBy(r => r.E))
+        {
+            if (merged.Count > 0 && s <= merged[^1].E && !(s == e && s == merged[^1].E && merged[^1].S == merged[^1].E))
+            {
+                merged[^1] = (merged[^1].S, Math.Max(merged[^1].E, e));
+            }
+            else
+            {
+                merged.Add((s, e));
+            }
+        }
+
+        return merged.Count == 0 ? old : [.. merged.Select(r => new Span(sp.Node, sp.Start + r.S, r.E - r.S))];
+    }
+
+    /// <summary>The library's conflict rule for two gold ranges: shared characters, a point strictly inside a range, or the same point.</summary>
+    private static bool Conflicting(Span a, Span b)
+    {
+        if (a.Node != b.Node)
+        {
+            return false;
+        }
+
+        int a0 = a.Start, a1 = a.Start + a.Len, b0 = b.Start, b1 = b.Start + b.Len;
+        if (a.Len == 0 && b.Len == 0)
+        {
+            return a0 == b0;
+        }
+
+        if (a.Len == 0)
+        {
+            return b0 < a0 && a0 < b1;
+        }
+
+        if (b.Len == 0)
+        {
+            return a0 < b0 && b0 < a1;
+        }
+
+        return a0 < b1 && b0 < a1;
+    }
+
+    /// <summary>A predicted edit overlaps a gold span when they share a character; an insertion (an empty range) counts when it touches the span.</summary>
+    private static bool Overlaps(Span a, int node, int start, int end)
+    {
+        if (a.Node != node)
+        {
+            return false;
+        }
+
+        int a0 = a.Start, a1 = a.Start + a.Len;
+        return a.Len == 0 || start == end ? a0 <= end && start <= a1 : a0 < end && start < a1;
+    }
 
     public static int Score(Dictionary<string, string> opt)
     {
@@ -333,6 +438,7 @@ internal static class CombineSet
         int resamples = int.Parse(opt.GetValueOrDefault("resamples") ?? "10000", CultureInfo.InvariantCulture);
         int limit = int.Parse(opt.GetValueOrDefault("limit") ?? "0", CultureInfo.InvariantCulture);
         string setHash = File.ReadAllText(Path.Combine(data, "manifest.sha256")).Trim();
+        Explain = opt.GetValueOrDefault("explain");
         string[] paths = [.. Directory.GetFiles(Path.Combine(data, "cases"), "*.json").Order(StringComparer.Ordinal)];
         if (limit > 0)
         {
@@ -444,6 +550,7 @@ internal static class CombineSet
             casesInvertibleAtFallback0 = all[CasesClean],
             failures = failuresAll.Take(200).ToArray(),
             failureCount = failuresAll.Length,
+            casesWithAMiss = Misses.Order(StringComparer.Ordinal).ToArray(),
             rows,
         };
         File.WriteAllText(outFile, JsonSerializer.Serialize(report, ReportOptions) + "\n");
@@ -498,7 +605,7 @@ internal static class CombineSet
                 string key = string.Join(';', u.Old.Select(s => $"{s.Node}:{s.Start}+{s.Len}")) + "|" + newText;
                 if (!goldByKey.TryGetValue(key, out GoldEdit? g))
                 {
-                    goldByKey[key] = g = new GoldEdit { Key = key, Old = u.Old };
+                    goldByKey[key] = g = new GoldEdit { Key = key, Old = u.Old, Changed = Effective(c.Original, u.Old, newText) };
                 }
 
                 g.Reviewers.Add(r);
@@ -509,9 +616,17 @@ internal static class CombineSet
 
         // Predicted atomic edits with their reviewers.
         var preds = new List<Pred>();
+        var cascade = new HashSet<int>();
         foreach (CombinedChange cc in comb.Changes)
         {
             Change ch = cc.Change;
+            // The gold labels the reviewers' own edits; the reference and label changes a deleted paragraph causes are not labelled.
+            if (ch.Type == ChangeType.Numbering || (ch.Type == ChangeType.Reference && !ch.IsSubstantive))
+            {
+                cascade.Add(cc.Id);
+                continue;
+            }
+
             if (ch.Old.Nodes.IsDefaultOrEmpty || ch.Old.Nodes.Length != 1)
             {
                 continue;
@@ -532,7 +647,7 @@ internal static class CombineSet
             }
         }
 
-        bool Over(GoldEdit g, Pred p) => g.Old.Any(s => Overlaps(s, p.Node, p.Start, p.End));
+        bool Over(GoldEdit g, Pred p) => g.Changed.Any(s => Overlaps(s, p.Node, p.Start, p.End));
 
         // Attribution and sharing.
         var found = new HashSet<GoldEdit>();
@@ -568,7 +683,7 @@ internal static class CombineSet
             for (int b = a + 1; b < gold.Count; b++)
             {
                 bool differentReviewers = gold[a].Reviewers.Any(r => gold[b].Reviewers.Any(q => q != r));
-                if (differentReviewers && gold[a].Old.Any(sa => gold[b].Old.Any(sb => Overlaps(sa, sb.Node, sb.Start, sb.Start + sb.Len))))
+                if (differentReviewers && gold[a].Changed.Any(sa => gold[b].Changed.Any(sb => Conflicting(sa, sb))))
                 {
                     comp[Find(a)] = Find(b);
                 }
@@ -593,6 +708,11 @@ internal static class CombineSet
                 }
             }
 
+            if (cf.ChangeIds.All(cascade.Contains))
+            {
+                continue;
+            }
+
             bool tp = false;
             for (int ci = 0; ci < components.Count; ci++)
             {
@@ -608,6 +728,35 @@ internal static class CombineSet
         }
 
         k[ConflictFound] = componentFound.Count(x => x);
+        if (Explain == c.Id)
+        {
+            Console.WriteLine($"case {c.Id} plan {c.Plan}");
+            foreach (GoldEdit g in gold)
+            {
+                Console.WriteLine($"  gold {{{string.Join(',', g.Reviewers)}}} {g.Key} {(found.Contains(g) ? "attributed" : "MISSED")}");
+            }
+
+            foreach (Pred p in preds)
+            {
+                Console.WriteLine($"  pred node {p.Node} [{p.Start},{p.End}) {{{string.Join(',', p.Reviewers)}}} change {p.Change} conflict {p.Conflict}");
+            }
+
+            foreach (CombinedChange cc in comb.Changes)
+            {
+                Console.WriteLine($"  change {cc.Id} {cc.Change.Kind} old [{string.Join(',', cc.Change.Old.Nodes)}] {{{string.Join(',', cc.Reviewers)}}} edits {string.Join(' ', cc.Change.Edits.Select(e => $"[{e.OldStart},{e.OldEnd}){e.OldText}>{e.NewText}"))}");
+            }
+
+            foreach (Conflict cf in comb.Conflicts)
+            {
+                Console.WriteLine($"  conflict {cf.Id} {cf.Kind} changes {string.Join(',', cf.ChangeIds)} reviewers {string.Join(',', cf.Reviewers)}");
+            }
+        }
+
+        if (k[AttrTotal] != k[AttrOk] || k[ConflictPred] != k[ConflictPredOk] || k[ConflictGold] != k[ConflictFound] || k[SharedPred] != k[SharedPredOk])
+        {
+            Misses.Add(c.Id);
+        }
+
         return k;
     }
 
