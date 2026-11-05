@@ -46,6 +46,47 @@ internal sealed class TrackedImporter
     /// <summary>How many comment references were left out of copies (a comment cannot be added by a tracked change).</summary>
     public int CommentsDropped { get; private set; }
 
+    private HashSet<long>? drawingIds;
+    private long maxDrawingId;
+
+    /// <summary>
+    /// Gives a copied drawing an identifier no drawing of the document has (the <c>id</c> of <c>wp:docPr</c> must be unique in a
+    /// document, ECMA-376 §20.4.2.5).
+    /// </summary>
+    private long FreshDrawingId(long id)
+    {
+        if (drawingIds is null)
+        {
+            drawingIds = [];
+            foreach (string part in to.PartNames)
+            {
+                MarkupNode root = to.Root(part);
+                if (root.IsNull)
+                {
+                    continue;
+                }
+
+                foreach (MarkupNode e in Wx.Descendants(root))
+                {
+                    if (e.LocalNameString == "docPr" && e.GetAttribute("id") is { } v && long.TryParse(v, NumberStyles.None, CultureInfo.InvariantCulture, out long n))
+                    {
+                        drawingIds.Add(n);
+                        maxDrawingId = Math.Max(maxDrawingId, n);
+                    }
+                }
+            }
+        }
+
+        if (id > 0 && drawingIds.Add(id))
+        {
+            maxDrawingId = Math.Max(maxDrawingId, id);
+            return id;
+        }
+
+        drawingIds.Add(++maxDrawingId);
+        return maxDrawingId;
+    }
+
     public void Fix(MarkupNode copy, string fromPart, string toPart)
     {
         var drop = new List<MarkupNode>();
@@ -53,6 +94,11 @@ internal sealed class TrackedImporter
         var all = new List<MarkupNode>(Wx.Descendants(copy)) { copy };
         foreach (MarkupNode e in all)
         {
+            if (e.LocalNameString == "docPr" && e.GetAttribute("id") is not null)
+            {
+                e.SetAttribute("id", FreshDrawingId(0).ToString(CultureInfo.InvariantCulture));
+            }
+
             if (Wx.InMain(e))
             {
                 string ln = e.LocalNameString;

@@ -448,6 +448,9 @@ internal sealed partial class TrackedWriter : IDisposable
         }
     }
 
+    /// <summary>The date written where the schema insists on one and the caller gave none: the start of the Unix epoch.</summary>
+    private const string PlaceholderDate = "1970-01-01T00:00:00Z";
+
     private long NextId() => ++idCounter;
 
     // ------------------------------------------------------------------------------------------------------------------ paragraphs
@@ -1108,13 +1111,20 @@ internal sealed partial class TrackedWriter : IDisposable
             {
                 bEl.AppendXml(Wx.Bytes(props));
             }
-
-            ImportFix(Wx.Child(bEl, propsLocal), dEl);
         }
         else
         {
             bProps.ReplaceWithXml(Wx.Bytes(props));
-            ImportFix(Wx.Child(bEl, propsLocal), dEl);
+        }
+
+        // Only what came from the other document needs its references mapped; the base's own (a section's header reference, say) are right.
+        foreach (MarkupNode c in new List<MarkupNode>(Wx.ChildElements(Wx.Child(bEl, propsLocal))))
+        {
+            bool isChange = Wx.Is(c, changeLocal), isKeep = Wx.InMain(c) && Array.IndexOf(keep, c.LocalNameString) >= 0 && !isChange;
+            if (isChange ? baseIsNew : !baseIsNew && !isKeep)
+            {
+                ImportFix(c, dEl);
+            }
         }
     }
 
@@ -1129,7 +1139,10 @@ internal sealed partial class TrackedWriter : IDisposable
         string rangeId = NextId().ToString(CultureInfo.InvariantCulture);
         SimpleFieldsToComplex(p);
         WrapRunGroups(p, wrapper);
-        string at = " " + wp + ":id=\"" + rangeId + "\" " + wp + ":author=\"" + authorXml + "\"" + dateXml;
+        // The schema requires a date on the range start (CT_MoveBookmark, ECMA-376 §17.13.5.24), so one that was not asked for is a fixed
+        // placeholder rather than the clock; the revisions themselves carry a date only when one was set.
+        string startDate = options.Date is null ? " " + wp + ":date=\"" + PlaceholderDate + "\"" : dateXml;
+        string at = " " + wp + ":id=\"" + rangeId + "\" " + wp + ":author=\"" + authorXml + "\"" + startDate;
         string start = "<" + wp + ":" + wrapper + "RangeStart" + at + " " + wp + ":name=\"" + name + "\"/>";
         string end = "<" + wp + ":" + wrapper + "RangeEnd " + wp + ":id=\"" + rangeId + "\"/>";
         MarkupNode pPr = Wx.Child(p, "pPr");

@@ -22,10 +22,12 @@ public class TrackedChangesTests
         WordBuildOn on = Environment.GetEnvironmentVariable("ONEDIFF_TRACKED_BUILD") == "old" ? WordBuildOn.Old : WordBuildOn.New;
         string logDir = Environment.GetEnvironmentVariable("ONEDIFF_TRACKED_LOG") ?? "";
         var lines = new List<string>();
-        int failures = 0, crashes = 0, allowed = 0;
+        int failures = 0, crashes = 0, allowed = 0, schemaFailures = 0;
+        bool schema = Environment.GetEnvironmentVariable("ONEDIFF_TRACKED_SCHEMA") == "1";
         for (int s = first; s < first + pairs; s++)
         {
             var (o, nw, ob, nb) = Pair(s);
+            HashSet<string>? baseline = null;
             foreach (CompareSettings settings in new[] { CompareSettings.Legal, CompareSettings.Strict })
             {
                 try
@@ -36,6 +38,17 @@ public class TrackedChangesTests
                     var filtered = new List<string>();
                     List<string> p = TrackedGate.Problems(o, nw, ms.ToArray(), settings, on, res.NotCarried, detail: logDir.Length > 0, filtered: filtered);
                     allowed += filtered.Count;
+                    if (schema)
+                    {
+                        baseline ??= [.. SchemaCheck.Signatures(ob), .. SchemaCheck.Signatures(nb)];
+                        List<string> errs = SchemaCheck.NewErrors(ms.ToArray(), baseline);
+                        if (errs.Count > 0)
+                        {
+                            schemaFailures++;
+                            lines.Add($"seed {s} {settings.Name}: SCHEMA {errs.Count} new errors; " + string.Join(" | ", errs.Take(3)));
+                        }
+                    }
+
                     if (p.Count > 0)
                     {
                         failures++;
@@ -57,14 +70,14 @@ public class TrackedChangesTests
             }
         }
 
-        string summary = $"tracked sweep: pairs={pairs} first={first} build={on} failures={failures} crashes={crashes} emptyParagraphsAllowed={allowed}";
+        string summary = $"tracked sweep: pairs={pairs} first={first} build={on} failures={failures} crashes={crashes} filteredAsNotCarried={allowed} schemaFailures={schemaFailures}";
         lines.Insert(0, summary);
         if (Environment.GetEnvironmentVariable("ONEDIFF_TRACKED_OUT") is { Length: > 0 } path)
         {
             File.WriteAllLines(path, lines);
         }
 
-        Assert.True(failures + crashes == 0, string.Join("\n", lines.Take(8)));
+        Assert.True(failures + crashes + schemaFailures == 0, string.Join("\n", lines.Take(8)));
     }
 }
 
