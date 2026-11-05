@@ -10,7 +10,7 @@ OUT=$HOME/onediff/u25/out/$NAME; mkdir -p "$OUT"
 SC="dotnet $A/OneDiff.GoldSets.Scan/release/OneDiff.GoldSets.Scan.dll"
 GS="dotnet $A/OneDiff.GoldSets/release/OneDiff.GoldSets.dll"
 uptime > "$OUT/load-before.txt"
-$SC compare --set "$SCAN" --out "$OUT/cmp-ocr" --source ocr --ids "$IDS" --jobs "$JOBS" > "$OUT/compare-ocr.log" 2>&1
+$SC compare --set "$SCAN" --out "$OUT/cmp-ocr" --source "${SRC:-ocr}" --ids "$IDS" --jobs "$JOBS" > "$OUT/compare-ocr.log" 2>&1
 $GS score --data "$DATA" --out "$OUT/ocr.json" --pipeline "ocr-scan" --cmp "$OUT/cmp-ocr" --blocks "$SCAN/pdf" --fuzzy-blocks --ids "$IDS" --jobs "$JOBS" > "$OUT/score-ocr.txt" 2>&1
 if [ -d "$DIGITAL/pdf" ]; then
   $SC compare --set "$DIGITAL" --out "$OUT/cmp-pdf" --source pdf --ids "$IDS" --jobs "$JOBS" > "$OUT/compare-pdf.log" 2>&1

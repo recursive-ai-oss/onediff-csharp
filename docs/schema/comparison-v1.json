@@ -334,7 +334,7 @@
         "collapseCascades": { "type": "boolean" },
         "typedChanges": { "type": "boolean" },
         "seed": { "type": "integer", "minimum": 0 },
-        "ocrConfidenceThreshold": { "type": "number", "exclusiveMinimum": 0, "maximum": 1, "description": "Optional. Written only when it differs from the default 0.8." },
+        "ocrConfidenceThreshold": { "type": "number", "exclusiveMinimum": 0, "maximum": 1, "description": "Optional. Written only when it differs from the default 0.95." },
         "style": {
           "type": "object",
           "required": ["name", "insertion", "deletion", "moveFrom", "moveTo", "formatting", "changeBars", "changeBarColor", "coverPage", "footer", "typeTags"],

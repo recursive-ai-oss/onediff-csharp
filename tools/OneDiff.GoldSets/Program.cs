@@ -16,7 +16,7 @@ internal static class Program
 {
     private const string Usage = """
         OneDiff.GoldSets generate --out DIR [--role eval|dev|train] [--seed N] [--docs-per-lang N] [--langs en,de,...] [--verify]
-        OneDiff.GoldSets score --data DIR --out FILE [--settings legal] [--oracle-alignment] [--cmp DIR | --changes DIR] [--blocks DIR [--fuzzy-blocks]] [--save-cmp DIR] [--pipeline NAME] [--jobs N] [--limit N] [--ids FILE] [--resamples N]
+        OneDiff.GoldSets score --data DIR --out FILE [--settings legal] [--oracle-alignment] [--cmp DIR | --changes DIR] [--blocks DIR [--fuzzy-blocks]] [--flag-threshold T] [--save-cmp DIR] [--pipeline NAME] [--jobs N] [--limit N] [--ids FILE] [--resamples N]
         OneDiff.GoldSets check-split --a DIR --b DIR
         OneDiff.GoldSets generate-combine --out DIR [--seed N] [--docs-per-lang N] [--langs en,de,...]
         OneDiff.GoldSets score-combine --data DIR --out FILE [--jobs N] [--limit N] [--resamples N]
@@ -288,6 +288,11 @@ internal static class Program
         string? changesDir = opt.GetValueOrDefault("changes");
         string? blocksDir = opt.GetValueOrDefault("blocks");
         bool fuzzyBlocks = opt.ContainsKey("fuzzy-blocks");
+        if (opt.TryGetValue("flag-threshold", out string? ft))
+        {
+            ScoreInput.FlagThreshold = double.Parse(ft, System.Globalization.CultureInfo.InvariantCulture);
+        }
+
         if (changesDir is not null && blocksDir is null)
         {
             throw new ArgumentException("--changes needs --blocks");

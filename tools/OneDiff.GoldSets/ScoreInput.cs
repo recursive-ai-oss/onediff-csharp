@@ -88,7 +88,7 @@ internal sealed class ScoreInput
                 Sides(ch.New, true, nd, ivs);
             }
 
-            changes.Add(new SChange(ch.Id, kind, ivs, ch.PossibleOcrError, Describe(ch)));
+            changes.Add(new SChange(ch.Id, kind, ivs, IsFlagged(ch), Describe(ch)));
         }
 
         return new ScoreInput
@@ -129,7 +129,7 @@ internal sealed class ScoreInput
         var links = new List<SLink>();
         foreach (SLink l in plain.Links)
         {
-            links.Add(new SLink(l.Kind, [.. l.Old.Select(om.Id)], [.. l.New.Select(nm.Id)]));
+            links.Add(new SLink(l.Kind, [.. l.Old.SelectMany(om.Ids).Distinct()], [.. l.New.SelectMany(nm.Ids).Distinct()]));
         }
 
         var changes = new List<SChange>();
@@ -139,7 +139,10 @@ internal sealed class ScoreInput
             foreach (Iv v in ch.Extent)
             {
                 NodeMap map = v.IsNew ? nm : om;
-                ivs.Add(new Iv(v.IsNew, map.Id(v.Node), map.Position(v.Node, v.Start, atEnd: false), map.Position(v.Node, v.End, atEnd: true)));
+                foreach ((int id, int from, int to) in map.Pieces(v.Node, v.Start, v.End))
+                {
+                    ivs.Add(new Iv(v.IsNew, id, from, to));
+                }
             }
 
             changes.Add(new SChange(ch.Id, ch.Kind, ivs, ch.Flagged, ch.Note));
@@ -158,6 +161,11 @@ internal sealed class ScoreInput
             FallbackLevel = plain.FallbackLevel,
         };
     }
+
+    /// <summary>When set, a change counts as flagged when its lowest word confidence is below this, whatever threshold the comparison used (for sweeps).</summary>
+    public static double? FlagThreshold { get; set; }
+
+    private static bool IsFlagged(Change ch) => FlagThreshold is double t ? ch.OcrConfidence is double c && c < t : ch.PossibleOcrError;
 
     private static string Describe(Change ch)
     {
@@ -292,6 +300,7 @@ internal sealed class NodeMap
     private readonly string[] sourceText;
     private readonly string[] goldTextByNode;
     private readonly int[]?[] alignment;
+    private GlobalMap? flow;
 
     private NodeMap(int[] gold, int[] prefix, string[] sourceText, string[] goldTextByNode, string[] goldText, bool[] goldContent, int matched, int total, int[]?[] alignment)
     {
@@ -317,6 +326,23 @@ internal sealed class NodeMap
 
     /// <summary>The gold node id of a source node (an id past the gold nodes when it matched nothing).</summary>
     public int Id(int sourceNode) => gold[sourceNode];
+
+    /// <summary>The gold nodes a source node stands for: one, except for recognized text that runs across blocks of the gold document.</summary>
+    public IEnumerable<int> Ids(int sourceNode) => flow is not null && flow.Covered(sourceNode) is { Count: > 0 } c ? c : [gold[sourceNode]];
+
+    /// <summary>
+    /// The pieces of gold nodes a source interval stands for, as (gold node, start, end). One piece unless the interval runs across
+    /// blocks of the gold document, which happens when recognized text was cut into paragraphs differently than the document was.
+    /// </summary>
+    public IEnumerable<(int Id, int Start, int End)> Pieces(int sourceNode, int start, int end)
+    {
+        if (flow is not null && flow.Pieces(sourceNode, start, end) is { Count: > 0 } pieces)
+        {
+            return pieces;
+        }
+
+        return [(Id(sourceNode), Position(sourceNode, start, atEnd: false), Position(sourceNode, end, atEnd: true))];
+    }
 
     /// <summary>
     /// The offset in the gold text for an offset in the source text. A start lands on the kept character it precedes, an end just
@@ -444,6 +470,13 @@ internal sealed class NodeMap
 
     private static NodeMap BuildFuzzy(IReadOnlyList<(int Id, string Text)> source, BlockSide side, int sourceNodeCount)
     {
+        NodeMap map = BuildFuzzyPerNode(source, side, sourceNodeCount);
+        map.flow = new GlobalMap(source, side);
+        return map;
+    }
+
+    private static NodeMap BuildFuzzyPerNode(IReadOnlyList<(int Id, string Text)> source, BlockSide side, int sourceNodeCount)
+    {
         List<GoldBlock> blocks = side.Blocks;
         int goldCount = blocks.Count == 0 ? 0 : blocks.Max(b => b.Node) + 1;
         string[] s = [.. source.Select(x => Squash.Of(x.Text))];
@@ -551,6 +584,143 @@ internal sealed class NodeMap
         }
 
         return new NodeMap(assigned, pref, srcText, goldByNode, [.. text], [.. content], matched, n, alignment);
+    }
+
+    /// <summary>
+    /// Recognized text read against the whole gold side at once: the squashed text of all content nodes is aligned character by
+    /// character with the squashed text of all gold blocks, and a position anywhere in a node lands in whichever gold block the
+    /// aligned character belongs to. Where the recognizer cut paragraphs, headings or table cells differently than the document was,
+    /// a node still maps onto the blocks it overlaps, so the score reads where changes are and not how the page was segmented.
+    /// </summary>
+    private sealed class GlobalMap
+    {
+        private readonly Dictionary<int, int> nodeIndex = [];
+        private readonly string[] rawText;
+        private readonly string[] source;
+        private readonly int[] sourceStart;
+        private readonly int[] boundary;
+        private readonly List<GoldBlock> blocks;
+        private readonly string[] goldText;
+        private readonly int[] labelLength;
+        private readonly int[] goldStart;
+        private readonly Dictionary<int, List<int>> covered = [];
+
+        public GlobalMap(IReadOnlyList<(int Id, string Text)> src, BlockSide side)
+        {
+            rawText = [.. src.Select(x => x.Text)];
+            blocks = side.Blocks;
+            source = [.. src.Select(x => Squash.Of(x.Text))];
+            sourceStart = new int[src.Count + 1];
+            for (int i = 0; i < src.Count; i++)
+            {
+                nodeIndex[src[i].Id] = i;
+                sourceStart[i + 1] = sourceStart[i] + source[i].Length;
+            }
+
+            goldText = [.. blocks.Select(b => Squash.Of(b.Text))];
+            labelLength = [.. blocks.Select(b => Squash.Of(b.Label).Length)];
+            goldStart = new int[blocks.Count + 1];
+            for (int j = 0; j < blocks.Count; j++)
+            {
+                goldStart[j + 1] = goldStart[j] + labelLength[j] + goldText[j].Length;
+            }
+
+            string s = string.Concat(source);
+            string g = string.Concat(blocks.Select((b, j) => Squash.Of(b.Label) + goldText[j]));
+            boundary = CharMap(s, g);
+            for (int i = 0; i < src.Count; i++)
+            {
+                if (source[i].Length == 0)
+                {
+                    continue;
+                }
+
+                int a = boundary[sourceStart[i]], b = boundary[sourceStart[i + 1]];
+                var ids = new List<int>();
+                for (int j = FindBlock(a, atEnd: false); j < blocks.Count && goldStart[j] < b; j++)
+                {
+                    int overlap = Math.Min(b, goldStart[j + 1]) - Math.Max(a, goldStart[j]);
+                    int whole = goldStart[j + 1] - goldStart[j];
+                    if (overlap >= 2 && overlap >= 0.3 * Math.Min(whole, b - a))
+                    {
+                        ids.Add(blocks[j].Node);
+                    }
+                }
+
+                covered[src[i].Id] = ids;
+            }
+        }
+
+        public List<int>? Covered(int node) => covered.GetValueOrDefault(node);
+
+        /// <summary>The block that a boundary starts (atEnd false) or that the characters before it end in (atEnd true).</summary>
+        private int FindBlock(int g, bool atEnd)
+        {
+            int lo = 0, hi = blocks.Count - 1;
+            if (blocks.Count == 0)
+            {
+                return 0;
+            }
+
+            while (lo < hi)
+            {
+                int mid = (lo + hi) / 2;
+                bool before = atEnd ? goldStart[mid + 1] < g : goldStart[mid + 1] <= g;
+                if (before)
+                {
+                    lo = mid + 1;
+                }
+                else
+                {
+                    hi = mid;
+                }
+            }
+
+            return lo;
+        }
+
+        /// <summary>Index into the block's text for a kept-character offset.</summary>
+        private int TextIndex(int block, int kept, bool atEnd)
+        {
+            string t = blocks[block].Text;
+            kept = Math.Clamp(kept, 0, goldText[block].Length);
+            return atEnd ? (kept <= 0 ? 0 : Math.Min(t.Length, Squash.IndexOfKept(t, kept - 1) + 1)) : Math.Min(t.Length, Squash.IndexOfKept(t, kept));
+        }
+
+        public List<(int Id, int Start, int End)>? Pieces(int node, int start, int end)
+        {
+            if (blocks.Count == 0 || !nodeIndex.TryGetValue(node, out int i) || source[i].Length == 0)
+            {
+                return null;
+            }
+
+            string raw = rawText[i];
+            int ks = Math.Min(Squash.Count(raw, start), source[i].Length), ke = Math.Min(Squash.Count(raw, end), source[i].Length);
+            int gs = boundary[sourceStart[i] + ks], ge = boundary[sourceStart[i] + ke];
+            int bs = FindBlock(gs, atEnd: false);
+            if (ge <= gs)
+            {
+                int at = TextIndex(bs, gs - goldStart[bs] - labelLength[bs], atEnd: false);
+                return [(blocks[bs].Node, at, at)];
+            }
+
+            int be = FindBlock(ge, atEnd: true);
+            var result = new List<(int, int, int)>();
+            for (int j = bs; j <= be && j < blocks.Count; j++)
+            {
+                int from = Math.Max(gs, goldStart[j]) - goldStart[j] - labelLength[j];
+                int to = Math.Min(ge, goldStart[j + 1]) - goldStart[j] - labelLength[j];
+                if (to <= 0 || (to <= from && result.Count > 0))
+                {
+                    continue;
+                }
+
+                result.Add((blocks[j].Node, TextIndex(j, Math.Max(from, 0), atEnd: false), TextIndex(j, to, atEnd: true)));
+            }
+
+            return result.Count > 0 ? result : null;
+        }
+
     }
 
     private static Dictionary<int, int> Pairs(string t)

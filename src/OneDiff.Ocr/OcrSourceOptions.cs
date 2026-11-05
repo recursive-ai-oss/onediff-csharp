@@ -44,8 +44,12 @@ public sealed record OcrSourceOptions
     /// </summary>
     public int MinTextLayerCharacters { get; init; } = 20;
 
-    /// <summary>Whether blocks the layout analysis recognized as tables become table, row and cell nodes. Default true.</summary>
-    public bool ReadTables { get; init; } = true;
+    /// <summary>
+    /// Whether blocks the layout analysis recognized as tables become table, row and cell nodes. Default false: the recognizer finds
+    /// the same table on two scans of one page only some of the time, and a table on one side and running text on the other is
+    /// a difference of reading, not of the document. Without it the cell text still reads in order and every difference in it is shown.
+    /// </summary>
+    public bool ReadTables { get; init; }
 
     /// <summary>Whether a line that starts with a bullet or a number becomes a list item whose label is an attribute. Default true.</summary>
     public bool ReadListItems { get; init; } = true;

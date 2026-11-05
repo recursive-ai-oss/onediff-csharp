@@ -216,7 +216,8 @@ internal static class Program
                 }
 
                 string key = $"{id}.{side}";
-                byte[] scan = Degrade(File.ReadAllBytes(Path.Combine(pdfDir, "pdf", $"{id}.{side}.pdf")), Choose(key, seed), seed, key);
+                Degradation chosen = opt.ContainsKey("clean") ? new Degradation(300, 0, 0, 0, "png", 0) : Choose(key, seed);
+                byte[] scan = Degrade(File.ReadAllBytes(Path.Combine(pdfDir, "pdf", $"{id}.{side}.pdf")), chosen, seed, key);
                 File.WriteAllBytes(target + ".tmp", scan);
                 File.Move(target + ".tmp", target);
             }
@@ -279,7 +280,13 @@ internal static class Program
         return count > 0 ? [.. ids.Take(count)] : ids;
     }
 
-    private static IDocumentSource SourceOf(string name) => name == "pdf" ? new PdfDocumentSource() : new OcrDocumentSource();
+    private static IDocumentSource SourceOf(string name) => name switch
+    {
+        "pdf" => new PdfDocumentSource(),
+        "ocr-tables" => new OcrDocumentSource(new OcrSourceOptions { ReadTables = true }),
+        "ocr-flat" => new OcrDocumentSource(new OcrSourceOptions { ReadListItems = false }),
+        _ => new OcrDocumentSource(),
+    };
 
     private static int Compare(Dictionary<string, string> opt)
     {

@@ -33,6 +33,15 @@ internal sealed class OcrPiece(NodeKind kind, string? label)
 
     public string LastLineText { get; set; } = "";
 
+    public double LastLeft { get; set; }
+
+    public double LastHeight { get; set; }
+
+    public double LastWidth { get; set; }
+
+    /// <summary>The width of the widest line added so far: what a full line of this paragraph's column measures.</summary>
+    public double WidestLine { get; set; }
+
     public bool IsEmpty => Raw.Length == 0;
 }
 
@@ -80,13 +89,14 @@ internal sealed class OcrModelBuilder(OcrSourceOptions options, CompareDocumentB
             return;
         }
 
-        builder.Begin(NodeKind.Section);
-        var lastFurniture = new Dictionary<OcrBlockRole, string>();
+        // One node for each running text: the header or footer of every page is compared with those already seen by its letters, because
+        // recognition makes two copies of one header differ by a letter or two, and the copy read with the most confidence stands for
+        // them all. Page numbers fold to #, so "Page 2 / 3" and "Page 2/.3" are the same text.
+        ITextNormalizer[] furniture = [ControlCharacterNormalizer.Instance, LineBreakNormalizer.Instance, OcrPageNumberNormalizer.Instance, TypographicNormalizer.Instance];
+        var clusters = new List<(OcrBlockRole Role, NodeKind Kind, string Key, double Confidence, List<(OcrPiece Piece, NormalizedText Text)> Pieces)>();
         foreach (PageData page in pages)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            string[] numbers = [(page.Index + 1).ToString(CultureInfo.InvariantCulture), pages.Count.ToString(CultureInfo.InvariantCulture)];
-            ITextNormalizer[] furniture = [ControlCharacterNormalizer.Instance, LineBreakNormalizer.Instance, new PageNumberNormalizer(numbers), TypographicNormalizer.Instance];
             foreach ((OcrBlockRole role, NodeKind kind) in new[] { (OcrBlockRole.Header, NodeKind.Header), (OcrBlockRole.Footer, NodeKind.Footer) })
             {
                 BlockData[] blocks = [.. page.Blocks.Where(b => b.Role == role)];
@@ -107,22 +117,30 @@ internal sealed class OcrModelBuilder(OcrSourceOptions options, CompareDocumentB
                     prepared.Add((piece, TextNormalization.Normalize(piece.Raw.ToString(), furniture)));
                 }
 
-                // A header or footer that reads like the one on the previous page is the same running text: one node.
-                string key = string.Join('\u001F', prepared.Select(static p => p.Text.Text));
-                if (lastFurniture.TryGetValue(role, out string? previous) && string.Equals(previous, key, StringComparison.Ordinal))
+                string key = PageFurniture.LettersOf(string.Join(' ', prepared.Select(static p => p.Text.Text)));
+                double confidence = prepared.SelectMany(static p => p.Piece.LineBoxes).Select(static l => l.Confidence).DefaultIfEmpty(0).Average();
+                int found = clusters.FindIndex(c => c.Role == role && PageFurniture.Alike(c.Key, key));
+                if (found < 0)
                 {
-                    continue;
+                    clusters.Add((role, kind, key, confidence, prepared));
                 }
-
-                lastFurniture[role] = key;
-                builder.Begin(kind);
-                foreach ((OcrPiece piece, NormalizedText text) in prepared)
+                else if (confidence > clusters[found].Confidence)
                 {
-                    EmitParagraph(piece, text);
+                    clusters[found] = (role, kind, clusters[found].Key, confidence, prepared);
                 }
-
-                builder.End();
             }
+        }
+
+        builder.Begin(NodeKind.Section);
+        foreach ((OcrBlockRole _, NodeKind kind, string _, double _, List<(OcrPiece Piece, NormalizedText Text)> pieces) in clusters)
+        {
+            builder.Begin(kind);
+            foreach ((OcrPiece piece, NormalizedText text) in pieces)
+            {
+                EmitParagraph(piece, text);
+            }
+
+            builder.End();
         }
 
         builder.End();
@@ -142,25 +160,28 @@ internal sealed class OcrModelBuilder(OcrSourceOptions options, CompareDocumentB
             return;
         }
 
-        LineData first = block.Lines[0];
+        // Two clauses can sit on one recognized line when the layout set their numbers side by side or the lines were merged:
+        // a clause number that follows the end of a sentence starts a paragraph wherever it stands.
+        IReadOnlyList<LineData> lines = options.ReadListItems ? SplitAtClauseNumbers(block.Lines) : block.Lines;
+        LineData first = lines[0];
         bool firstIsMarker = options.ReadListItems && IsMarkerLine(first);
-        if (!(open is not null && !firstIsMarker && options.JoinAcrossColumnsAndPages && CanJoin(page, first)))
+        if (!(open is not null && !firstIsMarker && !IsClauseNumberLine(first) && options.JoinAcrossColumnsAndPages && (CanJoin(page, first) || ContinuesBelow(page, first))))
         {
             Flush();
         }
 
         // The gaps between the block's lines: with enough of them, a paragraph gap must also stand out from the usual one, so that
         // double-spaced running text is not cut at every line.
-        double widest = block.Lines.Max(static l => l.Bounds.Width);
-        double[] gaps = [.. block.Lines.Skip(1).Select((l, k) => block.Lines[k].Bounds.Bottom - l.Bounds.Top)];
-        for (int i = 0; i < block.Lines.Count; i++)
+        double widest = lines.Max(static l => l.Bounds.Width);
+        double[] gaps = [.. lines.Skip(1).Select((l, k) => lines[k].Bounds.Bottom - l.Bounds.Top)];
+        for (int i = 0; i < lines.Count; i++)
         {
-            LineData line = block.Lines[i];
+            LineData line = lines[i];
 
             // The recognizer's blocks can hold several paragraphs: a gap between two lines wider than a line's own height ends one.
             if (i > 0)
             {
-                LineData above = block.Lines[i - 1];
+                LineData above = lines[i - 1];
                 double gap = above.Bounds.Bottom - line.Bounds.Top;
                 if (gap > ParagraphGap * Math.Max(line.Bounds.Height, above.Bounds.Height) && (gaps.Length < 4 || gap > 1.6 * Median(gaps)))
                 {
@@ -168,15 +189,19 @@ internal sealed class OcrModelBuilder(OcrSourceOptions options, CompareDocumentB
                 }
             }
 
-            // A clause number ("2.3") at the start of a line starts a paragraph, whatever the spacing.
-            if (options.ReadListItems && i > 0 && IsClauseNumberLine(line))
+            // A clause number ("2.3") at the start of a line starts a list item whatever the spacing, with the number as its label, so a
+            // renumbering reads as a change of labels (a cascade) and not as an edit of the text, as it does for a document with a text layer.
+            if (options.ReadListItems && IsClauseNumberLine(line))
             {
                 Flush();
+                open = new OcrPiece(NodeKind.ListItem, line.Words[0].Text);
+                AddLine(open, page, line, 1, line.Words.Count);
+                continue;
             }
 
             // A marker starts the block, or follows a line that ended a sentence or a short line (a heading). Inside running text a
             // line that begins with a number ("11. Juni 2026") is a date that the line break put first, not a list item.
-            if (options.ReadListItems && IsMarkerLine(line) && (i == 0 || (open is not null && (PdfText.EndsSentence(open.LastLineText) || block.Lines[i - 1].Bounds.Width < ShortLine * widest))))
+            if (options.ReadListItems && IsMarkerLine(line) && (i == 0 || (open is not null && (PdfText.EndsSentence(open.LastLineText) || lines[i - 1].Bounds.Width < ShortLine * widest))))
             {
                 Flush();
                 open = new OcrPiece(NodeKind.ListItem, line.Words[0].Text);
@@ -193,6 +218,61 @@ internal sealed class OcrModelBuilder(OcrSourceOptions options, CompareDocumentB
     {
         double[] sorted = [.. values.Order()];
         return sorted[sorted.Length / 2];
+    }
+
+    /// <summary>Cuts a line before each word that is a clause number (see <see cref="IsClauseNumberLine"/>) and follows a word that ends a sentence.</summary>
+    private static IReadOnlyList<LineData> SplitAtClauseNumbers(IReadOnlyList<LineData> lines)
+    {
+        List<LineData>? result = null;
+        for (int li = 0; li < lines.Count; li++)
+        {
+            LineData line = lines[li];
+            var cuts = new List<int>();
+            for (int w = 1; w + 1 < line.Words.Count; w++)
+            {
+                if (PdfText.EndsSentence(line.Words[w - 1].Text) && IsClauseNumberLine(new LineData(line.Words.Skip(w).Take(2).ToList(), line.Bounds, [])))
+                {
+                    cuts.Add(w);
+                }
+            }
+
+            if (cuts.Count == 0 && result is null)
+            {
+                continue;
+            }
+
+            if (result is null)
+            {
+                result = [.. lines.Take(li)];
+            }
+
+            if (cuts.Count == 0)
+            {
+                result.Add(line);
+                continue;
+            }
+
+            cuts.Add(line.Words.Count);
+            int from = 0;
+            foreach (int to in cuts)
+            {
+                if (to > from)
+                {
+                    List<WordData> words = [.. line.Words.Skip(from).Take(to - from)];
+                    Box hull = Box.Hull(words[0].Quad);
+                    foreach (WordData wd in words.Skip(1))
+                    {
+                        Box h = Box.Hull(wd.Quad);
+                        hull = new Box(Math.Min(hull.Left, h.Left), Math.Min(hull.Bottom, h.Bottom), Math.Max(hull.Right, h.Right), Math.Max(hull.Top, h.Top));
+                    }
+
+                    result.Add(new LineData(words, hull, []));
+                    from = to;
+                }
+            }
+        }
+
+        return result ?? lines;
     }
 
     /// <summary>Whether a line starts with a multi-level number such as 1.1 or 2.3.4 and goes on with text: the number of a clause.</summary>
@@ -226,6 +306,27 @@ internal sealed class OcrModelBuilder(OcrSourceOptions options, CompareDocumentB
     }
 
     private static bool IsMarkerLine(LineData line) => line.Words.Count > 1 && PdfText.IsListMarker(line.Words[0].Text);
+
+    /// <summary>
+    /// Whether a block that starts on the page of the open paragraph is only the recognizer's cut inside it: its first line sits right
+    /// under the paragraph's last at the usual line spacing (the gap rule that splits paragraphs inside a block), in the same column and
+    /// in the same type size, and the paragraph's last line was not a short one that ended a sentence. Where the recognizer puts a block
+    /// boundary inside running text is its own choice and differs between two scans of the same page, so it is not a paragraph break.
+    /// </summary>
+    private bool ContinuesBelow(PageData page, LineData first)
+    {
+        OcrPiece p = open!;
+        if (p.LastPage != page.Index || p.LastHeight <= 0 || first.Bounds.Height <= 0)
+        {
+            return false;
+        }
+
+        double height = Math.Max(p.LastHeight, first.Bounds.Height);
+        double gap = p.LastBottom - first.Bounds.Top;
+        double ratio = first.Bounds.Height / p.LastHeight;
+        bool shortEnd = p.LastWidth < ShortLine * p.WidestLine && PdfText.EndsSentence(p.LastLineText);
+        return !shortEnd && gap >= -0.4 * height && gap <= ParagraphGap * height && ratio is > 0.8 and < 1.25 && Math.Abs(first.Bounds.Left - p.LastLeft) <= 1.5 * height;
+    }
 
     private bool CanJoin(PageData page, LineData first)
     {
@@ -331,6 +432,10 @@ internal sealed class OcrModelBuilder(OcrSourceOptions options, CompareDocumentB
         p.LastPage = page.Index;
         p.LastBottom = line.Bounds.Bottom;
         p.LastLineText = line.Text;
+        p.LastLeft = line.Bounds.Left;
+        p.LastHeight = line.Bounds.Height;
+        p.LastWidth = line.Bounds.Width;
+        p.WidestLine = Math.Max(p.WidestLine, line.Bounds.Width);
     }
 
     private void AddWord(OcrPiece p, WordData word)
