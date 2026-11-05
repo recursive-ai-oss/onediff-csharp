@@ -8,7 +8,7 @@ namespace OneDiff.GoldSets.Docx;
 /// <summary>What a revision does to a stretch of text.</summary>
 internal enum SegKind { Equal, Delete, Insert, MoveFrom, MoveTo }
 
-internal sealed record Seg(SegKind Kind, string Text, string? Move);
+internal sealed record Seg(SegKind Kind, string Text, string? Move, bool Fmt = false);
 
 /// <summary>One paragraph of a tracked-changes file: its text in pieces, and whether its paragraph mark exists with changes rejected and accepted.</summary>
 internal sealed class ParaRec
@@ -29,7 +29,8 @@ internal sealed class ParaRec
 /// The two views are the document with every revision rejected and with every revision accepted, one line per non-empty paragraph;
 /// a paragraph whose mark is removed in a view runs on into the next one (ECMA-376 §17.13.5). A <em>change</em> is a maximal run of
 /// revisions inside a paragraph with no unchanged text between them, and a move's two halves (paired by the name on their range
-/// markers) are one change. Formatting revisions carry no text and are not changes here.
+/// markers) are one change. A run whose formatting was changed (<c>w:rPrChange</c>) is a revision of its text: the same text in both
+/// views, and it counts as a change with the other revisions around it. Paragraph-level property revisions carry no text and are not changes.
 /// </para>
 /// </summary>
 internal static class TrackedReader
@@ -196,7 +197,8 @@ internal static class TrackedReader
 
                 if (sb.Length > 0)
                 {
-                    Add(rec, ctx, sb.ToString(), move);
+                    bool fmt = ctx == SegKind.Equal && c.ChildElements.Any(x => Is(x, "rPr") && x.ChildElements.Any(y => Is(y, "rPrChange")));
+                    Add(rec, ctx, sb.ToString(), move, fmt);
                 }
             }
             else if (Is(c, "ins"))
@@ -238,15 +240,15 @@ internal static class TrackedReader
         }
     }
 
-    private static void Add(ParaRec rec, SegKind kind, string text, string? move)
+    private static void Add(ParaRec rec, SegKind kind, string text, string? move, bool fmt = false)
     {
-        if (rec.Segs.Count > 0 && rec.Segs[^1].Kind == kind && rec.Segs[^1].Move == move)
+        if (rec.Segs.Count > 0 && rec.Segs[^1].Kind == kind && rec.Segs[^1].Move == move && rec.Segs[^1].Fmt == fmt)
         {
             rec.Segs[^1] = rec.Segs[^1] with { Text = rec.Segs[^1].Text + text };
         }
         else
         {
-            rec.Segs.Add(new Seg(kind, text, move));
+            rec.Segs.Add(new Seg(kind, text, move, fmt));
         }
     }
 
@@ -365,6 +367,21 @@ internal static class TrackedReader
             {
                 switch (s.Kind)
                 {
+                    case SegKind.Equal when s.Fmt:
+                        // A formatting revision: the same text in both views, changed.
+                        if (oldLine >= 0)
+                        {
+                            (oldSpans ??= []).Add(new LineSpan(oldLine, oldPos, s.Text.Length));
+                        }
+
+                        if (newLine >= 0)
+                        {
+                            (newSpans ??= []).Add(new LineSpan(newLine, newPos, s.Text.Length));
+                        }
+
+                        oldPos += s.Text.Length;
+                        newPos += s.Text.Length;
+                        break;
                     case SegKind.Equal:
                         if (s.Text.Trim().Length > 0)
                         {

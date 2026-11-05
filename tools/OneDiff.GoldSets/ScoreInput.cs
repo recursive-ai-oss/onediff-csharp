@@ -56,7 +56,9 @@ internal sealed class ScoreInput
     private static bool IsContent(NodeKind k) => k is NodeKind.Paragraph or NodeKind.ListItem;
 
     /// <summary>Reads a comparison whose nodes are the gold nodes (same ids, same text).</summary>
-    public static ScoreInput From(Comparison cmp)
+    public static ScoreInput From(Comparison cmp) => FromSkipping(cmp, null, null);
+
+    private static ScoreInput FromSkipping(Comparison cmp, HashSet<int>? skipOld, HashSet<int>? skipNew)
     {
         CompareDocument od = cmp.Old;
         CompareDocument nd = cmp.New;
@@ -64,6 +66,11 @@ internal sealed class ScoreInput
         foreach (AlignmentLink l in cmp.Alignment.Links)
         {
             if (!l.OldNodes.All(i => IsContent(od[i].Kind)) || !l.NewNodes.All(i => IsContent(nd[i].Kind)))
+            {
+                continue;
+            }
+
+            if (l.OldNodes.Any(i => skipOld?.Contains(i) == true) || l.NewNodes.Any(i => skipNew?.Contains(i) == true))
             {
                 continue;
             }
@@ -81,6 +88,12 @@ internal sealed class ScoreInput
             {
                 Sides(ch.Old, false, od, ivs);
                 Sides(ch.New, true, nd, ivs);
+            }
+
+            // A change that only concerns nodes the gold does not have (see Furniture) is not scored.
+            if (ivs.Count > 0 && ivs.All(v => (v.IsNew ? skipNew : skipOld)?.Contains(v.Node) == true))
+            {
+                continue;
             }
 
             changes.Add(new SChange(ch.Id, kind, ivs));
@@ -108,10 +121,14 @@ internal sealed class ScoreInput
     /// <param name="cmp">The comparison; its node ids are the source's own.</param>
     /// <param name="gold">The pair's block map (both sides).</param>
     /// <param name="stats">Receives how many content nodes were matched.</param>
-    public static ScoreInput From(Comparison cmp, BlockMap gold, MapStats? stats = null)
+    /// <param name="bodyOnly">For a Word source: skip nodes the gold does not have (headers, footers, notes, comments, text boxes, empty paragraphs) and read a field's placeholder as its result.</param>
+    public static ScoreInput From(Comparison cmp, BlockMap gold, MapStats? stats = null, bool bodyOnly = false)
     {
-        NodeMap om = NodeMap.Build(cmp.Old.Nodes.Where(n => IsContent(n.Kind)).Select(n => (n.Id, n.Text)).ToList(), gold.Old, cmp.Old.Nodes.Length);
-        NodeMap nm = NodeMap.Build(cmp.New.Nodes.Where(n => IsContent(n.Kind)).Select(n => (n.Id, n.Text)).ToList(), gold.New, cmp.New.Nodes.Length);
+        // bodyOnly (a Word source): see Furniture and Expanded.
+        HashSet<int> skipOld = bodyOnly ? Furniture(cmp.Old) : [], skipNew = bodyOnly ? Furniture(cmp.New) : [];
+        Dictionary<int, (int[] At, int[] Extra)> oldAt = bodyOnly ? ObjectPositions(cmp.Old) : [], newAt = bodyOnly ? ObjectPositions(cmp.New) : [];
+        NodeMap om = NodeMap.Build(cmp.Old.Nodes.Where(n => IsContent(n.Kind) && !skipOld.Contains(n.Id)).Select(n => (n.Id, bodyOnly ? Expanded(cmp.Old, n) : n.Text)).ToList(), gold.Old, cmp.Old.Nodes.Length);
+        NodeMap nm = NodeMap.Build(cmp.New.Nodes.Where(n => IsContent(n.Kind) && !skipNew.Contains(n.Id)).Select(n => (n.Id, bodyOnly ? Expanded(cmp.New, n) : n.Text)).ToList(), gold.New, cmp.New.Nodes.Length);
         if (stats is not null)
         {
             stats.Matched += om.Matched + nm.Matched;
@@ -119,7 +136,7 @@ internal sealed class ScoreInput
         }
 
         // Source nodes that are not content map to themselves above the gold ids, so nothing collides.
-        ScoreInput plain = From(cmp);
+        ScoreInput plain = FromSkipping(cmp, skipOld, skipNew);
         var links = new List<SLink>();
         foreach (SLink l in plain.Links)
         {
@@ -133,7 +150,8 @@ internal sealed class ScoreInput
             foreach (Iv v in ch.Extent)
             {
                 NodeMap map = v.IsNew ? nm : om;
-                ivs.Add(new Iv(v.IsNew, map.Id(v.Node), map.Position(v.Node, v.Start, atEnd: false), map.Position(v.Node, v.End, atEnd: true)));
+                Dictionary<int, (int[] At, int[] Extra)> at = v.IsNew ? newAt : oldAt;
+                ivs.Add(new Iv(v.IsNew, map.Id(v.Node), map.Position(v.Node, Shift(at, v.Node, v.Start), atEnd: false), map.Position(v.Node, Shift(at, v.Node, v.End), atEnd: true)));
             }
 
             changes.Add(new SChange(ch.Id, ch.Kind, ivs));
@@ -151,6 +169,122 @@ internal sealed class ScoreInput
             Passed = plain.Passed,
             FallbackLevel = plain.FallbackLevel,
         };
+    }
+
+    /// <summary>
+    /// Nodes the gold documents do not have: content inside headers, footers, notes, comments and text boxes (a tracked-changes file
+    /// read back shows body paragraphs only, so the other tools are never asked about them), and content nodes with no text.
+    /// </summary>
+    private static HashSet<int> Furniture(CompareDocument doc)
+    {
+        var skip = new HashSet<int>();
+        foreach (Node n in doc.Nodes)
+        {
+            if (!IsContent(n.Kind))
+            {
+                continue;
+            }
+
+            bool furniture = string.IsNullOrWhiteSpace(n.Text);
+            for (int a = n.Parent; !furniture && a >= 0; a = doc[a].Parent)
+            {
+                furniture = doc[a].Kind is NodeKind.Header or NodeKind.Footer or NodeKind.Footnote or NodeKind.Endnote or NodeKind.Comment or NodeKind.TextBox;
+            }
+
+            if (furniture)
+            {
+                skip.Add(n.Id);
+            }
+        }
+
+        return skip;
+    }
+
+    /// <summary>
+    /// The text of a paragraph as a reader of the file sees it: the placeholder of a field or inline content control (U+FFFC) is
+    /// replaced by the object's visible text (the gold blocks contain a field's result, the model keeps it in a child node).
+    /// </summary>
+    private static string Expanded(CompareDocument doc, Node n)
+    {
+        if (!n.Text.Contains('\uFFFC', StringComparison.Ordinal))
+        {
+            return n.Text;
+        }
+
+        int[] extra = Objects(doc, n, out string[] results);
+        var sb = new StringBuilder(n.Text.Length + extra.Sum());
+        int k = 0;
+        foreach (char c in n.Text)
+        {
+            if (c == '\uFFFC' && k < results.Length)
+            {
+                sb.Append(results[k++]);
+            }
+            else
+            {
+                sb.Append(c);
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    private static int[] Objects(CompareDocument doc, Node n, out string[] results)
+    {
+        var list = new List<string>();
+        foreach (int c in doc.ChildrenOf(n.Id))
+        {
+            NodeKind k = doc[c].Kind;
+            if (k is NodeKind.Field or NodeKind.ContentControl or NodeKind.Image or NodeKind.TextBox or NodeKind.Footnote or NodeKind.Endnote)
+            {
+                list.Add(k is NodeKind.Field or NodeKind.ContentControl ? doc[c].Text : string.Empty);
+            }
+        }
+
+        results = [.. list];
+        return [.. list.Select(r => r.Length - 1)];
+    }
+
+    /// <summary>For each paragraph with objects: where its placeholders are and how many characters each gains when expanded (see <see cref="Expanded"/>).</summary>
+    private static Dictionary<int, (int[] At, int[] Extra)> ObjectPositions(CompareDocument doc)
+    {
+        var map = new Dictionary<int, (int[], int[])>();
+        foreach (Node n in doc.Nodes)
+        {
+            if (IsContent(n.Kind) && n.Text.Contains('\uFFFC', StringComparison.Ordinal))
+            {
+                int[] extra = Objects(doc, n, out string[] results);
+                var at = new List<int>();
+                for (int i = 0; i < n.Text.Length && at.Count < results.Length; i++)
+                {
+                    if (n.Text[i] == '\uFFFC')
+                    {
+                        at.Add(i);
+                    }
+                }
+
+                map[n.Id] = ([.. at], extra);
+            }
+        }
+
+        return map;
+    }
+
+    /// <summary>An offset in the model's text as an offset in the expanded text.</summary>
+    private static int Shift(Dictionary<int, (int[] At, int[] Extra)> objects, int node, int pos)
+    {
+        if (!objects.TryGetValue(node, out (int[] At, int[] Extra) o))
+        {
+            return pos;
+        }
+
+        int shifted = pos;
+        for (int i = 0; i < o.At.Length && o.At[i] < pos; i++)
+        {
+            shifted += o.Extra[i];
+        }
+
+        return shifted;
     }
 
     /// <summary>Maps a change side (a range of the nodes' joined text) back to intervals of single nodes.</summary>
@@ -368,6 +502,20 @@ internal sealed class NodeMap
             else
             {
                 j++;
+            }
+        }
+
+        if (Environment.GetEnvironmentVariable("ONEDIFF_MAPDEBUG") == "1")
+        {
+            var used = new HashSet<int>(assigned.Where(a => a >= 0));
+            foreach ((int id, string t) in source.Where(x => assigned[x.Id] < 0))
+            {
+                Console.Error.WriteLine("UNMATCHED src " + id + ": " + t.Replace("\n", "\\n"));
+            }
+
+            foreach (GoldBlock g in blocks.Where(g => !used.Contains(g.Node)))
+            {
+                Console.Error.WriteLine("UNUSED gold " + g.Node + " " + g.Kind + ": " + g.Label + "|" + g.Text);
             }
         }
 

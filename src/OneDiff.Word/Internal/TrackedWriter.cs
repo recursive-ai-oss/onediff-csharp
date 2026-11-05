@@ -50,6 +50,10 @@ internal sealed partial class TrackedWriter : IDisposable
     private int moveCounter;
     private long idCounter = 1_000_000;
 
+    /// <summary>Receives a line for every paragraph the writer had to replace as a whole, and why (diagnostics for tests).</summary>
+    [ThreadStatic]
+    internal static Action<string>? Trace;
+
     private enum DonorMode
     {
         /// <summary>The donor's content is shown as the opposite of the base's: deleted when the base is new, inserted when it is old.</summary>
@@ -103,7 +107,7 @@ internal sealed partial class TrackedWriter : IDisposable
                     regionEdits[c.LinkId] = list = [];
                 }
 
-                list.AddRange(c.Edits);
+                list.AddRange(RegionsOf(c));
             }
         }
 
@@ -131,6 +135,35 @@ internal sealed partial class TrackedWriter : IDisposable
         using var ms = new MemoryStream();
         b.Doc.SaveAs(ms, OfficeFormat.Docx);
         return ms.ToArray();
+    }
+
+    /// <summary>
+    /// What the writer records for a change: its whole extent as one replacement, so that a reader of the document sees the same
+    /// unit of change the comparison shows (a value, a term, a clause), and not the characters inside it. A unit that holds an object
+    /// (a field, a picture) is written edit by edit instead, because an object cannot be re-typed as text.
+    /// </summary>
+    private static ImmutableArray<RegionEdit> RegionsOf(Change c)
+    {
+        bool text = c.Kind is ChangeKind.Replace or ChangeKind.Insert or ChangeKind.Delete or ChangeKind.Format;
+        if (!text || c.Old.Nodes.Length != 1 || c.New.Nodes.Length != 1
+            || c.Old.Text.Contains('\uFFFC', StringComparison.Ordinal) || c.New.Text.Contains('\uFFFC', StringComparison.Ordinal))
+        {
+            return c.Edits;
+        }
+
+        // A side may be widened on one side only (a value span takes in the unit it belongs to on the new side but not the old), so the
+        // two extents are made to cover the same unchanged text: outside its edits a link's old and new text differ by a constant shift.
+        RegionEdit first = c.Edits[0], last = c.Edits[0];
+        foreach (RegionEdit e in c.Edits)
+        {
+            first = e.OldStart < first.OldStart || (e.OldStart == first.OldStart && e.NewStart < first.NewStart) ? e : first;
+            last = e.OldEnd > last.OldEnd || (e.OldEnd == last.OldEnd && e.NewEnd > last.NewEnd) ? e : last;
+        }
+
+        int before = first.NewStart - first.OldStart, after = last.NewEnd - last.OldEnd;
+        int oldStart = Math.Min(c.Old.Start, c.New.Start - before);
+        int oldEnd = Math.Max(c.Old.Start + c.Old.Length, c.New.Start + c.New.Length - after);
+        return [new RegionEdit(oldStart, oldEnd - oldStart, oldStart + before, oldEnd + after - (oldStart + before), c.Old.Text, c.New.Text, [], [])];
     }
 
     private void Note(string category, string message, int baseNode = -1, int donorNode = -1) =>
@@ -462,6 +495,11 @@ internal sealed partial class TrackedWriter : IDisposable
     {
         MarkupNode bp = b.Element(bid), dp = d.Element(did);
         bool replace = bp.IsNull || dp.IsNull || !ObjectsStable(bid, did);
+        if (replace)
+        {
+            Trace?.Invoke($"replace {bid}/{did} kind={link.Kind}: " + (bp.IsNull || dp.IsNull ? "no element" : "objects not stable"));
+        }
+
         bool move = link.Kind == LinkKind.Move;
         if (!replace)
         {
@@ -479,6 +517,7 @@ internal sealed partial class TrackedWriter : IDisposable
             }
             catch (Exception ex) when (ex is ReplaceNeeded or ArgumentException or InvalidOperationException)
             {
+                Trace?.Invoke($"replace {bid}/{did} kind={link.Kind}: {ex.Message}");
                 bp = Restore(bid, bp, snapshot);
                 replace = true;
             }
@@ -600,11 +639,6 @@ internal sealed partial class TrackedWriter : IDisposable
                     throw new ReplaceNeeded("an edit reaches an object");
                 }
 
-                if (r.IsFormatOnly)
-                {
-                    throw new ReplaceNeeded("format edit");
-                }
-
                 if (scratch.IsNull)
                 {
                     scratch = NewScratch(dp);
@@ -638,6 +672,12 @@ internal sealed partial class TrackedWriter : IDisposable
             throw new ReplaceNeeded("a position of the edit could not be placed");
         }
 
+        if (r.IsFormatOnly)
+        {
+            FormatRegion(bp, scratch, bh, bhl, dh, dhl);
+            return;
+        }
+
         string donorXml = "";
         if (dl > 0)
         {
@@ -668,6 +708,156 @@ internal sealed partial class TrackedWriter : IDisposable
                 MarkRange(bp, bh, bhl);
             }
         }
+    }
+
+    /// <summary>
+    /// Records a change of character formatting over text that is the same on both sides (ECMA-376 §17.13.5.31, <c>w:rPrChange</c>):
+    /// the runs of the stretch keep the formatting that accept-all gives and carry the other version's formatting as the change record.
+    /// Runs are cut where the other side's formatting changes, so each run has exactly one record.
+    /// </summary>
+    private void FormatRegion(MarkupNode bp, MarkupNode scratch, int bh, int bhl, int dh, int dhl)
+    {
+        if (bhl != dhl || bhl == 0)
+        {
+            throw new ReplaceNeeded("the formatted stretch differs in length");
+        }
+
+        // The other version's runs for the stretch, found the way a deletion finds them.
+        d.Marker.DeleteText(scratch, dh, dhl);
+        var donor = new List<(string Props, int Length)>();
+        foreach (MarkupNode w in new List<MarkupNode>(MarkerElements(scratch, "del")))
+        {
+            if (!harvested.Add(w))
+            {
+                continue;
+            }
+
+            foreach (MarkupNode run in Wx.ChildElements(w))
+            {
+                if (!Wx.Is(run, "r"))
+                {
+                    throw new ReplaceNeeded("a formatted stretch holds more than runs");
+                }
+
+                donor.Add((Content(Wx.Child(run, "rPr"), ["rPrChange"], false), HubLength(run)));
+            }
+        }
+
+        if (donor.Sum(x => x.Length) != bhl)
+        {
+            throw new ReplaceNeeded("the formatted stretch could not be measured");
+        }
+
+        // Cut the base runs at the other side's boundaries, so no run spans two records.
+        int at = 0;
+        for (int i = 0; i < donor.Count - 1; i++)
+        {
+            at += donor[i].Length;
+            if (donor[i].Props != donor[i + 1].Props)
+            {
+                b.Marker.InsertText(bp, bh + at, "x");
+                foreach (MarkupNode m in new List<MarkupNode>(MarkerElements(bp, "ins")))
+                {
+                    m.Remove();
+                }
+            }
+        }
+
+        b.Marker.DeleteText(bp, bh, bhl);
+        int pos = 0;
+        foreach (MarkupNode w in new List<MarkupNode>(MarkerElements(bp, "del")))
+        {
+            foreach (MarkupNode run in new List<MarkupNode>(Wx.ChildElements(w)))
+            {
+                if (!Wx.Is(run, "r"))
+                {
+                    throw new ReplaceNeeded("a formatted stretch holds more than runs");
+                }
+
+                int len = HubLength(run);
+                string other = DonorPropsAt(donor, pos, len);
+                pos += len;
+                MarkupNode rPr = Wx.Child(run, "rPr");
+                string own = Content(rPr, ["rPrChange"], false);
+                if (StripNamespaces(own) == StripNamespaces(other))
+                {
+                    continue;
+                }
+
+                if (other.Contains("rStyle", StringComparison.Ordinal) && !baseIsNew)
+                {
+                    throw new ReplaceNeeded("a character style of the other document");
+                }
+
+                string current = baseIsNew ? own : other, record = baseIsNew ? other : own;
+                string attrs = " " + wp + ":id=\"" + NextId().ToString(CultureInfo.InvariantCulture) + "\" " + wp + ":author=\"" + authorXml + "\"" + dateXml;
+                string props = "<" + wp + ":rPr>" + current + "<" + wp + ":rPrChange" + attrs + "><" + wp + ":rPr>" + record + "</" + wp + ":rPr></" + wp + ":rPrChange></" + wp + ":rPr>";
+                if (rPr.IsNull)
+                {
+                    run.PrependXml(Wx.Bytes(props));
+                }
+                else
+                {
+                    rPr.ReplaceWithXml(Wx.Bytes(props));
+                }
+
+                if (baseIsNew)
+                {
+                    ImportFix(Wx.Child(Wx.Child(run, "rPr"), "rPrChange"), dpFor(scratch));
+                }
+            }
+
+            // The stretch stays as it was (it is not a deletion): take the marker wrapper off and the text back to ordinary text.
+            string xml = Wx.Unwrap(Wx.Rename(w.OuterXml, wp, "delText", "t"), wp, "del");
+            w.ReplaceWithXml(Wx.Bytes(xml));
+        }
+    }
+
+    private static MarkupNode dpFor(MarkupNode scratch) => scratch;
+
+    private static string DonorPropsAt(List<(string Props, int Length)> donor, int pos, int length)
+    {
+        int at = 0;
+        foreach ((string props, int len) in donor)
+        {
+            if (pos >= at && pos + length <= at + len)
+            {
+                return props;
+            }
+
+            at += len;
+        }
+
+        throw new ReplaceNeeded("a run spans formatting boundaries");
+    }
+
+    /// <summary>The length of a run's text as the document hub counts it (a tab or a break is one character).</summary>
+    private static int HubLength(MarkupNode run)
+    {
+        int n = 0;
+        foreach (MarkupNode c in Wx.ChildElements(run))
+        {
+            if (!Wx.InMain(c))
+            {
+                throw new ReplaceNeeded("a run holds content from another namespace");
+            }
+
+            switch (c.LocalNameString)
+            {
+                case "t" or "delText":
+                    n += c.InnerText.Length;
+                    break;
+                case "tab" or "br" or "cr" or "noBreakHyphen" or "softHyphen":
+                    n++;
+                    break;
+                case "rPr" or "lastRenderedPageBreak":
+                    break;
+                default:
+                    throw new ReplaceNeeded("a run holds " + c.LocalNameString);
+            }
+        }
+
+        return n;
     }
 
     /// <summary>The donor's runs for a stretch of its paragraph, as deleted (or inserted) content with the real author.</summary>

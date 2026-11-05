@@ -16,7 +16,7 @@ internal static class Program
 {
     private const string Usage = """
         OneDiff.GoldSets generate --out DIR [--role eval|dev|train] [--seed N] [--docs-per-lang N] [--langs en,de,...] [--verify]
-        OneDiff.GoldSets score --data DIR --out FILE [--settings legal] [--oracle-alignment] [--cmp DIR | --changes DIR] [--blocks DIR] [--save-cmp DIR] [--pipeline NAME] [--jobs N] [--limit N] [--ids FILE] [--resamples N]
+        OneDiff.GoldSets score --data DIR --out FILE [--settings legal] [--oracle-alignment] [--cmp DIR | --changes DIR] [--blocks DIR] [--save-cmp DIR] [--body-only] [--pipeline NAME] [--jobs N] [--limit N] [--ids FILE] [--resamples N]
         OneDiff.GoldSets check-split --a DIR --b DIR
         OneDiff.GoldSets generate-combine --out DIR [--seed N] [--docs-per-lang N] [--langs en,de,...]
         OneDiff.GoldSets score-combine --data DIR --out FILE [--jobs N] [--limit N] [--resamples N]
@@ -283,6 +283,7 @@ internal static class Program
         string outFile = Path.GetFullPath(opt.GetValueOrDefault("out") ?? throw new ArgumentException("--out is required"));
         string? cmpDir = opt.GetValueOrDefault("cmp");
         string? saveCmp = opt.GetValueOrDefault("save-cmp");
+        bool bodyOnly = opt.ContainsKey("body-only");
         string? changesDir = opt.GetValueOrDefault("changes");
         string? blocksDir = opt.GetValueOrDefault("blocks");
         if (changesDir is not null && blocksDir is null)
@@ -384,7 +385,7 @@ internal static class Program
                 {
                     lock (mapStats)
                     {
-                        input = ScoreInput.From(cmp, blocks, mapStats);
+                        input = ScoreInput.From(cmp, blocks, mapStats, bodyOnly);
                     }
                 }
             }

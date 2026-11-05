@@ -7,8 +7,8 @@
 # SYNTH_DIR is the gold set the DOCX set was rendered from, DOCX_DIR the rendered files (with <id>.blocks.json), READ_DIR the
 # output of `OneDiff.GoldSets.Docx read` (READ_DIR/<tool>/), OUT_DIR gets <tool>/{all,completed,look0..look5}.json and .txt.
 # The all and completed rows use 10,000 bootstrap resamples over documents; the per-look rows use 1,000.
-# Set GOLDSETS_DLL to the built OneDiff.GoldSets.dll. Tool names are the ones given to `read --tool`; "onediff" scores a --cmp directory
-# (READ_DIR/onediff/<id>.cmp.json) instead.
+# ONLY_ALL=1 scores the all-pairs row only. Set GOLDSETS_DLL to the built OneDiff.GoldSets.dll. Tool names are the ones given to `read --tool`; "onediff" scores a --cmp directory
+# (READ_DIR/onediff/<id>.cmp.json) instead; so does any name starting with "onediff-engine".
 set -u
 SYNTH=$1 DOCX=$2 READ=$3 OUT=$4
 shift 4
@@ -25,7 +25,7 @@ for v, ids in looks.items():
 PY
 for T in "$@"; do
   mkdir -p "$OUT/$T"
-  if [ "$T" = onediff ]; then SRC=(--cmp "$READ/$T"); else SRC=(--changes "$READ/$T"); fi
+  BODY=; if [[ "$T" == onediff || "$T" == onediff-engine* ]]; then SRC=(--cmp "$READ/$T"); BODY=--body-only; else SRC=(--changes "$READ/$T"); fi
   if [ -f "$READ/$T/roundtrip.jsonl" ]; then
     python3 - "$READ/$T/roundtrip.jsonl" "$OUT/$T/ids-completed.txt" <<'PY'
 import json, sys
@@ -34,9 +34,10 @@ PY
   else
     ls "$READ/$T" | sed -n 's/\.cmp\.json$//p' > "$OUT/$T/ids-completed.txt"
   fi
-  dotnet "$DLL" score --data "$SYNTH" "${SRC[@]}" --blocks "$DOCX" --pipeline "$T" --jobs 4 --out "$OUT/$T/all.json" > "$OUT/$T/all.txt" 2>&1
-  dotnet "$DLL" score --data "$SYNTH" "${SRC[@]}" --blocks "$DOCX" --pipeline "$T" --jobs 4 --ids "$OUT/$T/ids-completed.txt" --out "$OUT/$T/completed.json" > "$OUT/$T/completed.txt" 2>&1
+  dotnet "$DLL" score --data "$SYNTH" "${SRC[@]}" --blocks "$DOCX" $BODY --pipeline "$T" --jobs 4 --out "$OUT/$T/all.json" > "$OUT/$T/all.txt" 2>&1
+  [ -n "${ONLY_ALL:-}" ] && continue
+  dotnet "$DLL" score --data "$SYNTH" "${SRC[@]}" --blocks "$DOCX" $BODY --pipeline "$T" --jobs 4 --ids "$OUT/$T/ids-completed.txt" --out "$OUT/$T/completed.json" > "$OUT/$T/completed.txt" 2>&1
   for L in 0 1 2 3 4 5; do
-    dotnet "$DLL" score --data "$SYNTH" "${SRC[@]}" --blocks "$DOCX" --pipeline "$T" --jobs 4 --resamples 1000 --ids "$OUT/ids-look$L.txt" --out "$OUT/$T/look$L.json" > "$OUT/$T/look$L.txt" 2>&1
+    dotnet "$DLL" score --data "$SYNTH" "${SRC[@]}" --blocks "$DOCX" $BODY --pipeline "$T" --jobs 4 --resamples 1000 --ids "$OUT/ids-look$L.txt" --out "$OUT/$T/look$L.json" > "$OUT/$T/look$L.txt" 2>&1
   done
 done
