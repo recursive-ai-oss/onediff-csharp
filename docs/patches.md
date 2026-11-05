@@ -45,3 +45,7 @@ The format and the matching are those of diff-match-patch's published wiki ("Uni
 ## Limits and errors
 
 Both parsers return a typed error (`PatchParseError`: kind, line, offset) through `TryParse`/`TryFromText`, or throw `PatchFormatException` from `Parse`/`FromText`. Nothing else is thrown for bad patch text. The parsers and appliers are fuzzed (`fuzz/OneDiff.Fuzz`).
+
+## Options on the one-liners
+
+`Diff.ApplyUnified(text, patch, options)` takes `UnifiedApplyOptions` (fuzz, offset limit, reverse). `Diff.ApplyPatchText(text, patchText, patcher, cancellationToken)` and `Diff.PatchText(old, new, patcher, cancellationToken)` take the `DmpPatcher` whose thresholds and margin apply; without one the defaults are used. Where a hunk or patch was not placed, `HunkResult.Line` and `DmpPatchResult.Location` are `null`. `DmpPatcher.TryMatch` returns false for no match and for a pattern longer than `MatchMaxBits`.

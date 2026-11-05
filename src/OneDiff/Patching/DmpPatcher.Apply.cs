@@ -5,7 +5,7 @@ namespace OneDiff.Patching;
 public sealed partial class DmpPatcher
 {
     /// <summary>
-    /// Applies patches to <paramref name="text"/>, placing each where its old text fits best (see <see cref="Match"/>), and reports
+    /// Applies patches to <paramref name="text"/>, placing each where its old text fits best (see <see cref="TryMatch"/>), and reports
     /// for each whether it was applied. Patches that cannot be placed are skipped; nothing is thrown for a conflict.
     /// </summary>
     /// <remarks>
@@ -43,7 +43,7 @@ public sealed partial class DmpPatcher
         var outcomes = new DmpPatchResult[patches.Count];
         for (int i = 0; i < outcomes.Length; i++)
         {
-            outcomes[i] = new DmpPatchResult(DmpPatchOutcome.Applied, -1, 0);
+            outcomes[i] = new DmpPatchResult(DmpPatchOutcome.Applied, null, 0);
         }
 
         // Patches are positioned in the text as it stands after the earlier ones; delta is how far reality has drifted from that.
@@ -60,10 +60,10 @@ public sealed partial class DmpPatcher
             if (text1.Length > matchMaxBits)
             {
                 // Too long for one search: find its first and last stretch and require them in order.
-                startLoc = Match(text, text1.Substring(0, matchMaxBits), expected);
+                startLoc = MatchIndex(text, text1.Substring(0, matchMaxBits), expected);
                 if (startLoc != -1)
                 {
-                    endLoc = Match(text, text1.Substring(text1.Length - matchMaxBits), expected + text1.Length - matchMaxBits);
+                    endLoc = MatchIndex(text, text1.Substring(text1.Length - matchMaxBits), expected + text1.Length - matchMaxBits);
                     if (endLoc == -1 || startLoc >= endLoc)
                     {
                         startLoc = -1;
@@ -72,7 +72,7 @@ public sealed partial class DmpPatcher
             }
             else
             {
-                startLoc = Match(text, text1, expected);
+                startLoc = MatchIndex(text, text1, expected);
             }
 
             if (startLoc == -1)
@@ -143,14 +143,14 @@ public sealed partial class DmpPatcher
         // A split patch fails as a whole if any piece fails; the first failure names the reason.
         if (outcomes[piece.Origin].Outcome == DmpPatchOutcome.Applied)
         {
-            outcomes[piece.Origin] = new DmpPatchResult(why, -1, 0);
+            outcomes[piece.Origin] = new DmpPatchResult(why, null, 0);
         }
     }
 
     private static void Succeed(DmpPatchResult[] outcomes, DmpPatch piece, int location, int drift)
     {
         DmpPatchResult cur = outcomes[piece.Origin];
-        if (cur.Outcome == DmpPatchOutcome.Applied && cur.Location == -1)
+        if (cur.Outcome == DmpPatchOutcome.Applied && cur.Location is null)
         {
             outcomes[piece.Origin] = new DmpPatchResult(DmpPatchOutcome.Applied, location, drift);
         }

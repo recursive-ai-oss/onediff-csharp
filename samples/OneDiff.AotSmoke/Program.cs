@@ -42,6 +42,7 @@ internal static class Program
             failures++;
         }
 
+        failures += CheckTextViews(oldText, newText);
         failures += CheckDocuments();
         failures += CheckSemantics();
         failures += CheckNlp();
@@ -54,6 +55,24 @@ internal static class Program
 
         Console.Out.WriteLine(failures == 0 ? "ok" : "FAILED");
         return failures == 0 ? 0 : 1;
+    }
+
+    /// <summary>The reading views, settings overloads and merge views of the text core under NativeAOT.</summary>
+    private static int CheckTextViews(string oldText, string newText)
+    {
+        int failures = 0;
+        TextDiff diff = Diff.Lines(oldText, newText, new DiffSettings { MaxWork = 1_000_000 });
+        OneDiff.Output.SideBySideDiff rows = Diff.SideBySide(oldText, newText);
+        OneDiff.Merge.TextMerge merge = Diff.Merge("a\nb\nc\n", "a\nX\nc\n", "a\nY\nc\n");
+        OneDiff.Merge.ItemMerge<string> items = Diff.Merge<string>(["a", "b", "c", "d"], ["a", "B", "c", "d"], ["a", "b", "c", "D", "e"]);
+        if (diff.Diagnostic.CostCapReached || diff.Lines.Count != 5 || diff.Pieces.Count != 5 || rows.Rows.Count != 3
+            || merge.Conflicts.Count != 1 || items.Items is not { Count: 5 })
+        {
+            Console.Error.WriteLine("text views: unexpected result");
+            failures++;
+        }
+
+        return failures;
     }
 
     /// <summary>The OneNLP value recognizer under NativeAOT: written-out values typed in a comparison, the built-in fallback, and a stable result.</summary>

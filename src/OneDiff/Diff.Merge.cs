@@ -26,7 +26,7 @@ public static partial class Diff
     /// <param name="settings">Conflict style, resolution and algorithm; defaults when null.</param>
     /// <param name="comparer">Decides which items are equal. The default comparer when null.</param>
     /// <param name="cancellationToken">Observed while aligning; throws <see cref="OperationCanceledException"/> when cancelled.</param>
-    public static ItemMerge Merge<T>(
+    public static ItemMerge<T> Merge<T>(
         ReadOnlySpan<T> baseItems,
         ReadOnlySpan<T> ours,
         ReadOnlySpan<T> theirs,

@@ -15,7 +15,7 @@ public enum WhiteSpaceHandling
 
 /// <summary>
 /// Decides which tokens count as the same when diffing text: the way to ignore case or white space. It is an ordinary
-/// <see cref="IEqualityComparer{T}"/> of strings, so it also plugs into <see cref="Diff.Sequences{T}"/> and
+/// <see cref="IEqualityComparer{T}"/> of strings, so it also plugs into <see cref="Diff.Sequences{T}(ReadOnlySpan{T}, ReadOnlySpan{T}, DiffAlgorithm, IEqualityComparer{T}, CancellationToken)"/> and
 /// <see cref="TokenInterner{T}"/>, and it can compare token text in place without allocating (the diff entry points use that).
 /// Case is ignored with simple per-UTF-16-unit upper-casing under the invariant culture, so results never depend on the machine's locale.
 /// Instances are immutable and thread safe.

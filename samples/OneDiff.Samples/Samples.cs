@@ -6,6 +6,7 @@ using OneDiff.Documents.Model;
 using OneDiff.Documents.Pipeline;
 using OneDiff.Documents.Serialization;
 using OneDiff.Merge;
+using OneDiff.Output;
 using OneDiff.Ocr;
 using OneDiff.Pdf;
 
@@ -20,7 +21,7 @@ public static class Samples
 {
     // ---- The text core -------------------------------------------------------------------------------------------
 
-    /// <summary>The words that changed between two strings, as Markdown with <c>~~deleted~~</c> and <c>**inserted**</c> runs.</summary>
+    /// <summary>The words that changed between two strings, as Markdown with <c>&lt;del&gt;</c> and <c>&lt;ins&gt;</c> marks around the changed words.</summary>
     public static string DiffTwoStrings(string oldText, string newText) =>
         Diff.ToMarkdownInline(Diff.Words(oldText, newText));                                    // the sample
 
@@ -34,6 +35,18 @@ public static class Samples
     /// <summary>A three-way merge of two edits of one base text. Edits to different lines merge; edits to the same line are a conflict.</summary>
     public static TextMerge ThreeWayMerge(string baseText, string ours, string theirs) =>
         Diff.Merge(baseText, ours, theirs);                                                     // the sample
+
+    /// <summary>The lines of a line diff with their kind and line numbers, the way a code-review view lists them: <c>-</c>, <c>+</c> or a blank prefix.</summary>
+    public static IEnumerable<string> ReadTheLines(string oldText, string newText) =>
+        Diff.Lines(oldText, newText).Lines.Select(l => $"{(l.Kind == EditKind.Insert ? '+' : l.Kind == EditKind.Delete ? '-' : ' ')} {l.Text}"); // the sample
+
+    /// <summary>A line diff laid out in two columns: aligned rows, with the changed words marked inside modified lines.</summary>
+    public static SideBySideDiff TwoColumns(string oldText, string newText) =>
+        Diff.SideBySide(oldText, newText);                                                      // the sample
+
+    /// <summary>A line diff of untrusted text with a work cap; the diagnostic says whether the cap made the diff coarser than the minimum.</summary>
+    public static bool CappedLineDiff(string oldText, string newText) =>
+        Diff.Lines(oldText, newText, new DiffSettings { MaxWork = 100_000 }).Diagnostic.CostCapReached; // the sample
 
     // ---- Documents -----------------------------------------------------------------------------------------------
 

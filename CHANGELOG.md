@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- `RecursiveAI.OneDiff`: `TextDiff.Pieces` and `TextDiff.Lines` read a diff as typed runs and lines with line numbers; `Diff.SideBySide` lays a line diff out in aligned rows with the changed words marked; `DiffSettings` (algorithm and work cap) is taken by the `Diff` one-liners and `TextDiff.Diagnostic` reports the cap; `Diff.ApplyUnified`, `ApplyPatchText` and `PatchText` take the apply options, patcher and cancellation token; `TextMerge.Conflicts` and `ItemMerge<T>.Items` expose a merge's conflicts and merged items.
+- `RecursiveAI.OneDiff`: `HunkResult.Line` and `DmpPatchResult.Location` are `int?` (null when not placed), and `DmpPatcher.Match` became `TryMatch`.
+
 In packages that are not on nuget.org yet, because they depend on previews of other libraries (`RecursiveAI.OneDiff.Word`, `RecursiveAI.OneDiff.Nlp`):
 
 - `RecursiveAI.OneDiff.Word`: `DocxRedline` writes a comparison as a DOCX with real tracked changes, built on the new document (default) or the old one: `w:ins`/`w:del` for text, paragraphs, rows and cells, `w:moveFrom`/`w:moveTo` with range markers, property changes for paragraphs, tables, rows, cells and sections. Accepting every revision gives the new document and rejecting every one the old. The author is a setting, no date is written unless asked, ids are numbered in document order, and the output is byte-identical from run to run. Format-only edits are run property changes, each change is written as one replaced unit, splits and merges use paragraph marks, changed field results and edited text boxes are tracked in place, and the source reads document properties, the list labels of every story and text boxes through the hub (OneOffice 0.1.0-preview.3). Differences a revision cannot carry are returned in `DocxRedlineResult.NotCarried`. `WordRedline.Register()` makes `Redline.Create` and `SaveAs` use it for `.docx`. See `docs/word.md`.

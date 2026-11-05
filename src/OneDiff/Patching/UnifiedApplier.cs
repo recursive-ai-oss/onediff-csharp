@@ -50,9 +50,9 @@ public enum HunkRejectReason
 /// <param name="Outcome">What happened.</param>
 /// <param name="Offset">Lines from the expected place (positive is later in the file). Zero when rejected.</param>
 /// <param name="Fuzz">Context lines ignored at each end. Zero unless <see cref="Outcome"/> is <see cref="HunkOutcome.AppliedWithFuzz"/>.</param>
-/// <param name="Line">Zero-based line of the input text where the matched lines start (including ignored context). -1 when rejected.</param>
+/// <param name="Line">Zero-based line of the input text where the matched lines start (including ignored context). null when rejected.</param>
 /// <param name="Reason">Why it was rejected, or <see cref="HunkRejectReason.None"/>.</param>
-public readonly record struct HunkResult(int HunkIndex, HunkOutcome Outcome, int Offset, int Fuzz, int Line, HunkRejectReason Reason);
+public readonly record struct HunkResult(int HunkIndex, HunkOutcome Outcome, int Offset, int Fuzz, int? Line, HunkRejectReason Reason);
 
 /// <summary>The result of applying a unified patch. Conflicts are reported here and never thrown.</summary>
 public sealed class UnifiedApplyResult
@@ -163,7 +163,7 @@ internal static class UnifiedApplier
             {
                 // Tell a stale conflict from an already-applied change: look for the new lines at fuzz zero.
                 int again = newSide.Count == 0 ? -1 : Locate(lines, newSide, 0, newSide.Count, nominal + hint, consumed, lead < trail, trail < lead, 0, options.MaxOffset);
-                results[h] = new HunkResult(h, HunkOutcome.Rejected, 0, 0, -1, again >= 0 ? HunkRejectReason.AlreadyApplied : HunkRejectReason.ContextMismatch);
+                results[h] = new HunkResult(h, HunkOutcome.Rejected, 0, 0, null, again >= 0 ? HunkRejectReason.AlreadyApplied : HunkRejectReason.ContextMismatch);
                 rejected.Add(hunk);
                 continue;
             }

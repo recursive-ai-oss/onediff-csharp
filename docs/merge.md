@@ -64,3 +64,7 @@ When the budget runs out:
 - `TextMerge.Diagnostic` and `ItemMerge.Diagnostic` have `CostCapReached` set and `Work` holds the work spent, a little over the cap at most (the cap is checked once per search round, so the overshoot is bounded by the size of the inputs).
 
 A merge that stays within the budget is byte-for-byte what it would be without a cap. With the default cap this never happens on the merge corpus. The patience and histogram alignments receive what is left of the budget and report the same way.
+
+## Conflicts and merged items
+
+`TextMerge.Conflicts` lists the conflict regions in order as `MergeConflict`s: index, region, the 1-based line each version starts on, and the three versions' lines (line endings included). It lists the places the sides disagreed whether or not `MergeSettings.Resolution` settled them in `Text`, so with a resolution `ConflictCount` is zero while `Conflicts` still shows what was settled. `Diff.Merge<T>` returns an `ItemMerge<T>`: `Items` is the merged sequence with conflicts settled as `Resolution` says (null when the resolution is `None` and there are conflicts, because there is no single sequence then), and `Resolve(how)` settles them another way (Ours, Theirs, or Union with ours first).

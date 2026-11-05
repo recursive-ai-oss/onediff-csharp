@@ -173,9 +173,9 @@ public enum DmpPatchOutcome
 
 /// <summary>The outcome of one patch.</summary>
 /// <param name="Outcome">What happened.</param>
-/// <param name="Location">Offset in the patched text where the patch's text was found, or -1.</param>
+/// <param name="Location">Offset in the patched text where the patch's text was found; null when it was not applied.</param>
 /// <param name="Drift">How far from the expected place it was found (zero when not applied).</param>
-public readonly record struct DmpPatchResult(DmpPatchOutcome Outcome, int Location, int Drift)
+public readonly record struct DmpPatchResult(DmpPatchOutcome Outcome, int? Location, int Drift)
 {
     /// <summary>True when the patch was applied.</summary>
     public bool Applied => Outcome == DmpPatchOutcome.Applied;
