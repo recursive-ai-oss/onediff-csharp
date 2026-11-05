@@ -23,7 +23,7 @@ public static partial class Diff
             int[] oldCodes = Widen(a.Slice(prefix, a.Length - prefix - suffix));
             int[] newCodes = Widen(b.Slice(prefix, b.Length - prefix - suffix));
             EditScript middle = Run(oldCodes, newCodes, algorithm, maxWork, out DiffDiagnostic diagnostic, cancellationToken);
-            return new TextDiff(oldText, newText, tokens, null, null, Frame(middle, prefix, suffix, oldText.Length, newText.Length), null, diagnostic);
+            return new TextDiff(oldText, newText, tokens, null, null, Frame(middle, prefix, suffix, oldText.Length, newText.Length), null, diagnostic with { Work = diagnostic.Work + prefix + suffix });
         }
 
         TokenRange[] oldRanges = Tokenizer.Tokenize(oldText, tokens);
@@ -63,7 +63,7 @@ public static partial class Diff
         }
 
         EditScript script = Frame(Run(oldIds, newIds, algorithm, maxWork, out DiffDiagnostic tokenDiagnostic, cancellationToken), head, tail, oldRanges.Length, newRanges.Length);
-        return new TextDiff(oldText, newText, tokens, oldRanges, newRanges, script, null, tokenDiagnostic);
+        return new TextDiff(oldText, newText, tokens, oldRanges, newRanges, script, null, tokenDiagnostic with { Work = tokenDiagnostic.Work + head + tail });
     }
 
     private static bool SameToken(string oldText, TokenRange o, string newText, TokenRange n)

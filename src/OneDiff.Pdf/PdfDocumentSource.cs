@@ -96,10 +96,17 @@ public sealed class PdfDocumentSource : IDocumentSource
                 throw PdfSourceErrors.Make(PdfSourceFailure.Malformed, "No pages could be read from this PDF; the file is damaged or empty.");
             }
 
-            // Pages without any text are a scan, not an empty document: refuse instead of comparing nothing (ISO 32000-2 puts a scan's
-            // page content in an image, which text extraction never sees).
+            // Pages without any text are either a scan (the page draws an image, which text extraction never sees, ISO 32000-2 7.7.3.3)
+            // or a file with nothing left on its pages. Either way, comparing an empty document in silence would hide every difference.
             if (pages.All(static p => string.IsNullOrWhiteSpace(p.Text)))
             {
+                if (!PdfPageContent.AnyPageHasContent(pdf))
+                {
+                    throw PdfSourceErrors.Make(
+                        PdfSourceFailure.Malformed,
+                        "This PDF has no readable page content (its pages are empty), so the file is probably truncated or damaged. It is not a scan: there is no image to read by OCR.");
+                }
+
                 throw PdfSourceErrors.Make(
                     PdfSourceFailure.NoTextLayer,
                     "This PDF has no text layer, so it is probably a scan. Reference RecursiveAI.OneDiff.Ocr and call OcrRedline.Register() to read it by OCR.");

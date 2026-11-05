@@ -159,6 +159,13 @@ public sealed class OcrDocumentSource : IDocumentSource
 
             var builder = new CompareDocumentBuilder(DocumentKind.Flowing).WithMetadata(input.Name, input.Sha256Hex(), MediaTypeOf(kind));
             new OcrModelBuilder(options, builder, cancellationToken).Build(PageFurniture.Detect(data));
+            if (data.All(static p => p.Blocks.Count == 0))
+            {
+                // The pages rendered but the engine read no word at all (blank, too faint, or not text). Comparing nothing must not pass
+                // as a result in silence; a strict comparison throws on this warning.
+                builder.AddWarning(DiagnosticSeverity.Warning, "ocr.nothingRecognized", "The OCR engine recognized no words on any page, so this input is compared as an empty document. Check that the pages show text.");
+            }
+
             return builder
                 .WithOrigin(wrapped is null ? new DocumentOrigin(input.Content, options.Password, input.Sha256Hex()) : new DocumentOrigin(wrapped))
                 .Build();

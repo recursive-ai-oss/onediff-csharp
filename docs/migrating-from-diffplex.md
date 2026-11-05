@@ -34,19 +34,21 @@ Which algorithm runs is a parameter: `Diff.Lines(old, new, DiffAlgorithm.Patienc
 
 ## `InlineDiffBuilder` (the README's console sample)
 
+OneDiff's line type is `DiffRun`, not `DiffPiece`, so a file can import both `DiffPlex.DiffBuilder.Model` and `OneDiff` while you migrate it without an ambiguous reference.
+
 The README builds an inline model with `InlineDiffBuilder.Diff(before, after)` and prints each line of `diff.Lines` with a `+`, `-` or blank prefix according to `line.Type`. `TextDiff.Lines` is the same view: one entry per line with its kind, text (without the line break) and line number in each text.
 
 | DiffPlex | OneDiff |
 |---|---|
 | `DiffPaneModel.Lines` | `TextDiff.Lines` |
-| `DiffPiece.Type` (`Unchanged`, `Deleted`, `Inserted`) | `DiffPiece.Kind` (`EditKind.Equal`, `Delete`, `Insert`) |
-| `DiffPiece.Text` | `DiffPiece.Text` |
-| `DiffPiece.Position` | `DiffPiece.OldLine` / `DiffPiece.NewLine` (both, one or the other, from 1; null on the side that lacks the line) |
+| `DiffPiece.Type` (`Unchanged`, `Deleted`, `Inserted`) | `DiffRun.Kind` (`EditKind.Equal`, `Delete`, `Insert`) |
+| `DiffPiece.Text` | `DiffRun.Text` |
+| `DiffPiece.Position` | `DiffRun.OldLine` / `DiffRun.NewLine` (both, one or the other, from 1; null on the side that lacks the line) |
 | `DiffPaneModel.HasDifferences` | `!diff.Script.IsIdentical` |
 
 ```csharp
 var sb = new StringBuilder();
-foreach (DiffPiece line in Diff.Lines(before, after).Lines)
+foreach (DiffRun line in Diff.Lines(before, after).Lines)
 {
     string prefix = line.Kind switch { EditKind.Insert => "+ ", EditKind.Delete => "- ", _ => "  " };
     sb.Append(prefix).Append(line.Text).Append('\n');

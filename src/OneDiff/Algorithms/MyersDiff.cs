@@ -71,7 +71,9 @@ public static class MyersDiff
         SolveMiddle(a, b, budget, script, cancellationToken);
         script.Equal(suffix);
 
-        diagnostic = budget.ToDiagnostic();
+        // The shared head and tail were matched item by item, so they count as work, but only in the report: charging them to the cap
+        // would make a long shared prefix look like an expensive search.
+        diagnostic = budget.ToDiagnostic() with { Work = budget.Work + prefix + suffix };
         return script.ToEditScript();
     }
 

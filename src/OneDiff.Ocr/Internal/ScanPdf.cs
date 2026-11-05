@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using OneDiff.Pdf;
+using OneDiff.Pdf.Internal;
 using OneImage;
 using OnePdf;
 using OnePdf.Text;
@@ -26,6 +27,12 @@ internal static class ScanPdf
             using PdfDocument pdf = PdfDocument.Open(content, new PdfOpenOptions { Password = options.Password });
             int n = pdf.PageCount;
             if (n == 0)
+            {
+                return false;
+            }
+
+            // Pages with no content stream have nothing to recognize: leave the file to the PDF source, which refuses it as damaged.
+            if (!PdfPageContent.AnyPageHasContent(pdf))
             {
                 return false;
             }

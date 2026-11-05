@@ -10,6 +10,44 @@ namespace OneDiff.Tests;
 /// <summary>The reading views, settings overloads, merge views and nullable results of the text core's public API.</summary>
 public sealed class ApiShapeTests
 {
+    [Fact]
+    public void WorkIsCountedOnSmallDiffsToo()
+    {
+        string a = string.Join('\n', Enumerable.Range(0, 40).Select(i => "line " + i)) + "\n";
+        string b = a.Replace("line 7\n", "seven\n", StringComparison.Ordinal).Replace("line 30\n", "thirty\nextra\n", StringComparison.Ordinal);
+        foreach (DiffAlgorithm algorithm in new[] { DiffAlgorithm.Myers, DiffAlgorithm.Patience, DiffAlgorithm.Histogram })
+        {
+            DiffDiagnostic d = Diff.Lines(a, b, new DiffSettings { Algorithm = algorithm }).Diagnostic;
+            Assert.False(d.CostCapReached);
+            Assert.True(d.Work >= 7, algorithm + " reported work " + d.Work);
+        }
+
+        Assert.Equal(3, Diff.Lines("x\ny\nz\n", "x\ny\nz\n").Diagnostic.Work);
+        Assert.Equal(0, Diff.Lines(string.Empty, string.Empty).Diagnostic.Work);
+    }
+
+    [Fact]
+    public void ComparerAndCleanupOneLinersTakeTheWorkCap()
+    {
+        string a = Shuffled(300, 7), b = Shuffled(300, 13);
+        var tight = new DiffSettings { MaxWork = 10 };
+        foreach (TextDiff d in new[]
+        {
+            Diff.WordsUsing(a, b, StringComparer.OrdinalIgnoreCase, tight),
+            Diff.LinesUsing(a.Replace(' ', '\n'), b.Replace(' ', '\n'), StringComparer.OrdinalIgnoreCase, tight),
+            Diff.TextUsing(a, b, StringComparer.OrdinalIgnoreCase, TokenKind.Word, tight),
+            Diff.Semantic(a, b, TokenKind.Word, tight),
+            Diff.Efficient(a, b, 4, TokenKind.Word, tight),
+        })
+        {
+            Assert.True(d.Diagnostic.CostCapReached);
+            Assert.Equal(a.Length, d.OldText.Length);
+        }
+
+        Assert.False(Diff.WordsUsing(a, b, StringComparer.OrdinalIgnoreCase, new DiffSettings()).Diagnostic.CostCapReached);
+        Assert.Throws<ArgumentOutOfRangeException>(() => Diff.WordsUsing("a", "b", StringComparer.Ordinal, new DiffSettings { MaxWork = -1 }));
+    }
+
     // ---- Reading views -------------------------------------------------------------------------------------------
 
     [Fact]
@@ -18,11 +56,11 @@ public sealed class ApiShapeTests
         TextDiff d = Diff.Lines("a\nb\nc\n", "a\nB\nc\nd\n");
         Assert.Equal(
         [
-            new DiffPiece(EditKind.Equal, 1, 1, "a"),
-            new DiffPiece(EditKind.Delete, 2, null, "b"),
-            new DiffPiece(EditKind.Insert, null, 2, "B"),
-            new DiffPiece(EditKind.Equal, 3, 3, "c"),
-            new DiffPiece(EditKind.Insert, null, 4, "d"),
+            new DiffRun(EditKind.Equal, 1, 1, "a"),
+            new DiffRun(EditKind.Delete, 2, null, "b"),
+            new DiffRun(EditKind.Insert, null, 2, "B"),
+            new DiffRun(EditKind.Equal, 3, 3, "c"),
+            new DiffRun(EditKind.Insert, null, 4, "d"),
         ], d.Lines);
     }
 
@@ -32,19 +70,19 @@ public sealed class ApiShapeTests
         TextDiff d = Diff.Lines("a\r\nb", "a\r\nc");
         Assert.Equal(
         [
-            new DiffPiece(EditKind.Equal, 1, 1, "a"),
-            new DiffPiece(EditKind.Delete, 2, null, "b"),
-            new DiffPiece(EditKind.Insert, null, 2, "c"),
+            new DiffRun(EditKind.Equal, 1, 1, "a"),
+            new DiffRun(EditKind.Delete, 2, null, "b"),
+            new DiffRun(EditKind.Insert, null, 2, "c"),
         ], d.Lines);
         Assert.Empty(Diff.Lines(string.Empty, string.Empty).Lines);
-        Assert.Equal([new DiffPiece(EditKind.Delete, 1, null, string.Empty)], Diff.Lines("\n", string.Empty).Lines);
+        Assert.Equal([new DiffRun(EditKind.Delete, 1, null, string.Empty)], Diff.Lines("\n", string.Empty).Lines);
     }
 
     [Fact]
     public void WordDiffPiecesAreRunsAndLinesAreCutAtBreaks()
     {
         TextDiff d = Diff.Words("one two\nthree four\n", "one 2\nthree four\nfive\n");
-        IReadOnlyList<DiffPiece> pieces = d.Pieces;
+        IReadOnlyList<DiffRun> pieces = d.Pieces;
         Assert.All(pieces, p => Assert.False(string.IsNullOrEmpty(p.Text)));
         // Old pieces concatenate to the old text, new pieces to the new text.
         Assert.Equal(d.OldText, string.Concat(pieces.Where(p => p.Kind != EditKind.Insert).Select(p => p.Text)));
@@ -52,7 +90,7 @@ public sealed class ApiShapeTests
         Assert.Contains(pieces, p => p.Kind == EditKind.Delete && p.Text == "two" && p.OldLine == 1);
         Assert.Contains(pieces, p => p.Kind == EditKind.Insert && p.Text == "2" && p.NewLine == 1);
 
-        IReadOnlyList<DiffPiece> lines = d.Lines;
+        IReadOnlyList<DiffRun> lines = d.Lines;
         Assert.All(lines, l => Assert.DoesNotContain('\n', l.Text));
         Assert.Contains(lines, l => l.Kind == EditKind.Insert && l.Text == "five" && l.NewLine == 3);
         Assert.Contains(lines, l => l.Kind == EditKind.Equal && l.Text == "three four" && l.OldLine == 2 && l.NewLine == 2);

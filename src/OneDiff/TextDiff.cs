@@ -110,25 +110,25 @@ public sealed class TextDiff
     /// <summary>The new text a run covers (empty for a deletion).</summary>
     public ReadOnlySpan<char> NewSpan(Edit edit) => Slice(NewText, newTokens, edit.NewStart, edit.NewLength);
 
-    private DiffPiece[]? pieces;
-    private DiffPiece[]? lines;
+    private DiffRun[]? pieces;
+    private DiffRun[]? lines;
 
     /// <summary>
     /// The diff as typed runs of text, in order: one piece per edit, with the line each run starts on in each text. Works for every
     /// token kind; for a line diff each piece is a block of whole lines, for a word diff a run of words.
     /// </summary>
-    public IReadOnlyList<DiffPiece> Pieces => pieces ??= BuildPieces(split: false);
+    public IReadOnlyList<DiffRun> Pieces => pieces ??= BuildPieces(split: false);
 
     /// <summary>
     /// The diff cut into lines for reading: every piece of <see cref="Pieces"/> is split at line breaks (which are dropped from the
     /// text), so each entry lies on one line of one or both texts. For a line diff that is exactly one entry per line, like the
     /// lines of an inline diff view; for a word diff a changed line shows as several entries sharing a line number.
     /// </summary>
-    public IReadOnlyList<DiffPiece> Lines => lines ??= BuildPieces(split: true);
+    public IReadOnlyList<DiffRun> Lines => lines ??= BuildPieces(split: true);
 
-    private DiffPiece[] BuildPieces(bool split)
+    private DiffRun[] BuildPieces(bool split)
     {
-        var result = new List<DiffPiece>(Script.Count);
+        var result = new List<DiffRun>(Script.Count);
         // A side's line is "open" when the text so far ended without a line break, so the next text continues it.
         int oldLine = 0, newLine = 0;
         bool oldOpen = false, newOpen = false;
@@ -141,7 +141,7 @@ public sealed class TextDiff
             int firstNew = newLine + (newOpen ? 0 : 1);
             if (!split)
             {
-                result.Add(new DiffPiece(e.Kind, inOld ? firstOld : null, inNew ? firstNew : null, text.ToString()));
+                result.Add(new DiffRun(e.Kind, inOld ? firstOld : null, inNew ? firstNew : null, text.ToString()));
             }
 
             while (text.Length > 0)
@@ -170,7 +170,7 @@ public sealed class TextDiff
 
                 if (split)
                 {
-                    result.Add(new DiffPiece(e.Kind, inOld ? oldLine : null, inNew ? newLine : null, text.Slice(0, content).ToString()));
+                    result.Add(new DiffRun(e.Kind, inOld ? oldLine : null, inNew ? newLine : null, text.Slice(0, content).ToString()));
                 }
 
                 text = text.Slice(len);
