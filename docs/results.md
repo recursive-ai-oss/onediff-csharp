@@ -82,6 +82,8 @@ Every pair is compared with the Legal and the Strict settings.
 
 **The rendered `pdf-v1` failure, fixed.** A table cell whose text wraps over two lines in the source PDF (for example "6" and "months") kept the line break in its node text; the inline page drew the cell as a stack of short lines, and the re-extraction read the neighbouring cell's text between the cell's lines. The grid reading now joins the lines of a cell with a space (a word broken by a hyphen keeps its break so the hyphenation fold still joins it). The smallest failing pair is a test (`RenderedReadbackTests`). Re-run on the fixed code: `pdf-v1` Verify, fallback 0, `Check`, marks re-read and determinism on 1,110 pairs × Legal/Strict, the rendered read-back inline and side by side on 1,110 pairs, and the text corpus (638 pairs and 24 over 300 kB): 0 failures. The PDF digest slice (20 pairs) is identical on x64 and arm64.
 
+**After the cell-text pairing rule** (a paired table cell with one unmatched text block on each side pairs them), the rows it can touch were scored again on the final code: `synth-v1` eval (above: edited, unrelated and changes per gold unit improved, every other row identical), change semantics (every row identical), `combine-v1` (every row identical, digest unchanged), `scan-v1` (every row identical, 600 pairs), the `scan-v1` exact gates on 100 pairs (every 6th; 5,322 changes, 8,921 marks, 20 determinism re-checks, 0 failures), and the alignment, invertibility and grouping sweeps at 60,000 cases each (seeds 1–60,000 in two chunks), 0 failures.
+
 ### Same bytes on both machines
 
 A fixed slice of `pdf-v1` (20 pairs, every 56th) and of `scan-v1` (20 pairs, every 30th), plus generated and corpus inputs. Each file below has the same SHA-256 on x64 and arm64.
@@ -95,6 +97,7 @@ A fixed slice of `pdf-v1` (20 pairs, every 56th) and of `scan-v1` (20 pairs, eve
 | `scan-v1` slice: JSON and marked PDFs (OCR source) | `1a421327…` | yes |
 | HTML pages (random documents in every style and layout, corpus pairs) | `2f32fe58…` | yes |
 | `combine-v1` first 20 cases: combination JSON and report pages, two runs each | `2c58a823…` | yes |
+| `synth-v1` slice: comparison JSON of 20 evaluation pairs (4 documents × 5 variants: en, de, zh, ar) | `ab579d71…` | yes (also equal to the digest before the cell-text pairing rule) |
 
 ## Gold sets
 
@@ -107,16 +110,16 @@ Gold documents as input; 210 documents, 1,050 pairs.
 | Row | Score [95% CI] | Floor | Verdict |
 |---|---|---|---|
 | align F1, same | 0.9999 [0.9998, 1.0000] | 0.9999 | floor held |
-| align F1, edited | 0.9793 [0.9737, 0.9844] | 0.979 | floor held |
+| align F1, edited | 0.9881 [0.9834, 0.9924] | 0.979 | above floor (was 0.9793) |
 | align F1, moved | 0.9880 [0.9749, 0.9979] | 0.988 | floor held |
 | align F1, split | 0.9960 [0.9862, 1.0000] | 0.996 | floor held |
 | align F1, merged | 1.0000 [1.0000, 1.0000] | 1.000 | floor held |
-| align F1, unrelated | 0.9278 [0.9113, 0.9434] | 0.928 | floor held |
+| align F1, unrelated | 0.9552 [0.9360, 0.9717] | 0.928 | above floor (was 0.9278) |
 | boundary F1 | 0.9144 [0.9036, 0.9246] | 0.914 | floor held |
 | boundary precision / recall | 0.9135 / 0.9152 | .912 / .911 | floor held |
 | fragmentation: changes per changed sentence | 1.0047 [1.0028, 1.0070] | 1.005 | floor held |
-| fragmentation: changes per gold unit | 1.1712 [1.1423, 1.2027] | 1.171 | floor held |
-| display regions per changed sentence / per unit | 1.0047 / 1.0273 | — | information |
+| fragmentation: changes per gold unit | 1.1553 [1.1286, 1.1847] | 1.171 | better than floor (a lower count is better; was 1.1712) |
+| display regions per changed sentence / per unit | 1.0047 / 1.0164 | — | information |
 | missed changed sentences | 0.0018 [0.0003, 0.0038] | 0.0018 | floor held |
 | Verify passes / fallback rate | 1.0 / 0 | 1.0 / 0 | pass |
 
