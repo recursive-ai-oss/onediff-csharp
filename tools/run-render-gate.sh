@@ -30,6 +30,8 @@ for ((f = 0; f < TOTAL; f += CHUNK)); do
   [ -f "$OUT/chunk-$f.txt" ] && continue
   wq run --class heavy --max 30m --cores 4 --label "onediff render gate $MODE from $f" -- \
     env ONEDIFF_RENDER_FROM=$f ONEDIFF_RENDER_COUNT=$CHUNK ONEDIFF_RENDER_EVERY=$EVERY ONEDIFF_RENDER_OUT="$OUT/chunk-$f.txt" dotnet "$T" -method "$FILTER" 2>&1 | tail -3
+  # the runner takes a sample of the corpus, so the list is shorter than the directory count: stop at the first empty slice
+  grep -q '^# pairs=0 ' "$OUT/chunk-$f.txt" && break
 done
 wq run --class heavy --max 30m --cores 4 --label "onediff render gate $MODE digest slice" -- \
   env ONEDIFF_RENDER_EVERY=37 ONEDIFF_RENDER_OUT="$OUT/digest-$(uname -m).txt" dotnet "$T" -method "$FILTER" 2>&1 | tail -3

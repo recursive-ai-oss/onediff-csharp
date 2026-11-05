@@ -43,7 +43,7 @@ public sealed record RedlineStyle
     public MarkStyle Insertion { get; init; } = new("#0000FF", MarkDecoration.DoubleUnderline);
 
     /// <summary>How deleted text is marked.</summary>
-    public MarkStyle Deletion { get; init; } = new("#FF0000", MarkDecoration.StrikeThrough);
+    public MarkStyle Deletion { get; init; } = new("#D00000", MarkDecoration.StrikeThrough);
 
     /// <summary>How the old place of moved text is marked.</summary>
     public MarkStyle MoveFrom { get; init; } = new("#008000", MarkDecoration.DoubleStrikeThrough);
@@ -52,7 +52,7 @@ public sealed record RedlineStyle
     public MarkStyle MoveTo { get; init; } = new("#008000", MarkDecoration.DoubleUnderline);
 
     /// <summary>How formatting-only changes are marked.</summary>
-    public MarkStyle Formatting { get; init; } = new("#7F7F7F", MarkDecoration.None);
+    public MarkStyle Formatting { get; init; } = new("#6B6B6B", MarkDecoration.None);
 
     /// <summary>Whether a bar is drawn in the margin beside changed lines.</summary>
     public bool ChangeBars { get; init; } = true;
@@ -104,8 +104,8 @@ public sealed record RedlineStyle
         Name = "Word",
         Insertion = new MarkStyle("#C00000", MarkDecoration.Underline),
         Deletion = new MarkStyle("#C00000", MarkDecoration.StrikeThrough),
-        MoveFrom = new MarkStyle("#00B050", MarkDecoration.DoubleStrikeThrough),
-        MoveTo = new MarkStyle("#00B050", MarkDecoration.DoubleUnderline),
+        MoveFrom = new MarkStyle("#00A046", MarkDecoration.DoubleStrikeThrough),
+        MoveTo = new MarkStyle("#00A046", MarkDecoration.DoubleUnderline),
         Formatting = new MarkStyle("#C00000", MarkDecoration.None),
         CoverPage = false,
         Footer = false,

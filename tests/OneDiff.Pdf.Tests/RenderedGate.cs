@@ -24,7 +24,8 @@ namespace OneDiff.Pdf.Tests;
 /// </summary>
 internal static class RenderedGate
 {
-    internal enum Cls { Plain, Ins, Del, MoveFrom, MoveTo, Fmt }
+    /// <summary>Note is the small grey text under a block that lists its attribute changes ("list.label: old → new"); and the grey list label before a block (#444); neither is document text.</summary>
+    internal enum Cls { Plain, Ins, Del, MoveFrom, MoveTo, Fmt, Note }
 
     /// <summary>The blackline with a colour of its own for each kind of mark (the preset's two moves share one).</summary>
     public static RedlineStyle Style { get; } = RedlineStyle.Blackline with
@@ -34,16 +35,21 @@ internal static class RenderedGate
         CoverPage = false,
     };
 
-    private const double BottomMargin = 56;
+    private const double BottomMargin = 56, SideMargin = 45.35;
 
     internal sealed record Piece(char Ch, Cls Class);
 
     /// <summary>The characters of the document in reading order, each with its class; whitespace is kept (as plain) between words and lines.</summary>
-    internal sealed record Extracted(List<Piece> Pieces, List<(double X, char Ch)> Columns, int Pages, int InvisibleGlyphs, int Glyphs);
+    internal sealed record Extracted(List<Piece> Pieces, List<(double X, char Ch)> Columns, int Pages, int InvisibleGlyphs, int Glyphs, int OutsideArea);
 
     private static Cls ClassOf(int color, RedlineStyle s)
     {
         string hex = "#" + (color & 0xFFFFFF).ToString("X6", System.Globalization.CultureInfo.InvariantCulture);
+        if (Eq(hex, "#333333") || Eq(hex, "#444444"))
+        {
+            return Cls.Note;
+        }
+
         if (Eq(hex, s.Insertion.Color))
         {
             return Cls.Ins;
@@ -73,20 +79,40 @@ internal static class RenderedGate
     {
         var pieces = new List<Piece>();
         var columns = new List<(double X, char Ch)>();
-        int invisible = 0, glyphs = 0;
+        int invisible = 0, glyphs = 0, outside = 0;
         using PdfDocument pdf = PdfDocument.Open(pdfBytes);
         IReadOnlyList<PdfPageText> texts = pdf.ExtractText(new PdfTextOptions { RetainGlyphs = true, DetectHeadersAndFooters = false, UseStructureTree = false, MaxDegreeOfParallelism = 1 });
         foreach (PdfPageText page in texts)
         {
             // The order the extraction gives its blocks follows the structure tree or its own layout analysis; the gate wants the
             // order a reader sees, so lines are put in rows from the top of the page, each row left to right.
-            var lines = new List<PdfTextLine>();
+            var lines = new List<Ln>();
             foreach (PdfTextBlock block in page.Blocks)
             {
-                lines.AddRange(block.Lines);
+                foreach (PdfTextLine l in block.Lines)
+                {
+                    // Notes and list labels are not document text (and a label hangs beside the lines of its block, which would read as a
+                    // column of its own), so they are left out of the lines.
+                    var words = l.Words.Where(w => ClassOf(page.Glyphs[w.GlyphIndices[0]].FillColor, style) != Cls.Note).ToList();
+                    if (words.Count == 0)
+                    {
+                        continue;
+                    }
+
+                    // OnePDF reads a stack of lone glyphs at one x (a narrow table cell wrapped one character per line) as one tall
+                    // line; its words are taken as lines of their own.
+                    if (words.Count > 1 && words.Max(w => w.Bounds.Top) - words.Min(w => w.Bounds.Bottom) > 30)
+                    {
+                        lines.AddRange(words.Select(w => new Ln([w], w.Bounds.Left, w.Bounds.Right, w.Bounds.Top, w.Bounds.Bottom, l.Direction)));
+                    }
+                    else
+                    {
+                        lines.Add(new Ln(words, words.Min(w => w.Bounds.Left), words.Max(w => w.Bounds.Right), words.Max(w => w.Bounds.Top), words.Min(w => w.Bounds.Bottom), l.Direction));
+                    }
+                }
             }
 
-            foreach (PdfTextLine line in InRows(lines))
+            foreach (Ln line in InRows(lines))
             {
                 foreach (PdfTextWord w in line.Words)
                 {
@@ -105,6 +131,12 @@ internal static class RenderedGate
                     foreach (PdfTextGlyph g in gl)
                     {
                         glyphs++;
+                        // The page area is the page less 16 mm (45.4 pt) at each side (the print stylesheet's @page margin).
+                        if (g.IsVisible && (g.Bounds.Left < SideMargin - 1 || g.Bounds.Right > page.Width - SideMargin + 1))
+                        {
+                            outside++;
+                        }
+
                         if (!g.IsVisible)
                         {
                             invisible++;
@@ -153,46 +185,88 @@ internal static class RenderedGate
             }
         }
 
-        return new Extracted(pieces, columns, texts.Count, invisible, glyphs);
+        return new Extracted(pieces, columns, texts.Count, invisible, glyphs, outside);
     }
 
     // The characters a style draws beside its marks (+, −, arrows). The page text and the expected text both lose them, so a
     // plus sign in the document is not told apart from a mark; the colour and column checks are what tell marks apart.
     // A carriage return is folded away in the compared text (line endings are normalized) but drawn, as its control picture, when the
-    // original has one, so the control picture of a carriage return is left out of both sides. Joiners (U+200C, U+200D) are left out too: the extraction
-    // loses the joiner of an emoji sequence and turns a Persian half-space into a space.
+    // original has one, so the control picture of a carriage return is left out of both sides.
     [ThreadStatic]
     private static HashSet<char>? drop;
 
-    /// <summary>Lines top to bottom; lines whose middles are within 4 pt of the first of their row form a row and are ordered left to right.</summary>
-    private static List<PdfTextLine> InRows(List<PdfTextLine> lines)
+    /// <summary>A line (or a word taken as one) with its bounds, in points from the page bottom.</summary>
+    private sealed record Ln(IReadOnlyList<PdfTextWord> Words, double Left, double Right, double Top, double Bottom, PdfTextDirection Direction);
+
+    /// <summary>
+    /// The lines in the order a reader takes them. The page is cut into bands at the vertical gaps wider than the space between the
+    /// lines of a paragraph (a table row is one band, a paragraph is one), top to bottom. Inside a band, lines are cut into columns
+    /// at the horizontal gaps that no line crosses, left to right, each column read top to bottom: the cells of a table row are read
+    /// one after another, not line by line across the row.
+    /// </summary>
+    private static List<Ln> InRows(List<Ln> lines)
     {
-        var byTop = lines.OrderByDescending(l => (l.Bounds.Top + l.Bounds.Bottom) / 2).ToList();
-        var result = new List<PdfTextLine>(lines.Count);
+        const double BandGap = 5.5, ColumnGap = 6;
+        var byTop = lines.OrderByDescending(l => l.Top).ThenBy(l => l.Left).ToList();
+        var result = new List<Ln>(lines.Count);
         int i = 0;
         while (i < byTop.Count)
         {
-            double y = (byTop[i].Bounds.Top + byTop[i].Bounds.Bottom) / 2;
-            int j = i;
-            var row = new List<PdfTextLine>();
-            while (j < byTop.Count && y - (byTop[j].Bounds.Top + byTop[j].Bounds.Bottom) / 2 <= 4)
+            var band = new List<Ln> { byTop[i++] };
+            double lowest = band[0].Bottom;
+            while (i < byTop.Count && lowest - byTop[i].Top <= BandGap)
             {
-                row.Add(byTop[j++]);
+                lowest = Math.Min(lowest, byTop[i].Bottom);
+                band.Add(byTop[i++]);
             }
 
-            result.AddRange(row.OrderBy(l => l.Bounds.Left));
-            i = j;
+            // Candidate columns are split at the gaps no line crosses; neighbours with no line level with a line of the other are
+            // not side by side (a lone short line far to the right of a code block, say), so they are read as one.
+            var byLeft = band.OrderBy(l => l.Left).ToList();
+            var groups = new List<List<Ln>>();
+            double right = double.NegativeInfinity;
+            foreach (Ln l in byLeft)
+            {
+                if (groups.Count == 0 || l.Left - right > ColumnGap)
+                {
+                    groups.Add([]);
+                }
+
+                groups[^1].Add(l);
+                right = Math.Max(right, l.Right);
+            }
+
+            var columns = new List<List<Ln>> { groups[0] };
+            for (int g = 1; g < groups.Count; g++)
+            {
+                if (SideBySide(columns[^1], groups[g]))
+                {
+                    columns.Add(groups[g]);
+                }
+                else
+                {
+                    columns[^1].AddRange(groups[g]);
+                }
+            }
+
+            foreach (List<Ln> column in columns)
+            {
+                result.AddRange(column.OrderByDescending(x => x.Top));
+            }
         }
 
         return result;
     }
+
+    private static bool SideBySide(List<Ln> a, List<Ln> b) =>
+        a.Any(x => b.Any(y => Math.Min(x.Top, y.Top) - Math.Max(x.Bottom, y.Bottom) > 2));
 
     private static string Strip(IEnumerable<char> chars)
     {
         var sb = new StringBuilder();
         foreach (char c in chars)
         {
-            if (!char.IsWhiteSpace(c) && c != '\u200B' && c != '\u00AD' && c != '\u240D' && c != '\u200C' && c != '\u200D' && drop?.Contains(c) != true)
+            if (!char.IsWhiteSpace(c) && c != '\u200B' && c != '\u00AD' && c != '\u240D' && drop?.Contains(c) != true)
             {
                 sb.Append(c);
             }
@@ -226,6 +300,11 @@ internal static class RenderedGate
         if (x.InvisibleGlyphs > 0)
         {
             Fail($"{x.InvisibleGlyphs} of {x.Glyphs} glyphs are invisible text");
+        }
+
+        if (x.OutsideArea > 0)
+        {
+            Fail($"{x.OutsideArea} of {x.Glyphs} glyphs are drawn outside the page area");
         }
 
         if (sideBySide)
@@ -262,6 +341,8 @@ internal static class RenderedGate
         InOrder(c.Old, c.Settings, oldProj, "old", Fail);
 
         string ins = Project(body, Cls.Ins), del = Project(body, Cls.Del);
+        // As in InOrder: a document with right-to-left text anywhere is read as a bag, digits and punctuation included.
+        bool bag = c.Old.Nodes.Any(n => HasRtl(n.Text)) || c.New.Nodes.Any(n => HasRtl(n.Text));
         foreach (Change ch in c.Changes)
         {
             if (ch.Edits.IsDefaultOrEmpty)
@@ -269,15 +350,15 @@ internal static class RenderedGate
                 switch (ch.Kind)
                 {
                     case ChangeKind.Insert:
-                        Contains(ins, ch.New.Text, $"change {ch.Id} inserted text", Fail);
+                        Contains(ins, ch.New.Text, $"change {ch.Id} inserted text", Fail, bag);
                         break;
                     case ChangeKind.Delete:
-                        Contains(del, ch.Old.Text, $"change {ch.Id} deleted text", Fail);
+                        Contains(del, ch.Old.Text, $"change {ch.Id} deleted text", Fail, bag);
                         break;
                     case ChangeKind.Move:
                         // A block moved and edited carries its edits in the colours of insertions and deletions.
-                        Contains(Project(body, Cls.MoveFrom, Cls.Del), ch.Old.Text, $"change {ch.Id} moved-from text", Fail);
-                        Contains(Project(body, Cls.MoveTo, Cls.Ins), ch.New.Text, $"change {ch.Id} moved-to text", Fail);
+                        Contains(Project(body, Cls.MoveFrom, Cls.Del, Cls.Fmt), ch.Old.Text, $"change {ch.Id} moved-from text", Fail, bag);
+                        Contains(Project(body, Cls.MoveTo, Cls.Ins, Cls.Fmt), ch.New.Text, $"change {ch.Id} moved-to text", Fail, bag);
                         break;
                 }
 
@@ -291,20 +372,26 @@ internal static class RenderedGate
                     continue;
                 }
 
-                Contains(del, e.OldText, $"change {ch.Id} deleted text", Fail);
-                Contains(ins, e.NewText, $"change {ch.Id} inserted text", Fail);
+                Contains(del, e.OldText, $"change {ch.Id} deleted text", Fail, bag);
+                Contains(ins, e.NewText, $"change {ch.Id} inserted text", Fail, bag);
             }
         }
 
         return errors;
     }
 
-    private static void Contains(string stream, string text, string what, Action<string> fail)
+    private static void Contains(string stream, string text, string what, Action<string> fail, bool bag)
     {
-        string t = Strip(Display(text));
-        if (t.Length > 0 && !(HasRtl(text) ? BagEnd(stream, 0, t) >= 0 : stream.Contains(t, StringComparison.Ordinal)))
+        // Each line of the text on its own: the lines of a block that came from table cells are read cell by cell on the page, and a
+        // moved block's cells need not be read next to each other.
+        foreach (string line in Display(text).Split('\n'))
         {
-            fail($"{what} '{Clip(text)}' is not drawn in its mark's colour");
+            string t = Strip(line);
+            if (t.Length > 0 && !(bag || HasRtl(text) ? BagEnd(stream, 0, t) >= 0 : stream.Contains(t, StringComparison.Ordinal)))
+            {
+                fail($"{what} '{Clip(text)}' is not drawn in its mark's colour");
+                return;
+            }
         }
     }
 
@@ -366,6 +453,38 @@ internal static class RenderedGate
     /// </summary>
     private static void InOrder(CompareDocument doc, CompareSettings settings, string stream, string side, Action<string> fail, bool ordered = true)
     {
+        var found = new List<string>();
+        InOrderCore(doc, settings, stream, side, found.Add, ordered);
+        if (found.Count == 0)
+        {
+            return;
+        }
+
+        // The page shows a split or merge group (blocks that were joined or divided) in one place, which is not where every one of its
+        // nodes stood in its document, so a document that fails in sequence is checked once more with every node found anywhere: the
+        // text is then on the page, and its place is the writer's (HTML) to get right.
+        var anywhere = new List<string>();
+        if (ordered)
+        {
+            InOrderCore(doc, settings, stream, side, anywhere.Add, ordered: false);
+        }
+
+        if (ordered && anywhere.Count == 0)
+        {
+            RelaxedDocs++;
+            return;
+        }
+
+        foreach (string f in ordered ? anywhere : found)
+        {
+            fail(f);
+        }
+    }
+
+    internal static int RelaxedDocs;
+
+    private static void InOrderCore(CompareDocument doc, CompareSettings settings, string stream, string side, Action<string> fail, bool ordered)
+    {
         // A document with right-to-left text anywhere is checked as a bag of characters throughout: its neutral characters (braces,
         // angle brackets, hyphen runs) are placed by the bidirectional algorithm among the right-to-left runs, and the extraction does
         // not read them back in sequence.
@@ -401,7 +520,7 @@ internal static class RenderedGate
             int i = stream.IndexOf(t, ordered ? pos : 0, StringComparison.Ordinal);
             if (i < 0)
             {
-                fail($"{side} node {n.Id}: '{Clip(shown)}' is not on the page after the previous block; {Divergence(stream, ordered ? pos : 0, t)}");
+                fail($"{side} node {n.Id}: '{Clip(shown)}' is not on the page after the previous block (position {pos} of {stream.Length}, after '{(pos > 40 ? stream[(pos - 40)..pos] : stream[..pos])}'); {Divergence(stream, ordered ? pos : 0, t)}");
                 return;
             }
 

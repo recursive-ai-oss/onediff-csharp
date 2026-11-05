@@ -392,10 +392,11 @@ internal static class HtmlPage
 
             if (print)
             {
-                // Observed with OneRender 1.3.2: when a table row with two long cells is cut at a page break, the lines that pass the
-                // bottom of the page are drawn outside it and lost. Grid rows lose fewer, and a row that is kept whole when it fits on a
-                // page loses none, so on paper each row is a two-column grid that is not cut unless it is taller than a page. The elements
-                // stay a table's, so the tags are unchanged; the column headings no longer repeat on each page.
+                // Observed with OneRender 1.3.3: when a table row whose cells differ in height is cut at page breaks, a line at a later
+                // cut is lost, although the table is inside the page area (a 40-line cell beside a 100-line cell loses the 97th line).
+                // A row that is kept whole when it fits on a page loses none, so on paper each row is a two-column grid that is not cut
+                // unless it is taller than a page. The elements stay a table's, so the tags are unchanged; the column headings no longer
+                // repeat on each page.
                 b.Append("table.sbs,table.sbs>thead,table.sbs>tbody{display:block}table.sbs tr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}table.sbs td,table.sbs th{width:auto}table.sbs td+td,table.sbs th+th{border-left:0}table.sbs tr{break-inside:avoid;page-break-inside:avoid}\n");
             }
         }

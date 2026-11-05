@@ -96,6 +96,26 @@ public class RenderedGateRunTests
         Run(pairs, 0);
     }
 
+    // A failure message quotes document text, which may hold a lone surrogate that the file encoding refuses.
+    private static string Printable(string s)
+    {
+        var b = new StringBuilder(s.Length);
+        for (int i = 0; i < s.Length; i++)
+        {
+            if (char.IsHighSurrogate(s[i]) && i + 1 < s.Length && char.IsLowSurrogate(s[i + 1]))
+            {
+                b.Append(s[i]).Append(s[i + 1]);
+                i++;
+            }
+            else
+            {
+                b.Append(char.IsSurrogate(s[i]) ? '�' : s[i]);
+            }
+        }
+
+        return b.ToString();
+    }
+
     private static void Run(List<Pair> all, int skipped)
     {
         string outFile = Environment.GetEnvironmentVariable("ONEDIFF_RENDER_OUT") ?? Path.Combine(Path.GetTempPath(), "render-gate.txt");
@@ -121,6 +141,12 @@ public class RenderedGateRunTests
                     using var ms = new MemoryStream();
                     RenderedPdfResult r = form.Render(c, ms, RenderedGate.Style);
                     byte[] pdf = ms.ToArray();
+                    if (Environment.GetEnvironmentVariable("ONEDIFF_RENDER_KEEP") is { Length: > 0 } keep && p.Id.Contains(Environment.GetEnvironmentVariable("ONEDIFF_RENDER_ONLY") ?? "", StringComparison.Ordinal))
+                    {
+                        Directory.CreateDirectory(keep);
+                        File.WriteAllBytes(Path.Combine(keep, p.Id.Replace('/', '_') + "." + layout + ".pdf"), pdf);
+                    }
+
                     Interlocked.Add(ref pages, r.PageCount);
                     Interlocked.Add(ref notes, r.Notes.Length);
                     foreach (string note in r.Notes.Where(x => x.Contains("missing glyph", StringComparison.OrdinalIgnoreCase)).Take(1))
@@ -146,7 +172,7 @@ public class RenderedGateRunTests
         });
 
         File.WriteAllLines(outFile, pairs.Select(x => lines.GetValueOrDefault(x.Id, x.Id + " MISSING")).Append($"# pairs={pairs.Length} skipped(over size)={skipped} pages={pages} notes={notes} failures={failures.Count}"));
-        File.WriteAllLines(outFile + ".failures", failures.Order(StringComparer.Ordinal));
+        File.WriteAllLines(outFile + ".failures", failures.Order(StringComparer.Ordinal).Select(Printable));
         Assert.True(failures.IsEmpty, $"{failures.Count} failures over {pairs.Length} pairs; first: {failures.Order(StringComparer.Ordinal).FirstOrDefault()}");
     }
 }
