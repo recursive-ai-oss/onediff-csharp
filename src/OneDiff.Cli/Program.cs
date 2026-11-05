@@ -11,6 +11,8 @@ internal static class Program
           patch   apply a unified or diff-match-patch patch
           merge   three-way merge with conflict markers
           compare compare two documents and write a redline (HTML or JSON)
+          combine combine reviewers' copies of one original (change report in HTML, or JSON)
+          chain   compare a chain of versions step by step (change report in HTML, or JSON)
         "onediff <command> --help" lists a command's options.
         """;
 
@@ -49,6 +51,7 @@ internal static class Program
                 "patch" => PatchCommand.Run(rest, io),
                 "merge" => MergeCommand.Run(rest, io),
                 "compare" => CompareCommand.Run(rest),
+                "combine" or "chain" => CombineCommand.Run(command, rest),
                 _ => throw new CliException($"unknown command '{command}'"),
             };
         }

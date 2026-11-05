@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using OneDiff.Documents.Combine;
 using OneDiff.Documents.Model;
 
 namespace OneDiff.Documents;
@@ -110,4 +111,59 @@ public static class Redline
         Comparison c = Comparison.Of(DocumentInput.FromBytes(oldContent, "old"), DocumentInput.FromBytes(newContent, "new"), settings, null, cancellationToken);
         return c.ToBytes(form, null, cancellationToken);
     }
+
+    /// <summary>
+    /// Combines reviewers' copies of one original and writes the result: each change attributed to the reviewers who made it,
+    /// identical changes merged, conflicts all shown and flagged. The output is the combination's change report as HTML
+    /// (<c>.html</c>) or its JSON form (<c>.json</c>); adapter packages add other forms to <see cref="Combine.Combination"/>.
+    /// </summary>
+    /// <param name="originalPath">The original every copy started from.</param>
+    /// <param name="copyPaths">The reviewers' copies, at least one, in reviewer order.</param>
+    /// <param name="outputPath">Where to write; replaced if it exists. The directory must exist.</param>
+    /// <param name="settings">What to show and hide in each comparison; <see cref="CompareSettings.Legal"/> when null.</param>
+    /// <param name="cancellationToken">Observed throughout.</param>
+    /// <exception cref="ArgumentException">There is no copy.</exception>
+    /// <exception cref="NotSupportedException">An input is not recognized, or the output extension is not built in.</exception>
+    /// <exception cref="IOException">A file cannot be read or written.</exception>
+    public static void Combine(string originalPath, IReadOnlyList<string> copyPaths, string outputPath, CompareSettings? settings = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(originalPath);
+        ArgumentNullException.ThrowIfNull(copyPaths);
+        ArgumentNullException.ThrowIfNull(outputPath);
+        CompareDocument original = Read(originalPath, cancellationToken);
+        var copies = new List<CompareDocument>(copyPaths.Count);
+        foreach (string p in copyPaths)
+        {
+            copies.Add(Read(p, cancellationToken));
+        }
+
+        Combination.Of(original, copies, settings, null, cancellationToken).SaveAs(outputPath);
+    }
+
+    /// <summary>
+    /// Compares a chain of versions v1 → … → vN and writes the chain's change report as HTML (<c>.html</c>) or its JSON form
+    /// (<c>.json</c>): every step verified, every change attributed to its step, plus the net change from the first to the last.
+    /// </summary>
+    /// <param name="versionPaths">The versions, oldest first; at least two.</param>
+    /// <param name="outputPath">Where to write; replaced if it exists. The directory must exist.</param>
+    /// <param name="settings">What to show and hide; <see cref="CompareSettings.Legal"/> when null.</param>
+    /// <param name="cancellationToken">Observed throughout.</param>
+    /// <exception cref="ArgumentException">There are fewer than two versions.</exception>
+    /// <exception cref="NotSupportedException">An input is not recognized, or the output extension is not built in.</exception>
+    /// <exception cref="IOException">A file cannot be read or written.</exception>
+    public static void Chain(IReadOnlyList<string> versionPaths, string outputPath, CompareSettings? settings = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(versionPaths);
+        ArgumentNullException.ThrowIfNull(outputPath);
+        var versions = new List<CompareDocument>(versionPaths.Count);
+        foreach (string p in versionPaths)
+        {
+            versions.Add(Read(p, cancellationToken));
+        }
+
+        ComparisonChain.Of(versions, settings, null, cancellationToken).SaveAs(outputPath);
+    }
+
+    private static CompareDocument Read(string path, CancellationToken cancellationToken) =>
+        CompareDocument.From(DocumentInput.FromBytes(File.ReadAllBytes(path), Path.GetFileName(path)), null, cancellationToken);
 }
