@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>OneDiff.Samples.Tests</RootNamespace>
+    <AssemblyName>OneDiff.Samples.Tests</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <NoWarn>$(NoWarn);xUnit1051</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <!-- The tests write their PDFs and scans from text with OnePDF's layout engine; the samples themselves do not use it. -->
+    <PackageReference Include="RecursiveAI.OnePdf.Layout" />
+    <PackageReference Include="RecursiveAI.OnePdf.Fonts" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../samples/OneDiff.Samples/OneDiff.Samples.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../OneDiff.Ocr.Tests/Scans.cs" Link="Shared/Scans.cs" />
+  </ItemGroup>
+
+</Project>

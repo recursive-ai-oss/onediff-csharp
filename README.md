@@ -2,63 +2,93 @@
 
 **Text diff and document comparison for .NET.**
 
-OneDiff is a clean-room diff and comparison library for .NET, in two layers:
-
-- **A text diff core:** Myers, patience and histogram diff over any sequence, line, word, character and grapheme tokenizers, semantic cleanup, unified and diff-match-patch patches with fuzzy apply, and three-way merge. It depends on nothing beyond the .NET base class library.
-- **Document comparison:** a compare model with source anchors, alignment that follows moves, splits and merges, typed changes with resolved values, renumbering and renamed defined terms as single changes, combining reviewers' copies, and version chains. **PDFs** are read into the model and the changes are marked on the original pages with real annotations, or written as a rendered redline PDF.
-
-Every comparison is checked for completeness: old plus the changes gives new, and new minus the changes gives old. If a grouping cannot be inverted, the engine falls back to a coarser complete one and says so; strict mode throws instead. The deterministic engine keeps that promise on its own.
-
-It targets `net10.0`, uses no native code, and is designed to be NativeAOT-, trimming- and WebAssembly-friendly. The same inputs and settings give byte-identical output.
-
-> **Preview.** This is an early preview, and APIs may change before 1.0. Measured results, including the rows that do not meet their bar and the ones still pending, are in [docs/results.md](docs/results.md); nothing beyond that page is claimed.
-
 This project is unaffiliated with any other project named OneDiff, including the Python diffusion-model accelerator of that name.
 
-## Packages
+OneDiff is a clean-room diff and comparison library for .NET, in two layers:
 
-On nuget.org in this preview:
+- **A text diff core** (`RecursiveAI.OneDiff`): Myers, patience and histogram diff over any sequence; line, word, character and grapheme tokenizers; semantic and efficiency cleanup; unified and diff-match-patch patches with fuzzy apply; three-way merge in git's conflict styles. It depends on nothing beyond the .NET base class library.
+- **Document comparison** (`RecursiveAI.OneDiff.Documents` and the adapters): a compare model with source anchors, alignment that follows moves, splits and merges, typed changes with resolved values (`30 days → 60 days`), renumbering and renamed defined terms as single changes, combining reviewers' copies, and version chains. **PDFs** (digital, and scans through a local OCR engine) are read into the model; the changes are marked on the original pages with real annotations, written as a rendered redline PDF, as HTML (inline or side by side), or as a versioned JSON change list.
+
+Every comparison is checked for completeness: old plus the changes gives new, and new minus the changes gives old. If a grouping cannot be inverted, the engine falls back to a coarser complete one and says so; strict mode throws instead. Differences that a setting hides (typography, page numbers, comments, …) are counted in a ledger, never dropped. Nothing needs a model: the deterministic engine keeps that promise on its own.
+
+It targets `net10.0`, uses no native code, and is built to be NativeAOT-, trimming- and WebAssembly-friendly. The same inputs and settings give byte-identical output. Nothing touches the network.
+
+## Install
+
+```
+dotnet add package RecursiveAI.OneDiff            # the text core
+dotnet add package RecursiveAI.OneDiff.Documents  # document comparison, HTML and JSON
+dotnet add package RecursiveAI.OneDiff.Pdf        # PDF in, PDF out
+dotnet add package RecursiveAI.OneDiff.Ocr        # scans
+dotnet tool install --global RecursiveAI.OneDiff.Tool   # the `onediff` command
+```
 
 | Package | Contents |
 |---|---|
-| `RecursiveAI.OneDiff` | The text core: diff algorithms, tokenizers, cleanup, unified and diff-match-patch patches, three-way merge. Depends on nothing beyond the .NET base class library. |
-| `RecursiveAI.OneDiff.Documents` | The document comparison engine: compare model, alignment, grouping, typed changes, cascades and renames, verification, combine and chains, the change report, JSON, and HTML redlines. Depends on the core and `RecursiveAI.OneFont`. |
-| `RecursiveAI.OneDiff.Pdf` | PDF compare: reads digital PDFs, marks the changes on the original pages, and writes a rendered redline PDF. Depends on `.Documents`, `RecursiveAI.OnePdf` and `RecursiveAI.OneRender.Pdf`. |
-| `RecursiveAI.OneDiff.Tool` | The `onediff` command-line tool: `diff`, `patch`, `merge`, `compare`, `combine` and `chain`, for text and PDF files (`onediff compare v1.pdf v2.pdf -o markup.pdf`). |
+| `RecursiveAI.OneDiff` | The text core. Depends on nothing beyond the base class library. |
+| `RecursiveAI.OneDiff.Documents` | The comparison engine: compare model, alignment, grouping, typed changes, verification, combine and chains, the change report, JSON, HTML redlines. Depends on the core and `RecursiveAI.OneFont`. |
+| `RecursiveAI.OneDiff.Pdf` | Reads digital PDFs; marks changes on the original pages; writes a rendered redline PDF. Depends on `.Documents`, `RecursiveAI.OnePdf` and `RecursiveAI.OneRender.Pdf`. |
+| `RecursiveAI.OneDiff.Ocr` | Reads scanned PDFs and images through `RecursiveAI.OneOcr`, with each word's confidence; differences that may be recognition errors are flagged. |
+| `RecursiveAI.OneDiff.Tool` | The `onediff` tool: `diff`, `patch`, `merge`, `compare`, `combine`, `chain`. |
 
-Preview, not yet on nuget.org (they depend on previews of other libraries that are not published yet; they build from this repository):
+Coming in later releases: Word documents in and tracked-changes DOCX out (`RecursiveAI.OneDiff.Word`, in this repository and not in the first release), spreadsheets, slides, and the OneNLP value recognizer (`RecursiveAI.OneDiff.Nlp`). Until then a Word file is refused with a message that names the package.
 
-| Package | Contents |
-|---|---|
-| `RecursiveAI.OneDiff.Word` | DOCX source through the OneOffice document hub, and a writer for DOCX with real tracked changes. |
-| `RecursiveAI.OneDiff.Nlp` | Typed values from OneNLP: written-out numbers, amounts, durations and percentages. |
+## The happy path
 
-Further packages (scans, spreadsheets, slides, the model) arrive later.
-
-## Examples
+Each line below is a runnable sample in [samples/OneDiff.Samples](samples/OneDiff.Samples/Samples.cs).
 
 ```csharp
 using OneDiff;
 using OneDiff.Documents;
+using OneDiff.Documents.Serialization;
+using OneDiff.Merge;
 using OneDiff.Pdf;
 
-// Text core: the edits between two strings, as a unified diff.
-string patch = Diff.Unified(oldText, newText);
+// Text: the words that changed, a unified patch, a three-way merge.
+string marked  = Diff.ToMarkdownInline(Diff.Words(oldText, newText));
+string patch   = Diff.Unified(oldText, newText);
+TextMerge both = Diff.Merge(baseText, ours, theirs);      // both.Text, both.HasConflicts
 
-// A PDF compare, marked on the new document's own pages (highlights, with the old text in the pop-ups).
-PdfRedline.Register();                                              // once at startup
+// PDF: a redline on the new document's own pages (highlights, with the old text in the pop-ups).
+PdfRedline.Register();                                    // once at startup
 Redline.Create("v1.pdf", "v2.pdf", "markup.pdf");
 
-// A rendered redline PDF: a new, tagged document laid out from the comparison.
+// PDF: a rendered, tagged redline PDF; or an HTML page with the two documents side by side.
 var cmp = Comparison.Of("v1.pdf", "v2.pdf");
 cmp.SaveAs("redline.pdf", PdfRedline.Rendered);
+cmp.SaveAs("side-by-side.html", RedlineForm.HtmlSideBySide);
+
+// The change list: walk what changed in substance, or save it as JSON and read it back.
+foreach (var c in cmp.Changes.Where(c => c.IsSubstantive))
+    Console.WriteLine($"{c.Kind}: {c.Old.Text} -> {c.New.Text}");
+Redline.Create("v1.pdf", "v2.pdf", "changes.json");
+Comparison again = ComparisonJson.Read(File.ReadAllBytes("changes.json"));
 ```
 
-Inputs are recognized by their content, and the output form follows the extension of the output path. More, including every redline look: [docs/samples/README.md](docs/samples/README.md). Coming from DiffPlex: [docs/migrating-from-diffplex.md](docs/migrating-from-diffplex.md).
+Inputs are recognized by their content, and the output form follows the extension of the output path. The same from a shell: `onediff compare v1.pdf v2.pdf -o markup.pdf`.
 
-## Results
+## The low level
 
-[docs/results.md](docs/results.md) is the results table: the exact gates, the speed rows against DiffPlex and diff-match-patch, the PDF engine's gates, the gold-set scores, and the rows that are still pending or lose.
+Every layer is public: the comparison is five stages over immutable values, and the alignment between the two documents is a value you can correct and run again.
+
+```csharp
+CompareDocument a = CompareDocument.FromText(oldText, "old");
+CompareDocument b = CompareDocument.FromText(newText, "new");
+
+Alignment alignment = Stages.Align(a, b);
+alignment = alignment.Pin(oldNodeId, newNodeId);          // a reviewer's correction
+
+Comparison result = Stages.Verify(Stages.Classify(Stages.Group(Stages.DiffPairs(alignment))));
+```
+
+## Documentation
+
+Start at [docs/index.md](docs/index.md). The pages that matter first:
+
+- Samples, every redline look, and how to choose a form: [docs/samples/README.md](docs/samples/README.md)
+- Coming from DiffPlex: [docs/migrating-from-diffplex.md](docs/migrating-from-diffplex.md); from `WmlComparer` or Docxodus: [docs/migrating-from-wmlcomparer.md](docs/migrating-from-wmlcomparer.md)
+- What a comparison is and how it is proved complete: [docs/compare-model.md](docs/compare-model.md)
+- Measured results, including the rows that are pending or lose: [docs/results.md](docs/results.md). Nothing beyond that page is claimed. In short: Myers' edit length equals GNU diff's minimum on 9,483 corpus pairs, three-way merge equals `git merge-file` byte for byte on 2,599 real triples in all three conflict styles, and in the speed rows against DiffPlex and diff-match-patch every area's geometric-mean time ratio is below 1.0 (the worst single row is 1.03×).
 
 ## Building
 
@@ -67,7 +97,7 @@ dotnet build -c Release
 dotnet test --solution OneDiff.slnx -c Release
 ```
 
-Build output goes outside the checkout; set `ONEDIFF_ARTIFACTS` to choose where. See [docs/building.md](docs/building.md) for CI, packing and preview dependencies.
+Build output goes outside the checkout; set `ONEDIFF_ARTIFACTS` to choose where. See [docs/building.md](docs/building.md).
 
 ## License
 

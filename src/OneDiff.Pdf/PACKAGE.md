@@ -8,15 +8,16 @@ PDF comparison: a document source that reads digital PDFs into the compare model
 using OneDiff.Documents;
 using OneDiff.Pdf;
 
-PdfRedline.Register();
-Redline.Create("v1.pdf", "v2.pdf", "markup.pdf");   // highlights and notes on v2's pages
+PdfRedline.Register();                                   // once at startup
+Redline.Create("v1.pdf", "v2.pdf", "markup.pdf");        // highlights and notes on v2's pages
+Comparison.Of("v1.pdf", "v2.pdf").SaveAs("redline.pdf", PdfRedline.Rendered);   // a new, tagged PDF
 ```
 
-Depends on `RecursiveAI.OneDiff.Documents`, `RecursiveAI.OnePdf` and `RecursiveAI.OneRender.Pdf`. See [docs/pdf.md](https://github.com/recursive-ai-oss/onediff-csharp/blob/main/docs/pdf.md).
+Depends on `RecursiveAI.OneDiff.Documents`, `RecursiveAI.OnePdf` and `RecursiveAI.OneRender.Pdf`.
 
-> **Preview.** Early releases; the public API may change before 1.0.
+More: [how PDFs are read and marked](https://github.com/recursive-ai-oss/onediff-csharp/blob/main/docs/pdf.md)
 
-Source, issues and the full README: https://github.com/recursive-ai-oss/onediff-csharp. Measured results, including the rows that do not meet their bar yet: [https://github.com/recursive-ai-oss/onediff-csharp/blob/main/docs/results.md](https://github.com/recursive-ai-oss/onediff-csharp/blob/main/docs/results.md).
+Source, issues and the full README: https://github.com/recursive-ai-oss/onediff-csharp. Measured results, including the rows that are pending or lose: [https://github.com/recursive-ai-oss/onediff-csharp/blob/main/docs/results.md](https://github.com/recursive-ai-oss/onediff-csharp/blob/main/docs/results.md).
 
 This project is unaffiliated with any other project named OneDiff.
 
