@@ -13,6 +13,7 @@
   <ItemGroup>
     <ProjectReference Include="../OneDiff.Documents/OneDiff.Documents.csproj" />
     <PackageReference Include="RecursiveAI.OnePdf" />
+    <PackageReference Include="RecursiveAI.OneRender.Pdf" />
   </ItemGroup>
 
 </Project>

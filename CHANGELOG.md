@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- `RecursiveAI.OneDiff.Pdf`: the rendered redline. `PdfRedline.Rendered` and `PdfRedline.RenderedSideBySide` (`RenderedPdfRedline`, with `Paper` and `Render`) write a tagged PDF laid out from any comparison, plain text included: the cover page, key, marks, ledger and footer of the HTML redline set on A4 or Letter with a running page number, in any `RedlineStyle`, byte-identical across runs. It depends on `RecursiveAI.OneRender.Pdf`.
+- `PdfRedline.Auto`, registered for `.pdf` by `PdfRedline.Register()`: original-page markup when the new document is a PDF, a rendered redline otherwise. Both forms can still be named.
+- Sample PDFs for every preset and layout, and one original-page markup sample, under `docs/samples`, with a README of the one-line recipes.
+
+### Changed
+
+- `PdfRedline.Register()` registers `PdfRedline.Auto` for `.pdf` instead of `PdfRedline.OnPages` alone; a PDF as the new input is marked on its pages as before.
+
 ## [0.1.0-preview.1]
 
 The first preview. Public API may change before 1.0.
