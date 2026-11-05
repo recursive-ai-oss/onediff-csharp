@@ -510,7 +510,12 @@ internal sealed partial class TrackedWriter : IDisposable
             try
             {
                 FineEdits(bid, did, bp, dp, link);
-                PropertyChange(bp, dp, "pPr", "pPrChange", ["rPr", "sectPr", "pPrChange"], insertAtStart: true);
+                if (!move)
+                {
+                    // A moved paragraph exists twice (moved from, moved to), each with its own properties, so it needs no property
+                    // change; one beside a paragraph-mark revision is still not restored on reject by OneOffice (rare, seen in the sweeps).
+                    PropertyChange(bp, dp, "pPr", "pPrChange", ["rPr", "sectPr", "pPrChange"], insertAtStart: true);
+                }
             }
             catch (Exception ex) when (ex is ReplaceNeeded or ArgumentException or InvalidOperationException)
             {
