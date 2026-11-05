@@ -588,8 +588,9 @@ internal static class DocFactory
                     cx.Media.Add((name, img.Png));
                     cx.NewRelationships.Add(new Relationship(id, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image", "media/image" + n.ToString(CultureInfo.InvariantCulture) + ".png"));
                     sb.Append("<w:r><w:drawing><wp:inline><wp:extent cx=\"914400\" cy=\"914400\"/><wp:docPr id=\"" + n.ToString(CultureInfo.InvariantCulture) + "\" name=\"Picture " + n.ToString(CultureInfo.InvariantCulture)
-                        + "\" descr=\"" + Escape(img.Alt) + "\"/><a:graphic><a:graphicData uri=\"http://schemas.openxmlformats.org/drawingml/2006/picture\"><pic:pic><pic:blipFill><a:blip r:embed=\""
-                        + id + "\"/></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>");
+                        + "\" descr=\"" + Escape(img.Alt) + "\"/><a:graphic><a:graphicData uri=\"http://schemas.openxmlformats.org/drawingml/2006/picture\"><pic:pic><pic:nvPicPr><pic:cNvPr id=\"" + n.ToString(CultureInfo.InvariantCulture) + "\" name=\"image" + n.ToString(CultureInfo.InvariantCulture)
+                        + ".png\"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed=\""
+                        + id + "\"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"914400\" cy=\"914400\"/></a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>");
                     break;
                 }
 
@@ -598,8 +599,8 @@ internal static class DocFactory
                     int n = ++cx.Counter;
                     string content = "<w:txbxContent><w:p><w:r><w:t xml:space=\"preserve\">" + Escape(box.Text) + "</w:t></w:r></w:p></w:txbxContent>";
                     sb.Append("<w:r><mc:AlternateContent><mc:Choice Requires=\"wps\"><w:drawing><wp:inline><wp:extent cx=\"1828800\" cy=\"914400\"/><wp:docPr id=\"" + n.ToString(CultureInfo.InvariantCulture)
-                        + "\" name=\"Text Box " + n.ToString(CultureInfo.InvariantCulture) + "\"/><a:graphic><a:graphicData uri=\"http://schemas.microsoft.com/office/word/2010/wordprocessingShape\"><wps:wsp><wps:txbx>"
-                        + content + "</wps:txbx></wps:wsp></a:graphicData></a:graphic></wp:inline></w:drawing></mc:Choice><mc:Fallback><w:pict><v:shape><v:textbox>"
+                        + "\" name=\"Text Box " + n.ToString(CultureInfo.InvariantCulture) + "\"/><a:graphic><a:graphicData uri=\"http://schemas.microsoft.com/office/word/2010/wordprocessingShape\"><wps:wsp><wps:cNvSpPr txBox=\"1\"/><wps:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"1828800\" cy=\"914400\"/></a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></wps:spPr><wps:txbx>"
+                        + content + "</wps:txbx><wps:bodyPr/></wps:wsp></a:graphicData></a:graphic></wp:inline></w:drawing></mc:Choice><mc:Fallback><w:pict><v:shape><v:textbox>"
                         + content + "</v:textbox></v:shape></w:pict></mc:Fallback></mc:AlternateContent></w:r>");
                     break;
                 }
