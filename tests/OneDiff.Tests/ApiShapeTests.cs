@@ -323,6 +323,7 @@ public sealed class ApiShapeTests
     // ---- Docs ----------------------------------------------------------------------------------------------------
 
     [Fact]
+    [Trait("Host", "Native")] // reads documentation files from the source tree
     public void PackageReadmeSnippetCompilesAndWorks()
     {
         string oldText = "a\nb\nc\n", newText = "a\nB\nc\n", baseText = oldText, ours = newText, theirs = "a\nb\nc\nd\n";
@@ -343,6 +344,7 @@ public sealed class ApiShapeTests
     }
 
     [Fact]
+    [Trait("Host", "Native")] // reads documentation files from the source tree
     public void RepositoryReadmeTextLinesCompile()
     {
         string oldText = "pay within thirty days", newText = "pay within forty days", baseText = "a\nb\nc\nd\n", ours = "A\nb\nc\nd\n", theirs = "a\nb\nc\nD\n";
