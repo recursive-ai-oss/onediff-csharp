@@ -37,7 +37,7 @@ internal static class Program
     private const string Usage = """
         OneDiff.GoldSets.Pdf render --out DIR [--data DIR] [--real DIR] [--fonts DIR[,DIR]] [--jobs N] [--limit N]
         OneDiff.GoldSets.Pdf compare --pdf DIR --out DIR [--every N] [--limit N] [--jobs N]
-        OneDiff.GoldSets.Pdf cross --mode dp|pd --pdf DIR --docx DIR --out DIR [--every N] [--limit N] [--jobs N]
+        OneDiff.GoldSets.Pdf cross --mode dp|pd --pdf DIR --docx DIR --out DIR [--settings legal|textonly] [--every N] [--limit N] [--jobs N]
 
           --data   a gold-set directory made by OneDiff.GoldSets generate (renders pairs/<id>.docs.json)
           --real   fetched real pairs: <source>/<pair>/{old.txt,new.txt}
@@ -114,6 +114,12 @@ internal static class Program
         int every = int.Parse(opt.GetValueOrDefault("every") ?? "1", CultureInfo.InvariantCulture);
         int limit = int.Parse(opt.GetValueOrDefault("limit") ?? "0", CultureInfo.InvariantCulture);
         int jobs = int.Parse(opt.GetValueOrDefault("jobs") ?? "4", CultureInfo.InvariantCulture);
+        CompareSettings settings = (opt.GetValueOrDefault("settings") ?? "legal") switch
+        {
+            "legal" => CompareSettings.Legal,
+            "textonly" => CompareSettings.TextOnly,
+            _ => throw new ArgumentException("--settings is legal or textonly"),
+        };
         Directory.CreateDirectory(outDir);
         string[] ids = [.. Directory.EnumerateFiles(pdfDir, "*.old.pdf").Select(f => Path.GetFileName(f)[..^".old.pdf".Length])
             .Where(id => File.Exists(Path.Combine(docxDir, id + ".old.docx")) && File.Exists(Path.Combine(docxDir, id + ".blocks.json")) && File.Exists(Path.Combine(pdfDir, id + ".blocks.json")))
@@ -136,7 +142,7 @@ internal static class Program
                 CompareDocument n = mode == "pd"
                     ? word.Read(DocumentInput.FromBytes(File.ReadAllBytes(Path.Combine(docxDir, id + ".new.docx")), id + ".new.docx"))
                     : pdf.Read(DocumentInput.FromBytes(File.ReadAllBytes(Path.Combine(pdfDir, id + ".new.pdf")), id + ".new.pdf"));
-                File.WriteAllBytes(Path.Combine(outDir, id + ".cmp.json"), ComparisonJson.Write(Comparison.Of(o, n)));
+                File.WriteAllBytes(Path.Combine(outDir, id + ".cmp.json"), ComparisonJson.Write(Comparison.Of(o, n, settings)));
 
                 // The gold node ids are the source documents' own, so a side's block map is the same whichever rendering it comes from.
                 JsonNode pdfMap = JsonNode.Parse(File.ReadAllBytes(Path.Combine(pdfDir, id + ".blocks.json")))!;
