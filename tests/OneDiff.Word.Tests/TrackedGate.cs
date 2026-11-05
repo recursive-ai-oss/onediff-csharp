@@ -69,6 +69,7 @@ internal static class TrackedGate
             // The blocks of a block content control that exists on one side only (its wrapper is not carried) are not carried either.
             var lonelyGot = new HashSet<int>(c.Changes.Where(x => x.Kind == ChangeKind.Delete).SelectMany(x => x.Old.Nodes).Where(n => NotCarriedNode(got, n) && got[n].Kind == NodeKind.ContentControl));
             var lonelyWant = new HashSet<int>(c.Changes.Where(x => x.Kind == ChangeKind.Insert).SelectMany(x => x.New.Nodes).Where(n => NotCarriedNode(want, n) && want[n].Kind == NodeKind.ContentControl));
+            var swaps = new List<(string What, string From, string To)>();
             var cross = new List<(string What, string Text, bool IsInsert)>();
             foreach (Change ch in c.Changes)
             {
@@ -103,6 +104,15 @@ internal static class TrackedGate
                     continue;
                 }
 
+                // A left-over empty paragraph can also pair with an empty paragraph of the other document and differ only in its properties.
+                if (allowance > 0 && ch.Kind == ChangeKind.Attribute && ch.Edits.Length == 0 && ch.Old.Nodes.All(n => got[n].Kind is NodeKind.Paragraph or NodeKind.ListItem && got[n].Text.Length == 0)
+                    && ch.New.Nodes.All(n => want[n].Kind is NodeKind.Paragraph or NodeKind.ListItem && want[n].Text.Length == 0))
+                {
+                    allowance--;
+                    filtered?.Add((accept ? "accept" : "reject") + ": a left-over empty paragraph differs in its properties");
+                    continue;
+                }
+
                 if (allowance > 0 && ch.Kind is ChangeKind.Insert or ChangeKind.Delete && EmptyParagraphs(got, want, ch))
                 {
                     allowance--;
@@ -131,6 +141,14 @@ internal static class TrackedGate
                     }
                 }
 
+                // Two fields that trade results (the cached result of a page-number field follows its section).
+                if (sectionsDiffer && ch.Kind is ChangeKind.Replace or ChangeKind.Attribute && ch.Old.Nodes.Length == 1 && ch.New.Nodes.Length == 1
+                    && got[ch.Old.Nodes[0]].Kind == NodeKind.Field && want[ch.New.Nodes[0]].Kind == NodeKind.Field)
+                {
+                    swaps.Add((what, got[ch.Old.Nodes[0]].Text, want[ch.New.Nodes[0]].Text));
+                    continue;
+                }
+
                 if (sectionsDiffer && ch.Kind is ChangeKind.Insert or ChangeKind.Delete && ch.Edits.Length == 0)
                 {
                     bool ins = ch.Kind == ChangeKind.Insert;
@@ -141,7 +159,7 @@ internal static class TrackedGate
                         Node first = doc[nodes[0]];
                         string? key = first.Kind is NodeKind.Paragraph or NodeKind.ListItem ? "P:" + first.Text
                             : first.Parent >= 0 ? "O:" + first.Kind + ":" + doc[first.Parent].Text : null;
-                        if (key is { Length: > 3 } && !key.EndsWith(':'))
+                        if (key is { Length: > 2 } && !key.EndsWith(':'))
                         {
                             cross.Add((what, key, ins));
                             continue;
@@ -150,6 +168,18 @@ internal static class TrackedGate
                 }
 
                 problems.Add(what);
+            }
+
+            foreach (var (what, from, to) in swaps)
+            {
+                if (swaps.Any(o => o.From == to && o.To == from))
+                {
+                    filtered?.Add((accept ? "accept" : "reject") + ": two fields traded results across a section break that is not carried");
+                }
+                else
+                {
+                    problems.Add(what);
+                }
             }
 
             foreach (var (what, text, isInsert) in cross)
