@@ -75,7 +75,11 @@ public class TimingTests
             sw.Restart();
             byte[] json = ComparisonJson.Write(c);
             double write = sw.Elapsed.TotalMilliseconds;
-            results.Add(string.Create(CultureInfo.InvariantCulture, $"rep {rep}: nodes={a.Count}/{b.Count} changes={c.Changes.Length} read(2)={read:F0}ms compare={compare:F0}ms json={write:F0}ms ({json.Length} bytes) passed={c.Verification.Passed} fallback={c.Verification.FallbackLevel}"));
+            sw.Restart();
+            using var tracked = new MemoryStream();
+            new DocxRedline().Create(c, tracked);
+            double track = sw.Elapsed.TotalMilliseconds;
+            results.Add(string.Create(CultureInfo.InvariantCulture, $"rep {rep}: nodes={a.Count}/{b.Count} changes={c.Changes.Length} read(2)={read:F0}ms compare={compare:F0}ms json={write:F0}ms ({json.Length} bytes) tracked-docx={track:F0}ms ({tracked.Length} bytes) passed={c.Verification.Passed} fallback={c.Verification.FallbackLevel}"));
         }
 
         Console.WriteLine(string.Join('\n', results));
