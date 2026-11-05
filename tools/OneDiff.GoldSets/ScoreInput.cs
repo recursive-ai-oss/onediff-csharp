@@ -505,20 +505,6 @@ internal sealed class NodeMap
             }
         }
 
-        if (Environment.GetEnvironmentVariable("ONEDIFF_MAPDEBUG") == "1")
-        {
-            var used = new HashSet<int>(assigned.Where(a => a >= 0));
-            foreach ((int id, string t) in source.Where(x => assigned[x.Id] < 0))
-            {
-                Console.Error.WriteLine("UNMATCHED src " + id + ": " + t.Replace("\n", "\\n"));
-            }
-
-            foreach (GoldBlock g in blocks.Where(g => !used.Contains(g.Node)))
-            {
-                Console.Error.WriteLine("UNUSED gold " + g.Node + " " + g.Kind + ": " + g.Label + "|" + g.Text);
-            }
-        }
-
         // Unmatched content nodes get ids past the gold nodes; every other node keeps an id too, so lookups never fail.
         var text = new List<string>(Enumerable.Repeat(string.Empty, goldCount));
         var content = new List<bool>(Enumerable.Repeat(false, goldCount));
