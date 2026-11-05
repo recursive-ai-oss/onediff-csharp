@@ -14,6 +14,7 @@ public class DigestTests
         var source = new WordDocumentSource();
         using var jsonHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         using var fileHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        using var trackedHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         for (int seed = 5000; seed < 5020; seed++)
         {
             var gen = new Gen(seed);
@@ -26,13 +27,29 @@ public class DigestTests
             byte[] json = ComparisonJson.Write(c);
             Assert.Equal(json, ComparisonJson.Write(Comparison.Of(source.Read(DocumentInput.FromBytes(oldBytes, "old.docx")), source.Read(DocumentInput.FromBytes(newBytes, "new.docx")))));
             jsonHash.AppendData(json);
+
+            // The tracked-changes DOCX, built on either document, is byte-identical from run to run.
+            foreach (WordBuildOn on in new[] { WordBuildOn.New, WordBuildOn.Old })
+            {
+                byte[] first = Tracked(source, oldBytes, newBytes, on), second = Tracked(source, oldBytes, newBytes, on);
+                Assert.Equal(first, second);
+                trackedHash.AppendData(first);
+            }
         }
 
-        string line = $"word digest: files={Convert.ToHexStringLower(fileHash.GetHashAndReset())} json={Convert.ToHexStringLower(jsonHash.GetHashAndReset())}";
+        string line = $"word digest: files={Convert.ToHexStringLower(fileHash.GetHashAndReset())} json={Convert.ToHexStringLower(jsonHash.GetHashAndReset())} tracked={Convert.ToHexStringLower(trackedHash.GetHashAndReset())}";
         Console.WriteLine(line);
         if (Environment.GetEnvironmentVariable("ONEDIFF_WORD_DIGEST") is { Length: > 0 } path)
         {
             File.WriteAllText(path, line + "\n");
         }
+    }
+
+    private static byte[] Tracked(WordDocumentSource source, byte[] oldBytes, byte[] newBytes, WordBuildOn on)
+    {
+        Comparison c = Comparison.Of(source.Read(DocumentInput.FromBytes(oldBytes, "old.docx")), source.Read(DocumentInput.FromBytes(newBytes, "new.docx")));
+        using var ms = new MemoryStream();
+        new DocxRedline { BuildOn = on }.Create(c, ms);
+        return ms.ToArray();
     }
 }

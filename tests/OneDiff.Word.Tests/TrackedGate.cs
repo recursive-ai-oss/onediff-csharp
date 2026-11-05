@@ -105,10 +105,9 @@ internal static class TrackedGate
                 }
 
                 // A left-over empty paragraph can also pair with an empty paragraph of the other document and differ only in its properties.
-                if (allowance > 0 && ch.Kind == ChangeKind.Attribute && ch.Edits.Length == 0 && ch.Old.Nodes.All(n => got[n].Kind is NodeKind.Paragraph or NodeKind.ListItem && got[n].Text.Length == 0)
+                if (leftovers && ch.Kind == ChangeKind.Attribute && ch.Edits.Length == 0 && ch.Old.Nodes.All(n => got[n].Kind is NodeKind.Paragraph or NodeKind.ListItem && got[n].Text.Length == 0)
                     && ch.New.Nodes.All(n => want[n].Kind is NodeKind.Paragraph or NodeKind.ListItem && want[n].Text.Length == 0))
                 {
-                    allowance--;
                     filtered?.Add((accept ? "accept" : "reject") + ": a left-over empty paragraph differs in its properties");
                     continue;
                 }

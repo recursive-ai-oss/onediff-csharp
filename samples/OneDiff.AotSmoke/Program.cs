@@ -115,6 +115,38 @@ internal static class Program
                 Console.Error.WriteLine("word: HTML output missing marks");
                 failures++;
             }
+
+            // The tracked-changes DOCX: accepting every revision gives the new file, rejecting every one gives the old.
+            string tracked = Path.Combine(dir, "tracked.docx");
+            Redline.Create(x, y, tracked);
+            byte[] trackedBytes = File.ReadAllBytes(tracked);
+            foreach (bool accept in new[] { true, false })
+            {
+                using RecursiveAI.OneOffice.Documents.Document doc = RecursiveAI.OneOffice.Documents.Document.Open(RecursiveAI.OneOffice.IO.ByteSource.FromMemory(trackedBytes));
+                if (doc.Revisions.Revisions.Count == 0)
+                {
+                    Console.Error.WriteLine("word: tracked DOCX has no revisions");
+                    failures++;
+                }
+
+                if (accept)
+                {
+                    doc.Revisions.AcceptAll();
+                }
+                else
+                {
+                    doc.Revisions.RejectAll();
+                }
+
+                using var resolved = new MemoryStream();
+                doc.SaveAs(resolved, RecursiveAI.OneOffice.OfficeFormat.Docx);
+                CompareDocument got = source.Read(DocumentInput.FromBytes(resolved.ToArray(), "resolved.docx"));
+                if (!Comparison.Of(got, accept ? b : a).Changes.IsEmpty)
+                {
+                    Console.Error.WriteLine("word: tracked DOCX " + (accept ? "accept-all" : "reject-all") + " differs");
+                    failures++;
+                }
+            }
         }
         finally
         {
