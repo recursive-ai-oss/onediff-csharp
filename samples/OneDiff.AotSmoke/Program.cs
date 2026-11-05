@@ -230,7 +230,7 @@ internal static class Program
         var word = new WordDocumentSource();
         foreach (bool accept in new[] { true, false })
         {
-            using RecursiveAI.OneOffice.Documents.Document doc = RecursiveAI.OneOffice.Documents.Document.Open(RecursiveAI.OneOffice.IO.ByteSource.FromMemory(tracked.ToArray()));
+            using RecursiveAI.OneDocument.Documents.Document doc = RecursiveAI.OneDocument.Documents.Document.Open(RecursiveAI.OneDocument.IO.ByteSource.FromMemory(tracked.ToArray()));
             if (doc.Revisions.Revisions.Count == 0)
             {
                 Console.Error.WriteLine("reconstructed docx: no revisions");
@@ -247,7 +247,7 @@ internal static class Program
             }
 
             using var resolved = new MemoryStream();
-            doc.SaveAs(resolved, RecursiveAI.OneOffice.OfficeFormat.Docx);
+            doc.SaveAs(resolved, RecursiveAI.OneDocument.OfficeFormat.Docx);
             CompareDocument got = word.Read(DocumentInput.FromBytes(resolved.ToArray(), "resolved.docx"));
             string[] texts = [.. got.Nodes.Where(n => n.Kind == NodeKind.Paragraph && !IsFurniture(got, n)).Select(n => n.Text)];
             if (!texts.AsSpan().SequenceEqual(accept ? newText : oldText))
@@ -279,7 +279,7 @@ internal static class Program
         return false;
     }
 
-    /// <summary>Writes two small DOCX files with OneOffice, reads them through the Word source, compares them and writes the redline through the registered happy path.</summary>
+    /// <summary>Writes two small DOCX files with OneDocument, reads them through the Word source, compares them and writes the redline through the registered happy path.</summary>
     private static int CheckWord()
     {
         int failures = 0;
@@ -315,7 +315,7 @@ internal static class Program
             byte[] trackedBytes = File.ReadAllBytes(tracked);
             foreach (bool accept in new[] { true, false })
             {
-                using RecursiveAI.OneOffice.Documents.Document doc = RecursiveAI.OneOffice.Documents.Document.Open(RecursiveAI.OneOffice.IO.ByteSource.FromMemory(trackedBytes));
+                using RecursiveAI.OneDocument.Documents.Document doc = RecursiveAI.OneDocument.Documents.Document.Open(RecursiveAI.OneDocument.IO.ByteSource.FromMemory(trackedBytes));
                 if (doc.Revisions.Revisions.Count == 0)
                 {
                     Console.Error.WriteLine("word: tracked DOCX has no revisions");
@@ -332,7 +332,7 @@ internal static class Program
                 }
 
                 using var resolved = new MemoryStream();
-                doc.SaveAs(resolved, RecursiveAI.OneOffice.OfficeFormat.Docx);
+                doc.SaveAs(resolved, RecursiveAI.OneDocument.OfficeFormat.Docx);
                 CompareDocument got = source.Read(DocumentInput.FromBytes(resolved.ToArray(), "resolved.docx"));
                 if (!Comparison.Of(got, accept ? b : a).Changes.IsEmpty)
                 {
@@ -351,14 +351,14 @@ internal static class Program
 
     private static byte[] MakeDocx(string[] paragraphs)
     {
-        using RecursiveAI.OneOffice.Documents.Document doc = RecursiveAI.OneOffice.Documents.Document.Create();
+        using RecursiveAI.OneDocument.Documents.Document doc = RecursiveAI.OneDocument.Documents.Document.Create();
         foreach (string p in paragraphs)
         {
             doc.Body.AddParagraph(p);
         }
 
         using var ms = new MemoryStream();
-        doc.SaveAs(ms, RecursiveAI.OneOffice.OfficeFormat.Docx);
+        doc.SaveAs(ms, RecursiveAI.OneDocument.OfficeFormat.Docx);
         return ms.ToArray();
     }
 

@@ -2,9 +2,9 @@ using System.Collections.Immutable;
 using OneDiff.Documents;
 using OneDiff.Documents.Model;
 using OneDiff.Word;
-using RecursiveAI.OneOffice;
-using RecursiveAI.OneOffice.Documents;
-using RecursiveAI.OneOffice.IO;
+using RecursiveAI.OneDocument;
+using RecursiveAI.OneDocument.Documents;
+using RecursiveAI.OneDocument.IO;
 
 namespace OneDiff.Word.Tests;
 
@@ -23,7 +23,7 @@ internal static class TrackedGate
             doc.Revisions.RejectAll();
         }
 
-        // OneOffice leaves the wrapper of a resolved hyperlink or smart tag behind when all its runs went with a revision, and a paragraph
+        // OneDocument leaves the wrapper of a resolved hyperlink or smart tag behind when all its runs went with a revision, and a paragraph
         // that is joined to the next one carries the empty wrapper along. Word drops it; it holds nothing, so it is dropped here too.
         // (The same applies to nothing else: an empty paragraph, run or content control is still compared.)
         foreach (var e in OneDiff.Word.Internal.Wx.Descendants(doc.MainMarkup.Root))

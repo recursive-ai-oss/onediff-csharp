@@ -27,7 +27,7 @@
     <PackageVersion Include="RecursiveAI.OneRender.Fonts.Cjk" Version="1.3.3" />
     <PackageVersion Include="RecursiveAI.OneRender.Fonts.Noto.Arabic" Version="1.3.3" />
     <PackageVersion Include="RecursiveAI.OneRender.Fonts.Noto.Devanagari" Version="1.3.3" />
-    <PackageVersion Include="RecursiveAI.OneOffice.Documents" Version="0.1.0-preview.3" />
+    <PackageVersion Include="RecursiveAI.OneDocument.Documents" Version="0.2.0-preview.2" />
     <!-- Schema validation of tracked-changes output in the Word tests (a released Microsoft library, run through its public validator). -->
     <PackageVersion Include="DocumentFormat.OpenXml" Version="3.5.1" />
     <PackageVersion Include="RecursiveAI.OneFont" Version="$(OneFontVersion)" />
@@ -38,8 +38,8 @@
     <PackageVersion Include="RecursiveAI.OneImage.Text" Version="1.10.4" />
     <PackageVersion Include="RecursiveAI.OneOcr" Version="1.0.0" />
     <PackageVersion Include="RecursiveAI.OneOcr.Pdf" Version="1.0.0" />
-    <!-- OneOffice preview (same extra restore source as the other previews): writes and reads the DOCX files of the document gold sets. -->
-    <PackageVersion Include="RecursiveAI.OneOffice" Version="0.1.0-preview.3" />
+    <!-- OneDocument preview (same extra restore source as the other previews): writes and reads the DOCX files of the document gold sets. -->
+    <PackageVersion Include="RecursiveAI.OneDocument" Version="0.2.0-preview.2" />
     <!-- DOCX comparators, restored for the comparator and benchmark projects only and run as released binaries through their public APIs. -->
     <PackageVersion Include="Docxodus" Version="15.0.0" />
     <PackageVersion Include="OfficeIMO.Word" Version="3.5.3" />

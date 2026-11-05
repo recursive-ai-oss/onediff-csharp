@@ -1,7 +1,7 @@
 using System.Text;
-using RecursiveAI.OneOffice;
-using RecursiveAI.OneOffice.Documents;
-using RecursiveAI.OneOffice.Markup;
+using RecursiveAI.OneDocument;
+using RecursiveAI.OneDocument.Documents;
+using RecursiveAI.OneDocument.Markup;
 
 namespace OneDiff.GoldSets.Docx;
 
@@ -23,7 +23,7 @@ internal sealed class ParaRec
 }
 
 /// <summary>
-/// Reads the output of a comparison tool — a DOCX with tracked changes — through OneOffice's markup and revision model into the
+/// Reads the output of a comparison tool — a DOCX with tracked changes — through OneDocument's markup and revision model into the
 /// scorer's form (<see cref="ToolOutput"/>). Nothing about the tool's own API is used: only the file it wrote.
 /// <para>
 /// The two views are the document with every revision rejected and with every revision accepted, one line per non-empty paragraph;

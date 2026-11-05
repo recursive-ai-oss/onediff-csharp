@@ -2,8 +2,8 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using RecursiveAI.OneOffice;
-using RecursiveAI.OneOffice.Documents;
+using RecursiveAI.OneDocument;
+using RecursiveAI.OneDocument.Documents;
 
 namespace OneDiff.GoldSets.Docx;
 
@@ -27,10 +27,10 @@ internal static class Program
 
           render       DIR/docx/<id>.{old,new}.docx and <id>.blocks.json for every pair under --data (a gold set made by
                        OneDiff.GoldSets generate) and --real (<source>/<pair>/{old.txt,new.txt}), then manifest.json and
-                       manifest.sha256 (the set hash). Every file is read back with OneOffice and its blocks and list labels checked.
+                       manifest.sha256 (the set hash). Every file is read back with OneDocument and its blocks and list labels checked.
           read         for every <id>.docx in --tracked (a tool's tracked-changes output for the pair <id>): DIR/<id>.changes.json
                        for 'GoldSets score --changes', and DIR/roundtrip.jsonl, one line per pair, with the result of accepting and
-                       rejecting every revision (through OneOffice) compared with the two inputs in --docx.
+                       rejecting every revision (through OneDocument) compared with the two inputs in --docx.
           bench-pairs  joins N mixed pairs of one language into one big pair for timing: DIR/n<N>/old.docx and new.docx.
         """;
 
@@ -299,7 +299,7 @@ internal static class Program
 
     /// <summary>
     /// Some tools type every <c>.xml</c> part as the main document through one default content type and give the main part no override of
-    /// its own. That is valid OPC, but OneOffice 0.1 does not recognise such a package, so the override is added to the content-type
+    /// its own. That is valid OPC, but OneDocument 0.1 does not recognise such a package, so the override is added to the content-type
     /// list (nothing else is touched) before the file is read.
     /// </summary>
     internal static byte[] Openable(byte[] bytes)
@@ -365,7 +365,7 @@ internal static class Program
                 List<string> wantOld = ParagraphTexts(src0);
                 List<string> wantNew = ParagraphTexts(src1);
 
-                // Accept and reject on copies, through OneOffice, and compare what is left with the two inputs.
+                // Accept and reject on copies, through OneDocument, and compare what is left with the two inputs.
                 using Document acc = Document.Open(new MemoryStream(bytes), leaveOpen: false);
                 acc.Revisions.AcceptAll();
                 List<string> gotNew = ParagraphTexts(acc);

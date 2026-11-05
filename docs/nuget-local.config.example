@@ -19,8 +19,8 @@
       <package pattern="RecursiveAI.OnePdf" />
       <package pattern="RecursiveAI.OnePdf.*" />
       <package pattern="RecursiveAI.OneFont" />
-      <package pattern="RecursiveAI.OneOffice" />
-      <package pattern="RecursiveAI.OneOffice.*" />
+      <package pattern="RecursiveAI.OneDocument" />
+      <package pattern="RecursiveAI.OneDocument.*" />
       <package pattern="RecursiveAI.OneArchive" />
       <package pattern="RecursiveAI.OneCompress" />
       <package pattern="RecursiveAI.OneNlp" />

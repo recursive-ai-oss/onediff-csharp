@@ -4,7 +4,7 @@ How `RecursiveAI.OneDiff.Word` reads a Word document into the compare model, and
 
 ## 1. Reading a document
 
-`WordDocumentSource` recognizes a Word package by content, never by file name: the OneOffice format sniffer must name DOCX, DOCM, DOTX or DOTM (an OPC package whose main part is a word-processing document). A compound file holding an encrypted package is recognized too, so that reading it says "encrypted" instead of "unsupported". The document is opened through the OneOffice document hub (`Document.Open`); nothing reads the package a second way, except the small core-properties part, which is parsed with the hub's markup layer.
+`WordDocumentSource` recognizes a Word package by content, never by file name: the OneDocument format sniffer must name DOCX, DOCM, DOTX or DOTM (an OPC package whose main part is a word-processing document). A compound file holding an encrypted package is recognized too, so that reading it says "encrypted" instead of "unsupported". The document is opened through the OneDocument document hub (`Document.Open`); nothing reads the package a second way, except the small core-properties part, which is parsed with the hub's markup layer.
 
 Register the source once with `WordRedline.Register()`; after that `Redline.Create("a.docx", "b.docx", "out.html")` (or `.json`) works, and so does a pair that mixes formats of the flowing kind, such as `a.docx` and `b.pdf` with `PdfRedline.Register()` as well.
 
@@ -85,7 +85,7 @@ Resolution is `WordAnchors.TryParse` and `WordAnchors.Follow` (internal, tested)
 ### Method
 
 - **Built on one document.** The output is the new document (default, `WordBuildOn.New`) or the old one (`WordBuildOn.Old`), reopened from the bytes it was read from, so its package, styles, numbering, headers, footers and anything the model does not itemize are the base document's. Everything the other (donor) document has is copied in as the opposite revision: deleted content when built on the new document, inserted content when built on the old. Accept-all gives the new document and reject-all the old, whichever is the base.
-- **Revisions are made with OneOffice's `RevisionAuthor`** (insert, delete, move markers, property changes) and finished with edits to its markup tree, never with a parallel DOCX layer. The author is `DocxRedline.Author` (default `OneDiff`). No date is written unless `DocxRedline.Date` is set. Revision ids are numbered 1, 2, … in document order after everything is written, so equal inputs give equal bytes (checked: two runs, and x64 against arm64, see below).
+- **Revisions are made with OneDocument's `RevisionAuthor`** (insert, delete, move markers, property changes) and finished with edits to its markup tree, never with a parallel DOCX layer. The author is `DocxRedline.Author` (default `OneDiff`). No date is written unless `DocxRedline.Date` is set. Revision ids are numbered 1, 2, … in document order after everything is written, so equal inputs give equal bytes (checked: two runs, and x64 against arm64, see below).
 - **Inputs.** Both documents of the comparison must have been read by `WordDocumentSource` in this process, because the writer needs their bytes and anchors (`InvalidOperationException` otherwise).
 
 ### What maps to which revision
@@ -115,24 +115,24 @@ A revision cannot express these differences, so they are listed in `DocxRedlineR
 | `header-footer` | a header or footer that exists on one side only cannot be added or removed as a tracked change |
 | `section` | a section break cannot be tracked; the blocks of a section that exists on one side only are |
 | `content-control` | a block content control that exists on one side only, and changes of content-control properties; the control's content is tracked, its wrapper cannot be |
-| `paragraph-mark-accept`, `paragraph-mark-reject` | a paragraph mark that has to go on accept or reject cannot when the paragraph is last in its container, comes before a table or block content control, or holds a section break: Word and OneOffice keep such a mark, which leaves an emptied paragraph. The writer moves the mark to the paragraph before it when that paragraph can take it (as Word does when Enter is pressed at the end of a paragraph) and merges an inserted and a deleted paragraph at the end of a container into one; this is the note when neither is possible |
+| `paragraph-mark-accept`, `paragraph-mark-reject` | a paragraph mark that has to go on accept or reject cannot when the paragraph is last in its container, comes before a table or block content control, or holds a section break: Word and OneDocument keep such a mark, which leaves an emptied paragraph. The writer moves the mark to the paragraph before it when that paragraph can take it (as Word does when Enter is pressed at the end of a paragraph) and merges an inserted and a deleted paragraph at the end of a container into one; this is the note when neither is possible |
 | `unplaced`, `import` | a copied node or relationship that could not be placed (not seen in the gates) |
 
 ### Decisions
 
 - The schema requires a date on `w:moveFromRangeStart` and `w:moveToRangeStart` (CT_MoveBookmark), so when no date was asked for these two markers carry `1970-01-01T00:00:00Z`; every other revision stays undated.
-- A moved paragraph gets no `w:pPrChange`: it exists twice, each with its own properties, and a paragraph-mark revision beside a property change is not resolved by OneOffice on reject (see "OneOffice gaps").
+- A moved paragraph gets no `w:pPrChange`: it exists twice, each with its own properties, and a paragraph-mark revision beside a property change is not resolved by OneDocument on reject (see "OneDocument gaps").
 - Two packages number their lists independently, so the same number can mean different labels. A change of paragraph properties compares a list (`w:numPr`) by what its number stands for in its own package (the definition without its ids) as well as by its XML; the record of the other version carries the other package's definition across (as for any copied list).
 - A block content control that only the donor has is not copied, so what stood inside it is copied; what follows the control in the donor is placed after the last of those copies, not before them.
 - Text of the other document is placed at paragraph level, outside hyperlinks and inline content controls and after the object runs that precede it, because a revision inside them would take the wrong wrapper with it.
 
 ### Checks
 
-- **Accept/reject gate** (`TrackedGate`): OneOffice's `AcceptAll` / `RejectAll` on the output, the result read back with `WordDocumentSource` and compared with the new (old) side under the comparison's own settings; the comparison must have no change. Differences of the categories above are let through only as the table says; every other change is a failure.
+- **Accept/reject gate** (`TrackedGate`): OneDocument's `AcceptAll` / `RejectAll` on the output, the result read back with `WordDocumentSource` and compared with the new (old) side under the comparison's own settings; the comparison must have no change. Differences of the categories above are let through only as the table says; every other change is a failure.
   - Property, comment, header, footer and section nodes, and the blocks inside a block content control or section that exists on one side only, are not compared (their wrapper is not carried).
   - As many empty-paragraph differences (insert or delete of an empty paragraph, an empty paragraph that differs only in its properties, list numbers shifted by it) are allowed as the writer listed `paragraph-mark-*` entries for that resolution. A missing empty paragraph, or more than listed, fails.
   - When the writer listed a `section` or block `content-control` entry, a moved paragraph without edits is allowed; an insert and a delete of the same text (or of the same object in a paragraph with the same text) count together as a move across the break; two fields that trade results across a section break are allowed.
-  - Empty `w:hyperlink` and `w:smartTag` wrappers left after resolving are dropped before reading back (OneOffice leaves them; they hold nothing).
+  - Empty `w:hyperlink` and `w:smartTag` wrappers left after resolving are dropped before reading back (OneDocument leaves them; they hold nothing).
 - **Schema**: the Open XML SDK validator (Office 2019) over every output. Errors the two inputs also have (same rule and element) are not counted against the output.
 - **Determinism**: two runs give identical bytes; the digest of 20 seeded pairs built on either document is the same on x64 and arm64.
 
@@ -159,9 +159,9 @@ The scorer reads every tool's DOCX with one reader (`TrackedReader`), so no tool
 
 The engine's own row on a Word source is scored on body content (`score --body-only`): headers, footers, notes, comments, text boxes and empty nodes have no gold block, and a field placeholder reads as its result.
 
-### OneOffice gaps met (workarounds in the writer)
+### OneDocument gaps met (workarounds in the writer)
 
-On OneOffice 0.1.0-preview.3 (moved markup keeps its namespace declarations, notes get free ids across parts, emptied smart-tag and custom-XML wrappers go, and rejecting a moved or property-changed paragraph restores its mark), these remain:
+On OneDocument (then named OneOffice) 0.1.0-preview.3 (moved markup keeps its namespace declarations, notes get free ids across parts, emptied smart-tag and custom-XML wrappers go, and rejecting a moved or property-changed paragraph restores its mark), these remain (all still worked around on 0.2.0-preview.2; the gate tests pass unchanged):
 
 - A paragraph whose pPr holds a paragraph-mark revision next to a `w:pPrChange` is still not joined on reject in some cases (about one pair in a thousand of the generated ones when a moved paragraph also gets a `w:pPrChange`). The writer gives a moved paragraph no `w:pPrChange` (it exists twice, each with its own properties) and does not hand a transferred mark to a paragraph that has one (it lists `paragraph-mark-*` instead).
 - A resolved revision leaves the empty wrapper of a hyperlink, simple field or content control behind (documented behaviour), and a paragraph that joins the next carries it along; the gate's reader drops empty hyperlink wrappers before comparing.

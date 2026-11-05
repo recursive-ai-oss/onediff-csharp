@@ -3,7 +3,7 @@ using System.Text;
 using OneDiff.Documents;
 using OneDiff.Documents.Model;
 using OneDiff.Documents.Pipeline;
-using RecursiveAI.OneOffice.Markup;
+using RecursiveAI.OneDocument.Markup;
 
 namespace OneDiff.Word.Internal;
 

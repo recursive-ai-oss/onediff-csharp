@@ -1,8 +1,8 @@
 using OneDiff.Documents.Model;
-using RecursiveAI.OneOffice;
-using RecursiveAI.OneOffice.Documents;
-using RecursiveAI.OneOffice.Documents.Revisions;
-using RecursiveAI.OneOffice.IO;
+using RecursiveAI.OneDocument;
+using RecursiveAI.OneDocument.Documents;
+using RecursiveAI.OneDocument.Documents.Revisions;
+using RecursiveAI.OneDocument.IO;
 
 namespace OneDiff.Word.Tests;
 
