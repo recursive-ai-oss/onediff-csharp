@@ -2,9 +2,9 @@
 
 **Text diff and document comparison for .NET.**
 
-Word documents: a document source that reads DOCX, DOCM, DOTX and DOTM through the OneOffice document hub into the compare model, and a writer that saves a comparison as a DOCX with real tracked changes.
+Word documents: a document source that reads DOCX, DOCM, DOTX and DOTM through the OneDocument document hub into the compare model, and a writer that saves a comparison as a DOCX with real tracked changes.
 
-Depends on `RecursiveAI.OneDiff.Documents` and `RecursiveAI.OneOffice.Documents`. See [docs/word.md](https://github.com/recursive-ai-oss/onediff-csharp/blob/main/docs/word.md).
+Depends on `RecursiveAI.OneDiff.Documents` and `RecursiveAI.OneDocument.Documents`. See [docs/word.md](https://github.com/recursive-ai-oss/onediff-csharp/blob/main/docs/word.md).
 
 > **Preview.** Early releases; the public API may change before 1.0.
 

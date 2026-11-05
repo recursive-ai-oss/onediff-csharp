@@ -4,11 +4,11 @@ using System.Text;
 using OneDiff.Documents;
 using OneDiff.Documents.Model;
 using OneDiff.Documents.Pipeline;
-using RecursiveAI.OneOffice;
-using RecursiveAI.OneOffice.Documents;
-using RecursiveAI.OneOffice.Documents.Revisions;
-using RecursiveAI.OneOffice.IO;
-using RecursiveAI.OneOffice.Markup;
+using RecursiveAI.OneDocument;
+using RecursiveAI.OneDocument.Documents;
+using RecursiveAI.OneDocument.Documents.Revisions;
+using RecursiveAI.OneDocument.IO;
+using RecursiveAI.OneDocument.Markup;
 
 namespace OneDiff.Word.Internal;
 
@@ -515,7 +515,7 @@ internal sealed partial class TrackedWriter : IDisposable
                 if (!move)
                 {
                     // A moved paragraph exists twice (moved from, moved to), each with its own properties, so it needs no property
-                    // change; one beside a paragraph-mark revision is still not restored on reject by OneOffice (rare, seen in the sweeps).
+                    // change; one beside a paragraph-mark revision is still not restored on reject by OneDocument (rare, seen in the sweeps).
                     PropertyChange(bp, dp, "pPr", "pPrChange", ["rPr", "sectPr", "pPrChange"], insertAtStart: true);
                 }
             }

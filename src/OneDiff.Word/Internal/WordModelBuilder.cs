@@ -4,16 +4,16 @@ using System.Security.Cryptography;
 using System.Text;
 using OneDiff.Documents;
 using OneDiff.Documents.Model;
-using RecursiveAI.OneOffice.Documents;
-using RecursiveAI.OneOffice.Documents.Comments;
-using RecursiveAI.OneOffice.Documents.ContentControls;
-using RecursiveAI.OneOffice.Documents.Notes;
-using RecursiveAI.OneOffice.Documents.Numbering;
-using RecursiveAI.OneOffice.Documents.Styles;
-using RecursiveAI.OneOffice.Properties;
-using RecursiveAI.OneOffice.Markup;
-using RecursiveAI.OneOffice.Packaging;
-using RecursiveAI.OneOffice.Schema;
+using RecursiveAI.OneDocument.Documents;
+using RecursiveAI.OneDocument.Documents.Comments;
+using RecursiveAI.OneDocument.Documents.ContentControls;
+using RecursiveAI.OneDocument.Documents.Notes;
+using RecursiveAI.OneDocument.Documents.Numbering;
+using RecursiveAI.OneDocument.Documents.Styles;
+using RecursiveAI.OneDocument.Properties;
+using RecursiveAI.OneDocument.Markup;
+using RecursiveAI.OneDocument.Packaging;
+using RecursiveAI.OneDocument.Schema;
 
 namespace OneDiff.Word.Internal;
 
@@ -80,7 +80,7 @@ internal sealed class TextBuf
     }
 }
 
-/// <summary>Reads a Word document through the OneOffice hub into the flowing compare model (docs/word.md).</summary>
+/// <summary>Reads a Word document through the OneDocument hub into the flowing compare model (docs/word.md).</summary>
 internal sealed class WordModelBuilder
 {
     private const string McNamespace = "http://schemas.openxmlformats.org/markup-compatibility/2006";

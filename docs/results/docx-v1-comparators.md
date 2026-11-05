@@ -15,9 +15,9 @@ OfficeIMO's `Compare(source, target)` does not produce a redline document; the r
 
 ## How the rows are made
 
-Each output is read back through OneOffice's revision model (the tool's own API is not used) into the scorer's form: a change is a run of adjacent revisions in one paragraph with no non-blank unchanged text between them; the two halves of a move are one change; formatting revisions carry no text and are not changes. Accept-all and reject-all run through OneOffice on copies, and the paragraph sequence left is compared with the new and the old input. A pair a tool did not finish scores as an empty result in "All pairs" and is left out in "Completed pairs only". Bootstrap: 10,000 resamples over the 210 base documents, seed 20261104 (1,000 for the per-look tables).
+Each output is read back through OneDocument's revision model (the tool's own API is not used) into the scorer's form: a change is a run of adjacent revisions in one paragraph with no non-blank unchanged text between them; the two halves of a move are one change; formatting revisions carry no text and are not changes. Accept-all and reject-all run through OneDocument on copies, and the paragraph sequence left is compared with the new and the old input. A pair a tool did not finish scores as an empty result in "All pairs" and is left out in "Completed pairs only". Bootstrap: 10,000 resamples over the 210 base documents, seed 20261104 (1,000 for the per-look tables).
 
-Machine: AMD Ryzen 9 7950X3D, 32 logical cores, x64; four pairs in parallel; load average around 14 beside other jobs (indicative runs only); SDK 10.0.403, runtime 10.0.14, OneOffice 0.1.0-preview.1.
+Machine: AMD Ryzen 9 7950X3D, 32 logical cores, x64; four pairs in parallel; load average around 14 beside other jobs (indicative runs only); SDK 10.0.403, runtime 10.0.14, OneDocument (then named OneOffice) 0.1.0-preview.1.
 
 ## Run and round-trip
 
@@ -28,7 +28,7 @@ Machine: AMD Ryzen 9 7950X3D, 32 logical cores, x64; four pairs in parallel; loa
 | wmlcomparer | 1050 | 1050 (100.0%) | 0 | 489 | 1050 | 1050 (100.0%) | 1050 (100.0%) | 6 |
 | libreoffice | 1050 | 884 (84.2%) | 166 | 144 | 884 | 883 (84.1%) | 763 (72.7%) | 10 |
 
-Accept and reject rates are over all pairs (a pair with no output counts as a miss); paragraph sequences compared through OneOffice's accept-all and reject-all.
+Accept and reject rates are over all pairs (a pair with no output counts as a miss); paragraph sequences compared through OneDocument's accept-all and reject-all.
 
 ## All pairs (a pair without output scores as an empty result)
 

@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <AssemblyName>OneDiff.Word</AssemblyName>
-    <Description>Text diff and document comparison for .NET. Word documents: a document source that reads DOCX, DOCM, DOTX and DOTM through the OneOffice document hub into the compare model, and a writer that saves a comparison as a DOCX with real tracked changes.</Description>
+    <Description>Text diff and document comparison for .NET. Word documents: a document source that reads DOCX, DOCM, DOTX and DOTM through the OneDocument document hub into the compare model, and a writer that saves a comparison as a DOCX with real tracked changes.</Description>
     <EnablePackageValidation>true</EnablePackageValidation>
   </PropertyGroup>
 
@@ -12,7 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../OneDiff.Documents/OneDiff.Documents.csproj" />
-    <PackageReference Include="RecursiveAI.OneOffice.Documents" />
+    <PackageReference Include="RecursiveAI.OneDocument.Documents" />
   </ItemGroup>
 
 </Project>

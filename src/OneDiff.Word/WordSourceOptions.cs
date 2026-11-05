@@ -55,7 +55,7 @@ public enum WordSourceFailure
     /// <summary>The file is encrypted. Encrypted packages are not read by this source, whatever the password.</summary>
     Encrypted = 1,
 
-    /// <summary>The document exceeds a limit of <see cref="WordSourceOptions"/> or of the OneOffice reader.</summary>
+    /// <summary>The document exceeds a limit of <see cref="WordSourceOptions"/> or of the OneDocument reader.</summary>
     TooLarge = 2,
 
     /// <summary>The document holds tracked changes and <see cref="WordSourceOptions.Revisions"/> is <see cref="WordRevisionMode.Refuse"/>.</summary>

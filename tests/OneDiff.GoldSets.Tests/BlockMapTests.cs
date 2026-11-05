@@ -1,7 +1,7 @@
 using System.IO.Compression;
 using System.Text;
 using OneDiff.GoldSets.Docx;
-using RecursiveAI.OneOffice.Documents;
+using RecursiveAI.OneDocument.Documents;
 
 namespace OneDiff.GoldSets.Tests;
 

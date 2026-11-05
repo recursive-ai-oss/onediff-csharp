@@ -1,9 +1,9 @@
 using System.Globalization;
 using System.IO.Compression;
 using System.Text;
-using RecursiveAI.OneOffice;
-using RecursiveAI.OneOffice.Documents;
-using RecursiveAI.OneOffice.Packaging;
+using RecursiveAI.OneDocument;
+using RecursiveAI.OneDocument.Documents;
+using RecursiveAI.OneDocument.Packaging;
 
 namespace OneDiff.GoldSets.Docx;
 
@@ -20,7 +20,7 @@ internal sealed record Rendered(byte[] Bytes, List<GoldBlock> Blocks, int Paragr
 /// Writes a gold document as a Word document with the structures real contracts have: multilevel numbering with list labels worked
 /// out by the numbering definition (not typed in the text), styles, a table with a repeating header row, a signature box with merged
 /// cells, a title carrying a footnote and a comment, cross-references as fields with bookmarks, a header with a picture, a footer
-/// with page-number fields, and for some looks a content control. The package is assembled with OneOffice's package model, saved by
+/// with page-number fields, and for some looks a content control. The package is assembled with OneDocument's package model, saved by
 /// its writer and read back by its document model (see <see cref="Check"/>).
 /// </summary>
 internal static class DocxWriter
@@ -450,10 +450,10 @@ internal static class DocxWriter
         s.Write(len);
     }
 
-    // ---- reading it back through OneOffice ----------------------------------------------------------------------------
+    // ---- reading it back through OneDocument ----------------------------------------------------------------------------
 
     /// <summary>
-    /// Opens a rendered file with OneOffice and compares it with what was meant: every block is found at its paragraph with the same
+    /// Opens a rendered file with OneDocument and compares it with what was meant: every block is found at its paragraph with the same
     /// text, and every list label worked out by the numbering definition equals the gold label.
     /// </summary>
     public static (int Located, int Total, int LabelsOk, int LabelsTotal) Check(string path, List<GoldBlock> blocks, List<GNode> nodes)
@@ -470,7 +470,7 @@ internal static class DocxWriter
         }
 
         var labelOf = new Dictionary<int, string>();
-        foreach (RecursiveAI.OneOffice.Documents.Numbering.ListLabel l in doc.Numbering.LabelBody())
+        foreach (RecursiveAI.OneDocument.Documents.Numbering.ListLabel l in doc.Numbering.LabelBody())
         {
             int idx = paragraphs.FindIndex(p => p.Equals(l.Paragraph));
             if (idx >= 0)

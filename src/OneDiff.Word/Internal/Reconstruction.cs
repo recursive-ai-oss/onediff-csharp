@@ -3,10 +3,10 @@ using System.Globalization;
 using System.Text;
 using OneDiff.Documents;
 using OneDiff.Documents.Model;
-using RecursiveAI.OneOffice;
-using RecursiveAI.OneOffice.Documents;
-using RecursiveAI.OneOffice.Documents.Numbering;
-using RecursiveAI.OneOffice.IO;
+using RecursiveAI.OneDocument;
+using RecursiveAI.OneDocument.Documents;
+using RecursiveAI.OneDocument.Documents.Numbering;
+using RecursiveAI.OneDocument.IO;
 
 namespace OneDiff.Word.Internal;
 
@@ -118,11 +118,11 @@ internal static class Reconstruction
             Block(model, id, labels, settings, sb, cancellationToken);
         }
 
-        RecursiveAI.OneOffice.Markup.MarkupNode bodyNode = doc.Body.Container.Node;
-        RecursiveAI.OneOffice.Markup.MarkupNode sect = doc.Body.SectionProperties!.Value.Node;
-        for (RecursiveAI.OneOffice.Markup.MarkupNode c = bodyNode.FirstChild; !c.IsNull && template is null; c = c.NextSibling)
+        RecursiveAI.OneDocument.Markup.MarkupNode bodyNode = doc.Body.Container.Node;
+        RecursiveAI.OneDocument.Markup.MarkupNode sect = doc.Body.SectionProperties!.Value.Node;
+        for (RecursiveAI.OneDocument.Markup.MarkupNode c = bodyNode.FirstChild; !c.IsNull && template is null; c = c.NextSibling)
         {
-            if (c.Kind == RecursiveAI.OneOffice.Markup.MarkupNodeKind.Element && c.LocalNameString == "p")
+            if (c.Kind == RecursiveAI.OneDocument.Markup.MarkupNodeKind.Element && c.LocalNameString == "p")
             {
                 c.Remove();
                 break;
@@ -223,24 +223,24 @@ internal static class Reconstruction
             }
         }
 
-        RecursiveAI.OneOffice.Markup.MarkupNode body = doc.Body.Container.Node;
-        var drop = new List<RecursiveAI.OneOffice.Markup.MarkupNode>();
-        for (RecursiveAI.OneOffice.Markup.MarkupNode c = body.FirstChild; !c.IsNull; c = c.NextSibling)
+        RecursiveAI.OneDocument.Markup.MarkupNode body = doc.Body.Container.Node;
+        var drop = new List<RecursiveAI.OneDocument.Markup.MarkupNode>();
+        for (RecursiveAI.OneDocument.Markup.MarkupNode c = body.FirstChild; !c.IsNull; c = c.NextSibling)
         {
-            if (c.Kind == RecursiveAI.OneOffice.Markup.MarkupNodeKind.Element && !Wx.Is(c, "sectPr"))
+            if (c.Kind == RecursiveAI.OneDocument.Markup.MarkupNodeKind.Element && !Wx.Is(c, "sectPr"))
             {
                 drop.Add(c);
             }
         }
 
-        foreach (RecursiveAI.OneOffice.Markup.MarkupNode c in drop)
+        foreach (RecursiveAI.OneDocument.Markup.MarkupNode c in drop)
         {
             c.Remove();
         }
 
-        RecursiveAI.OneOffice.Markup.MarkupNode sect = doc.Body.SectionProperties!.Value.Node;
-        var refs = new List<RecursiveAI.OneOffice.Markup.MarkupNode>();
-        foreach (RecursiveAI.OneOffice.Markup.MarkupNode c in Wx.ChildElements(sect))
+        RecursiveAI.OneDocument.Markup.MarkupNode sect = doc.Body.SectionProperties!.Value.Node;
+        var refs = new List<RecursiveAI.OneDocument.Markup.MarkupNode>();
+        foreach (RecursiveAI.OneDocument.Markup.MarkupNode c in Wx.ChildElements(sect))
         {
             if ((Wx.Is(c, "headerReference") || Wx.Is(c, "footerReference")) && Wx.Attr(c, "type") is not (null or "default"))
             {
@@ -248,7 +248,7 @@ internal static class Reconstruction
             }
         }
 
-        foreach (RecursiveAI.OneOffice.Markup.MarkupNode c in refs)
+        foreach (RecursiveAI.OneDocument.Markup.MarkupNode c in refs)
         {
             c.Remove();
         }
@@ -279,11 +279,11 @@ internal static class Reconstruction
         }
 
         HeaderFooter hf = doc.Sections[0].AddOwn(kind, HeaderFooterType.Default);
-        RecursiveAI.OneOffice.Markup.MarkupNode container = hf.Container.Node;
-        for (RecursiveAI.OneOffice.Markup.MarkupNode c = container.FirstChild; !c.IsNull;)
+        RecursiveAI.OneDocument.Markup.MarkupNode container = hf.Container.Node;
+        for (RecursiveAI.OneDocument.Markup.MarkupNode c = container.FirstChild; !c.IsNull;)
         {
-            RecursiveAI.OneOffice.Markup.MarkupNode next = c.NextSibling;
-            if (c.Kind == RecursiveAI.OneOffice.Markup.MarkupNodeKind.Element && c.LocalNameString == "p")
+            RecursiveAI.OneDocument.Markup.MarkupNode next = c.NextSibling;
+            if (c.Kind == RecursiveAI.OneDocument.Markup.MarkupNodeKind.Element && c.LocalNameString == "p")
             {
                 c.Remove();
             }

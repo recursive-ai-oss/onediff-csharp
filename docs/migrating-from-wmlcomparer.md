@@ -49,7 +49,7 @@ The Docxodus README documents no comparison settings by name beyond the two revi
 | a revision's author | *Not applicable* to a single comparison. `Redline.Combine` / `Combination` attribute each change to the reviewer's copy it came from. | |
 | `GetEditScriptJson()` | `Redline.Create(a, b, "changes.json")` or `ComparisonJson.Write(cmp)`; `ComparisonJson.Read(bytes)` reads it back and re-checks it | A versioned schema, [schema/comparison-v1.json](schema/comparison-v1.json). |
 | `GetSemanticChanges()` / `GetSemanticChangesJson()` | `change.Type`, `change.OldValue` / `NewValue`, `change.IsSubstantive`, and `cmp.Ledger` | Typed values (`30 d → 60 d`), the substantive filter and the ledger of differences hidden by settings. |
-| `RevisionProcessor` (accept and reject revisions) | *Not provided.* OneDiff writes redlines; accepting and rejecting is OneOffice's job (`RevisionAuthor`), which OneDiff uses to verify its own output. | |
+| `RevisionProcessor` (accept and reject revisions) | *Not provided.* OneDiff writes redlines; accepting and rejecting is OneDocument's job (`RevisionAuthor`), which OneDiff uses to verify its own output. | |
 
 ```csharp
 using OneDiff.Documents;
