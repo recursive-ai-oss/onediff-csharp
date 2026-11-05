@@ -77,3 +77,64 @@ Resolution is `WordAnchors.TryParse` and `WordAnchors.Follow` (internal, tested)
 - `WordSourceOptions` bounds the characters of text (64 million), the nodes (8 million) and an image part's size (256 MiB); the hub's `OfficeLimits` (part sizes, expansion ratio, XML depth) apply underneath. Cancellation is checked per paragraph and per block.
 - Encrypted packages are not decrypted by this package (the hub's cryptography package is a separate dependency); they are rejected as `Encrypted`.
 - The same bytes give the same document; the same pair gives byte-identical comparison JSON. The model has no clock, random or machine-dependent input.
+
+## 5. Tracked-changes output
+
+`DocxRedline` writes a `Comparison` as a DOCX with real tracked changes (ECMA-376 Part 1 §17.13). `WordRedline.Register()` makes `Redline.Create("old.docx", "new.docx", "redline.docx")` and `comparison.SaveAs("redline.docx")` use it; `DocxRedline.Create` also returns what could not be carried.
+
+### Method
+
+- **Built on one document.** The output is the new document (default, `WordBuildOn.New`) or the old one (`WordBuildOn.Old`), reopened from the bytes it was read from, so its package, styles, numbering, headers, footers and anything the model does not itemize are the base document's. Everything the other (donor) document has is copied in as the opposite revision: deleted content when built on the new document, inserted content when built on the old. Accept-all gives the new document and reject-all the old, whichever is the base.
+- **Revisions are made with OneOffice's `RevisionAuthor`** (insert, delete, move markers, property changes) and finished with edits to its markup tree, never with a parallel DOCX layer. The author is `DocxRedline.Author` (default `OneDiff`). No date is written unless `DocxRedline.Date` is set. Revision ids are numbered 1, 2, … in document order after everything is written, so equal inputs give equal bytes (checked: two runs, and x64 against arm64, see below).
+- **Inputs.** Both documents of the comparison must have been read by `WordDocumentSource` in this process, because the writer needs their bytes and anchors (`InvalidOperationException` otherwise).
+
+### What maps to which revision
+
+| Difference | Revision |
+|---|---|
+| Inserted, deleted or replaced text inside a paragraph | `w:ins` / `w:del` around the runs (`w:delText` for deleted text); runs keep their properties and their hyperlink or smart-tag wrapper |
+| Inserted or deleted paragraph, list item | the content and the paragraph mark (`w:pPr/w:rPr/w:ins` or `w:del`) |
+| Inserted or deleted table, row, cell | `w:ins` / `w:del` in `w:trPr`, `w:cellIns` / `w:cellDel` in `w:tcPr`, and the paragraphs inside |
+| Moved paragraph (also moved and edited) | `w:moveFrom` at one place and `w:moveTo` at the other, with `w:moveFromRangeStart/End` and `w:moveToRangeStart/End` sharing a name; text edits of a moved-and-edited paragraph are `w:ins`/`w:del` inside the `w:moveTo` copy of the base |
+| Split and merge | the inserted or deleted paragraph marks of the two paragraphs |
+| Paragraph, table, row, cell and section properties | `w:pPrChange`, `w:tblPrChange`, `w:trPrChange`, `w:tcPrChange`, `w:sectPrChange`, holding the properties reject-all restores |
+| A paragraph whose objects (fields, pictures, notes, text boxes, content controls) or run formatting differ | the whole paragraph is replaced: the other document's paragraph as a deletion (insertion) next to the base paragraph as an insertion (deletion) |
+
+Run-level formatting changes (`w:rPrChange`) are not written yet; a paragraph with a format-only difference is carried as a replacement, which is complete (accept and reject are exact) but coarser than Word would write.
+
+### What is not carried (`NotCarried`)
+
+A revision cannot express these differences, so they are listed in `DocxRedlineResult.NotCarried` (each entry is also a change or ledger entry of the comparison):
+
+| Category | Why |
+|---|---|
+| `properties`, `comments` | document properties and comments are not revisable; a comment anchored in content that exists on one side only is dropped from the copy |
+| `header-footer` | a header or footer that exists on one side only cannot be added or removed as a tracked change |
+| `section` | a section break cannot be tracked; the blocks of a section that exists on one side only are |
+| `content-control` | a block content control that exists on one side only, and changes of content-control properties; the control's content is tracked, its wrapper cannot be |
+| `paragraph-mark-accept`, `paragraph-mark-reject` | a paragraph mark that has to go on accept or reject cannot when the paragraph is last in its container, comes before a table or block content control, or holds a section break: Word and OneOffice keep such a mark, which leaves an emptied paragraph. The writer moves the mark to the paragraph before it when that paragraph can take it (as Word does when Enter is pressed at the end of a paragraph) and merges an inserted and a deleted paragraph at the end of a container into one; this is the note when neither is possible |
+| `unplaced`, `import` | a copied node or relationship that could not be placed (not seen in the gates) |
+
+### Decisions
+
+- The schema requires a date on `w:moveFromRangeStart` and `w:moveToRangeStart` (CT_MoveBookmark), so when no date was asked for these two markers carry `1970-01-01T00:00:00Z`; every other revision stays undated.
+- A moved paragraph gets no `w:pPrChange`: it exists twice, each with its own properties, and a paragraph-mark revision beside a property change is not resolved by OneOffice on reject (see "OneOffice gaps").
+- Text of the other document is placed at paragraph level, outside hyperlinks and inline content controls and after the object runs that precede it, because a revision inside them would take the wrong wrapper with it.
+
+### Checks
+
+- **Accept/reject gate** (`TrackedGate`): OneOffice's `AcceptAll` / `RejectAll` on the output, the result read back with `WordDocumentSource` and compared with the new (old) side under the comparison's own settings; the comparison must have no change. Differences of the categories above are let through only as the table says; every other change is a failure.
+  - Property, comment, header, footer and section nodes, and the blocks inside a block content control or section that exists on one side only, are not compared (their wrapper is not carried).
+  - As many empty-paragraph differences (insert or delete of an empty paragraph, an empty paragraph that differs only in its properties, list numbers shifted by it) are allowed as the writer listed `paragraph-mark-*` entries for that resolution. A missing empty paragraph, or more than listed, fails.
+  - When the writer listed a `section` or block `content-control` entry, a moved paragraph without edits is allowed; an insert and a delete of the same text (or of the same object in a paragraph with the same text) count together as a move across the break; two fields that trade results across a section break are allowed.
+  - Empty `w:hyperlink` and `w:smartTag` wrappers left after resolving are dropped before reading back (OneOffice leaves them; they hold nothing).
+- **Schema**: the Open XML SDK validator (Office 2019) over every output. Errors the two inputs also have (same rule and element) are not counted against the output.
+- **Determinism**: two runs give identical bytes; the digest of 20 seeded pairs built on either document is the same on x64 and arm64.
+
+### OneOffice gaps met (workarounds in the writer)
+
+- Accepting or rejecting moves the content of a paragraph whose mark goes by serialized fragments, which can only be read back when the prefixes they use (`r:` for a hyperlink) are declared on the part's root; when they are not, the join fails silently and the emptied paragraph stays. The writer declares the well-known prefixes on every part root it saves.
+- A paragraph whose pPr holds both a paragraph-mark revision and a `w:pPrChange` is not joined on reject (the property restore replaces the element the mark revision points to). The writer never produces that pair.
+- A resolved revision leaves the empty wrapper of a hyperlink, smart tag, simple field or content control behind, and a paragraph that joins the next carries it along.
+- There is no way to mark existing runs as inserted or deleted without going through delete text: the writer authors a deletion under a marker author and renames it (`w:del` to `w:ins`, `w:delText` to `w:t`).
+- The notes part hands out an id a copied note already took; the writer chooses ids from what the part holds.

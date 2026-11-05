@@ -15,7 +15,7 @@ public enum WordBuildOn
 }
 
 /// <summary>A difference that a tracked-changes DOCX cannot carry as a revision, with the model nodes it concerns.</summary>
-/// <param name="Category">A short stable name: <c>properties</c>, <c>comments</c>, <c>header-footer</c>, <c>section</c>, <c>content-control</c> or <c>unplaced</c>.</param>
+/// <param name="Category">A short stable name: <c>properties</c>, <c>comments</c>, <c>header-footer</c>, <c>section</c>, <c>content-control</c>, <c>paragraph-mark-accept</c>, <c>paragraph-mark-reject</c>, <c>unplaced</c> or <c>import</c>.</param>
 /// <param name="Message">What could not be carried and why.</param>
 /// <param name="BaseNodes">Node ids in the document the DOCX was built on.</param>
 /// <param name="OtherNodes">Node ids in the other document.</param>
