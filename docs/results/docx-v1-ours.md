@@ -166,7 +166,7 @@ Boundary F1 ours .919.
 
 ## Rows that use the ceiling clause
 
-Against Docxodus, `align.F1.same`, `align.F1.split` and `align.F1.merged`, in both row sets: both tools' intervals reach 1.0, so neither can be told from the maximum. Against OfficeIMO, WmlComparer and LibreOffice, `align.F1.same` is the same tie at 1.0 (OfficeIMO's row is the only one among them with a ceiling count; the other two have no ceiling rows). Nothing else uses the clause.
+Against Docxodus, `align.F1.same`, `align.F1.split` and `align.F1.merged`, in both row sets: both tools' intervals reach 1.0, so neither can be told from the maximum. Against OfficeIMO, `align.F1.same` is the same tie. Against WmlComparer and LibreOffice every row is strictly better. Nothing else uses the clause.
 
 ## The reader, applied to every tool
 
