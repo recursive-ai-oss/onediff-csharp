@@ -4,16 +4,16 @@ using OneDiff.Documents;
 namespace OneDiff.Pdf.Tests;
 
 /// <summary>
-/// A minimized failure of the rendered-redline read-back gate. The pair is a generated English contract whose table holds a cell
-/// that wraps over two lines ("6" and "months"); the source keeps the line break in the node text, and the inline rendered page, read
-/// back, does not carry that text at the place the change list gives. Side-by-side pages of the same pair read back clean.
+/// A generated English contract whose table holds a cell that wraps over two lines ("6" and "months"). Read as a grid, the cell's
+/// lines are joined by a space, not a hard break: a hard break made the cell narrower than its neighbours' lines and the inline page,
+/// read back, no longer carried the cell's text where the change list puts it.
 /// </summary>
 public class RenderedReadbackTests
 {
     private static string TestData([CallerFilePath] string here = "") =>
         Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, "..", "..", "testdata", "rendered-readback"));
 
-    [Fact(Skip = "Open finding: the inline rendered redline of this pair does not read back in change-list order (a table cell whose text wraps over two lines); unskip when fixed.")]
+    [Fact]
     [Trait("Host", "Native")] // reads fixture files
     public void TheInlineRenderedRedlineOfAWrappedTableCellReadsBack()
     {
