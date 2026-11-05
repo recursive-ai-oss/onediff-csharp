@@ -1157,5 +1157,92 @@
     }
    }
   ]
+ },
+ "docx": {
+  "terms": "Bonterms repositories, README: \"... Bonterms Standard Agreements are free to use under CC BY 4.0.\" Attribution: Bonterms, bonterms.com. These Word files are different templates of one publisher, so a pair is two related documents, not two versions of one.",
+  "documents": [
+   {
+    "id": "cloud-cover",
+    "name": "Bonterms Cloud-Terms: Example-Cover-Page-for-Bonterms-Cloud-Terms .docx",
+    "url": "https://raw.githubusercontent.com/Bonterms/Cloud-Terms/df13f512c3bd923cc09cc2dae918812f876ea6e9/Example-Cover-Page-for-Bonterms-Cloud-Terms%20.docx"
+   },
+   {
+    "id": "nda-cover",
+    "name": "Bonterms Mutual-NDA: Example-Cover-Page-for-Bonterms-Mutual-NDA .docx",
+    "url": "https://raw.githubusercontent.com/Bonterms/Mutual-NDA/1b6e3a67176d47bbb89633bd4ec2be2c32d6cacf/Example-Cover-Page-for-Bonterms-Mutual-NDA%20.docx"
+   },
+   {
+    "id": "psa-cover",
+    "name": "Bonterms Professional-Services-Agreement: Example-Cover-Page-for-Bonterms-PSA .docx",
+    "url": "https://raw.githubusercontent.com/Bonterms/Professional-Services-Agreement/a31fc2a697900e32a0105a6eb469cb4def067e31/Example-Cover-Page-for-Bonterms-PSA%20.docx"
+   },
+   {
+    "id": "baa-cover",
+    "name": "Bonterms Business-Associate-Agreement: Example-Cover-Page-Bonterms-BAA-2024-10-30.docx",
+    "url": "https://raw.githubusercontent.com/Bonterms/Business-Associate-Agreement/f4a14e40216c2e5752a2061af9ab53ae5e48ae8f/Example-Cover-Page-Bonterms-BAA-2024-10-30.docx"
+   },
+   {
+    "id": "cloud-playbook",
+    "name": "Bonterms Cloud-Terms: Playbook-of-Additional-Terms-for-Bonterms-Cloud-Terms-and-SLA.docx",
+    "url": "https://raw.githubusercontent.com/Bonterms/Cloud-Terms/df13f512c3bd923cc09cc2dae918812f876ea6e9/Playbook-of-Additional-Terms-for-Bonterms-Cloud-Terms-and-SLA.docx"
+   },
+   {
+    "id": "nda-playbook",
+    "name": "Bonterms Mutual-NDA: Playbook-of-Additional-Terms-for-Bonterms-NDA.docx",
+    "url": "https://raw.githubusercontent.com/Bonterms/Mutual-NDA/1b6e3a67176d47bbb89633bd4ec2be2c32d6cacf/Playbook-of-Additional-Terms-for-Bonterms-NDA.docx"
+   },
+   {
+    "id": "dpa-playbook",
+    "name": "Bonterms Data-Protection-Addendum: Playbook-of-Additional-Terms-for-Bonterms-DPA-2024-05-16 .docx",
+    "url": "https://raw.githubusercontent.com/Bonterms/Data-Protection-Addendum/68edf622cc850488492d74df62764ee943ef444a/Playbook-of-Additional-Terms-for-Bonterms-DPA-2024-05-16%20.docx"
+   },
+   {
+    "id": "psa-playbook",
+    "name": "Bonterms Professional-Services-Agreement: Playbook-of-Additional-Terms-for-Bonterms-Professional-Services-Agreement-2023-08-31 .docx",
+    "url": "https://raw.githubusercontent.com/Bonterms/Professional-Services-Agreement/a31fc2a697900e32a0105a6eb469cb4def067e31/Playbook-of-Additional-Terms-for-Bonterms-Professional-Services-Agreement-2023-08-31%20.docx"
+   }
+  ],
+  "pairs": [
+   {
+    "id": "bonterms-cloud-cover-nda-cover",
+    "old": "cloud-cover",
+    "new": "nda-cover"
+   },
+   {
+    "id": "bonterms-nda-cover-psa-cover",
+    "old": "nda-cover",
+    "new": "psa-cover"
+   },
+   {
+    "id": "bonterms-psa-cover-baa-cover",
+    "old": "psa-cover",
+    "new": "baa-cover"
+   },
+   {
+    "id": "bonterms-cloud-cover-psa-cover",
+    "old": "cloud-cover",
+    "new": "psa-cover"
+   },
+   {
+    "id": "bonterms-cloud-playbook-nda-playbook",
+    "old": "cloud-playbook",
+    "new": "nda-playbook"
+   },
+   {
+    "id": "bonterms-nda-playbook-dpa-playbook",
+    "old": "nda-playbook",
+    "new": "dpa-playbook"
+   },
+   {
+    "id": "bonterms-dpa-playbook-psa-playbook",
+    "old": "dpa-playbook",
+    "new": "psa-playbook"
+   },
+   {
+    "id": "bonterms-cloud-playbook-psa-playbook",
+    "old": "cloud-playbook",
+    "new": "psa-playbook"
+   }
+  ]
  }
 }

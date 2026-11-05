@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fetches the real version pairs of the document gold sets. Nothing it writes is ever committed.
 
-    fetch-real-pairs.py [--root DIR] [--pins FILE] [--only licences,yc,github,edgar] [--update-pins] [--git PATH]
+    fetch-real-pairs.py [--root DIR] [--pins FILE] [--only licences,yc,github,edgar,docx] [--update-pins] [--git PATH]
 
 Output, under DIR (default $ONEDIFF_EVAL/real-pairs, else ~/onediff/eval/real-pairs-v1):
 
@@ -26,6 +26,11 @@ Sources, with the terms read at each:
 With the pins file, a fetch is reproducible: every URL, repository commit and EDGAR document is named in it, and every
 download is checked against the SHA-256 recorded there. --update-pins looks things up again (git history, EDGAR full-text
 search) and rewrites the pins file; use it only to extend the set.
+
+The docx source is separate and never part of the default set (that set's manifest identifies it): Word files of related Bonterms
+templates (CC BY 4.0), written as <source>/<pair>/old.docx and new.docx. Fetch them into their own root:
+    fetch-real-pairs.py --only docx --root ~/onediff/eval/real-docx-v1
+They carry no labels and are used for the exact gates (round trip, invertibility) and the comparator harness, not for scoring.
 """
 
 import argparse
@@ -237,6 +242,27 @@ def fetch_url_pairs(pins, key, out, terms):
                f"terms: {terms}\nFetch-only: the texts are not redistributed with the repository.\n")
         out.pair(key, pair["id"], texts[0], texts[1], src)
     return len(pins[key]["pairs"])
+
+
+# ---- Word files ---------------------------------------------------------------------------------------------------------
+
+def fetch_docx_pairs(pins, out):
+    """Word files of related templates under CC BY 4.0, kept as the bytes they were published with."""
+    docs = {d["id"]: d for d in pins["docx"]["documents"]}
+    cache = {}
+    for pair in pins["docx"]["pairs"]:
+        for side in ("old", "new"):
+            d = docs[pair[side]]
+            if d["id"] not in cache:
+                data = http_get(d["url"])
+                check_pin(d, data, d["url"])
+                cache[d["id"]] = data
+            out.write(f"docx/{pair['id']}/{side}.docx", cache[d["id"]])
+        src = (f"old: {docs[pair['old']]['name']}\n  {docs[pair['old']]['url']}\n  sha256 {docs[pair['old']]['sha256']}\n"
+               f"new: {docs[pair['new']]['name']}\n  {docs[pair['new']]['url']}\n  sha256 {docs[pair['new']]['sha256']}\n"
+               f"terms: {pins['docx']['terms']}\nFetch-only: the files are not redistributed with the repository.\n")
+        out.write(f"docx/{pair['id']}/SOURCE.txt", src)
+    return len(pins["docx"]["pairs"])
 
 
 # ---- GitHub histories -----------------------------------------------------------------------------------------------
@@ -467,11 +493,13 @@ def main():
         counts["github"] = fetch_github(pins, out, args.git, cache)
     if "edgar" in only:
         counts["edgar"] = fetch_edgar(pins, out)
+    if "docx" in only:
+        counts["docx"] = fetch_docx_pairs(pins, out)
     shutil_cache = cache
     if os.path.isdir(shutil_cache):
         subprocess.run(["rm", "-rf", shutil_cache], check=True)
     h = out.finish()
-    if args.update_pins:
+    if args.update_pins or "docx" in only:
         with open(args.pins, "w", encoding="utf-8") as f:
             json.dump(pins, f, indent=1, ensure_ascii=False)
             f.write("\n")

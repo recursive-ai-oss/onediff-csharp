@@ -16,12 +16,14 @@ internal static class Program
 {
     private const string Usage = """
         OneDiff.GoldSets generate --out DIR [--role eval|dev|train] [--seed N] [--docs-per-lang N] [--langs en,de,...] [--verify]
-        OneDiff.GoldSets score --data DIR --out FILE [--oracle-alignment] [--cmp DIR] [--save-cmp DIR] [--pipeline NAME] [--jobs N] [--limit N] [--resamples N]
+        OneDiff.GoldSets score --data DIR --out FILE [--oracle-alignment] [--cmp DIR | --changes DIR] [--blocks DIR] [--save-cmp DIR] [--pipeline NAME] [--jobs N] [--limit N] [--ids FILE] [--resamples N]
         OneDiff.GoldSets check-split --a DIR --b DIR
 
           generate    writes DIR/pairs/<id>.docs.json and <id>.labels.json for the documents of the chosen role, split.json (every
                       document and its role), manifest.json and manifest.sha256 (the set hash). Same seed, same bytes.
-          score       compares every pair with the reference pipeline (or reads DIR/<id>.cmp.json from --cmp) and writes the rows.
+          score       compares every pair with the reference pipeline (or reads DIR/<id>.cmp.json from --cmp, or the tracked-changes
+                      readings DIR/<id>.changes.json from --changes) and writes the rows. Comparisons made from rendered files (PDF, DOCX)
+                      and other tools' output are mapped to the gold nodes through DIR/<id>.blocks.json (--blocks); --changes needs it.
           check-split exits 1 when the two directories contain the same base document.
         """;
 
@@ -272,6 +274,15 @@ internal static class Program
         string outFile = Path.GetFullPath(opt.GetValueOrDefault("out") ?? throw new ArgumentException("--out is required"));
         string? cmpDir = opt.GetValueOrDefault("cmp");
         string? saveCmp = opt.GetValueOrDefault("save-cmp");
+        string? changesDir = opt.GetValueOrDefault("changes");
+        string? blocksDir = opt.GetValueOrDefault("blocks");
+        if (changesDir is not null && blocksDir is null)
+        {
+            throw new ArgumentException("--changes needs --blocks");
+        }
+
+        var mapStats = new MapStats();
+        int noOutput = 0;
         bool oracleAlignment = opt.ContainsKey("oracle-alignment");
         string pipeline = opt.GetValueOrDefault("pipeline") ?? (oracleAlignment ? "gold-alignment" : "reference");
         int jobs = int.Parse(opt.GetValueOrDefault("jobs") ?? "4", CultureInfo.InvariantCulture);
@@ -294,6 +305,12 @@ internal static class Program
         }
 
         string[] ids = [.. Directory.EnumerateFiles(Path.Combine(data, "pairs"), "*.labels.json").Select(p => Path.GetFileName(p)[..^".labels.json".Length]).OrderBy(x => x, StringComparer.Ordinal)];
+        if (opt.TryGetValue("ids", out string? idFile))
+        {
+            var want = new HashSet<string>(File.ReadAllLines(idFile), StringComparer.Ordinal);
+            ids = [.. ids.Where(want.Contains)];
+        }
+
         if (limit > 0)
         {
             ids = [.. ids.Take(limit)];
@@ -311,28 +328,60 @@ internal static class Program
             string id = ids[i];
             var labels = GoldJson.Read<PairLabels>(File.ReadAllBytes(Path.Combine(data, "pairs", id + ".labels.json")));
             var docs = GoldJson.Read<PairDocs>(File.ReadAllBytes(Path.Combine(data, "pairs", id + ".docs.json")));
-            Comparison cmp;
-            if (cmpDir is not null)
+            ScoreInput input;
+            BlockMap? blocks = blocksDir is null ? null : BlockMap.Read(Path.Combine(blocksDir, id + ".blocks.json"));
+            if (changesDir is not null)
             {
-                cmp = ComparisonJson.Read(File.ReadAllBytes(Path.Combine(cmpDir, id + ".cmp.json")));
+                // A pair the tool produced nothing for is scored as an empty result: nothing aligned, nothing found.
+                string file = Path.Combine(changesDir, id + ".changes.json");
+                ToolOutput output = File.Exists(file) ? ToolOutput.Read(file) : new ToolOutput(ToolOutput.SchemaName, id, "none", [], [], [], []);
+                if (!File.Exists(file))
+                {
+                    Interlocked.Increment(ref noOutput);
+                }
+
+                lock (mapStats)
+                {
+                    input = output.ToScoreInput(blocks!, mapStats);
+                }
             }
             else
             {
-                CompareDocument o = GoldJson.Build(docs.Old);
-                CompareDocument n = GoldJson.Build(docs.New);
-                cmp = oracleAlignment ? Pipeline.OracleAlignment(o, n, labels) : Comparison.Of(o, n, Pipeline.Settings);
-                if (saveCmp is not null)
+                Comparison cmp;
+                if (cmpDir is not null)
                 {
-                    File.WriteAllBytes(Path.Combine(saveCmp, id + ".cmp.json"), ComparisonJson.Write(cmp));
+                    cmp = ComparisonJson.Read(File.ReadAllBytes(Path.Combine(cmpDir, id + ".cmp.json")));
+                }
+                else
+                {
+                    CompareDocument o = GoldJson.Build(docs.Old);
+                    CompareDocument n = GoldJson.Build(docs.New);
+                    cmp = oracleAlignment ? Pipeline.OracleAlignment(o, n, labels) : Comparison.Of(o, n, Pipeline.Settings);
+                    if (saveCmp is not null)
+                    {
+                        File.WriteAllBytes(Path.Combine(saveCmp, id + ".cmp.json"), ComparisonJson.Write(cmp));
+                    }
+                }
+
+                if (blocks is null)
+                {
+                    input = ScoreInput.From(cmp);
+                }
+                else
+                {
+                    lock (mapStats)
+                    {
+                        input = ScoreInput.From(cmp, blocks, mapStats);
+                    }
                 }
             }
 
-            if (!cmp.Verification.Passed || cmp.Verification.FallbackLevel > 0)
+            if (!input.Passed || input.FallbackLevel > 0)
             {
-                failures.Add($"{id}: verification passed={cmp.Verification.Passed} fallback={cmp.Verification.FallbackLevel}");
+                failures.Add($"{id}: verification passed={input.Passed} fallback={input.FallbackLevel}");
             }
 
-            results[i] = (labels, PairScorer.Score(cmp, labels, GoldJson.SameNodes(docs)));
+            results[i] = (labels, PairScorer.Score(input, labels, GoldJson.SameNodes(docs)));
         });
 
         File.WriteAllLines(outFile + ".missed.txt", results.Where(r => r.Counts.Missed.Count > 0).OrderBy(r => r.Labels.Id, StringComparer.Ordinal).Select(r => r.Labels.Id + " " + string.Join(" | ", r.Counts.Missed)));
@@ -373,6 +422,11 @@ internal static class Program
         var output = new ScoreOutput("synth", setHash, pipeline, Bootstrap.Resamples, Bootstrap.Seed, rows, [.. failures.OrderBy(x => x, StringComparer.Ordinal)]);
         File.WriteAllBytes(outFile, JsonSerializer.SerializeToUtf8Bytes(output, ReportOptions));
         Console.WriteLine($"set {setHash}  pipeline {pipeline}  pairs {ids.Length}  verification failures {failures.Count}  bootstrap {Bootstrap.Resamples} resamples over documents, seed {Bootstrap.Seed}");
+        if (blocksDir is not null)
+        {
+            Console.WriteLine($"block map: {mapStats.Matched}/{mapStats.Total} content nodes matched to gold blocks" + (changesDir is null ? string.Empty : $"; pairs without output: {noOutput}"));
+        }
+
         foreach (MetricRow row in rows.Where(r => r.Scope is "all" or "mixed" || r.Scope.StartsWith("lang:", StringComparison.Ordinal)))
         {
             Console.WriteLine(Report.Line(row));

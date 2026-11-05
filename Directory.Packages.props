@@ -17,5 +17,11 @@
     <PackageVersion Include="RecursiveAI.OnePdf.Fonts" Version="1.18.0-preview.1" />
     <PackageVersion Include="RecursiveAI.OnePdf.Hyphenation" Version="1.18.0-preview.1" />
     <PackageVersion Include="RecursiveAI.OneFont" Version="1.4.0-preview.1" />
+    <!-- OneOffice preview (same extra restore source as the other previews): writes and reads the DOCX files of the document gold sets. -->
+    <PackageVersion Include="RecursiveAI.OneOffice" Version="0.1.0-preview.1" />
+    <PackageVersion Include="RecursiveAI.OneOffice.Documents" Version="0.1.0-preview.1" />
+    <!-- DOCX comparators, restored for the comparator and benchmark projects only and run as released binaries through their public APIs. -->
+    <PackageVersion Include="Docxodus" Version="15.0.0" />
+    <PackageVersion Include="OfficeIMO.Word" Version="3.5.3" />
   </ItemGroup>
 </Project>

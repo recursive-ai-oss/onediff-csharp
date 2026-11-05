@@ -101,11 +101,16 @@ internal static class PairScorer
     };
 
     /// <param name="noDiff">Whether the two documents of the pair are identical (see <see cref="GoldJson.SameNodes"/>).</param>
-    public static Counts Score(Comparison cmp, PairLabels labels, bool noDiff = false)
+    public static Counts Score(Comparison cmp, PairLabels labels, bool noDiff = false) => Score(ScoreInput.From(cmp), labels, noDiff);
+
+    /// <param name="input">A comparison in the gold documents' coordinates, from any producer.</param>
+    /// <param name="labels">The pair's labels.</param>
+    /// <param name="noDiff">Whether the two documents of the pair are identical (see <see cref="GoldJson.SameNodes"/>).</param>
+    public static Counts Score(ScoreInput input, PairLabels labels, bool noDiff = false)
     {
-        var c = new Counts { Pairs = 1, Passed = cmp.Verification.Passed ? 1 : 0, Fallbacks = cmp.Verification.FallbackLevel > 0 ? 1 : 0 };
-        CompareDocument od = cmp.Old;
-        CompareDocument nd = cmp.New;
+        var c = new Counts { Pairs = 1, Passed = input.Passed ? 1 : 0, Fallbacks = input.FallbackLevel > 0 ? 1 : 0 };
+        string[] oldText = input.OldText;
+        string[] newText = input.NewText;
 
         // A pair whose two documents are identical has nothing to compare, whatever its labels say. The generator can undo a defined-
         // term rename with a second one in the same pair, leaving unit labels for text that did not change; those labels describe no
@@ -114,10 +119,10 @@ internal static class PairScorer
 
         // ---- links ----
         var gold = new HashSet<string>();
-        string Join(CompareDocument d, IEnumerable<int> ids) => string.Join('\u001E', ids.Select(i => d[i].Text));
+        string Join(string[] d, IEnumerable<int> ids) => string.Join('\u001E', ids.Select(i => d[i]));
         foreach (GoldLink l in labels.Links)
         {
-            gold.Add(Key(LinkType(l.Kind, Join(od, l.Old), Join(nd, l.New)), l.Old, l.New));
+            gold.Add(Key(LinkType(l.Kind, Join(oldText, l.Old), Join(newText, l.New)), l.Old, l.New));
         }
 
         foreach (int d in labels.Deleted)
@@ -133,27 +138,27 @@ internal static class PairScorer
         var pred = new HashSet<string>();
         var linkedOld = new HashSet<int>();
         var linkedNew = new HashSet<int>();
-        foreach (AlignmentLink l in cmp.Alignment.Links)
+        foreach (SLink l in input.Links)
         {
-            if (!l.OldNodes.All(i => IsContent(od[i].Kind)) || !l.NewNodes.All(i => IsContent(nd[i].Kind)))
+            pred.Add(Key(LinkType(l.Kind, Join(oldText, l.Old), Join(newText, l.New)), l.Old, l.New));
+            l.Old.ToList().ForEach(i => linkedOld.Add(i));
+            l.New.ToList().ForEach(i => linkedNew.Add(i));
+        }
+
+        for (int id = 0; id < oldText.Length; id++)
+        {
+            if (input.OldContent[id] && !linkedOld.Contains(id))
             {
-                continue;
+                pred.Add(Key("unrelated", [id], []));
             }
-
-            string kind = l.Kind switch { LinkKind.Move => "move", LinkKind.Split => "split", LinkKind.Merge => "merge", _ => "match" };
-            pred.Add(Key(LinkType(kind, Join(od, l.OldNodes), Join(nd, l.NewNodes)), l.OldNodes, l.NewNodes));
-            l.OldNodes.ToList().ForEach(i => linkedOld.Add(i));
-            l.NewNodes.ToList().ForEach(i => linkedNew.Add(i));
         }
 
-        foreach (Node n in od.Nodes.Where(n => IsContent(n.Kind) && !linkedOld.Contains(n.Id)))
+        for (int id = 0; id < newText.Length; id++)
         {
-            pred.Add(Key("unrelated", [n.Id], []));
-        }
-
-        foreach (Node n in nd.Nodes.Where(n => IsContent(n.Kind) && !linkedNew.Contains(n.Id)))
-        {
-            pred.Add(Key("unrelated", [], [n.Id]));
+            if (input.NewContent[id] && !linkedNew.Contains(id))
+            {
+                pred.Add(Key("unrelated", [], [id]));
+            }
         }
 
         foreach (string k in gold)
@@ -177,7 +182,7 @@ internal static class PairScorer
         }
 
         // ---- boundaries ----
-        string TextOf(bool isNew, int node) => (isNew ? nd : od)[node].Text;
+        string TextOf(bool isNew, int node) => (isNew ? newText : oldText)[node];
         var goldBoundaries = new HashSet<(bool, int, int)>();
         var goldUnitIvs = new Dictionary<int, List<Iv>>();
         foreach (Unit u in noDiff ? [] : labels.Units)
@@ -206,16 +211,20 @@ internal static class PairScorer
 
         // Predicted units: one list of intervals per change (boundaries use the engine's own sides).
         var perChange = new Dictionary<int, List<Iv>>();
-        foreach (Change ch in cmp.Changes)
+        foreach (SChange ch in input.Changes)
         {
-            if (ch.Kind is ChangeKind.Attribute or ChangeKind.Split or ChangeKind.Merge)
+            if (ch.Kind == SKind.NoExtent)
             {
                 continue;
             }
 
             var ivs = new List<Iv>();
-            Sides(ch.Old, false, od, ivs);
-            Sides(ch.New, true, nd, ivs);
+            foreach (Iv v in ch.Extent)
+            {
+                string text = TextOf(v.IsNew, v.Node);
+                AddTrimmed(ivs, v.IsNew, v.Node, v.Start, v.End, text);
+            }
+
             perChange[ch.Id] = ivs;
         }
 
@@ -251,9 +260,9 @@ internal static class PairScorer
         {
             var extents = new List<List<Iv>>();
             var indexOfChange = new Dictionary<int, int>();
-            foreach (Change ch in cmp.Changes)
+            foreach (SChange ch in input.Changes)
             {
-                if ((ch.Kind == ChangeKind.Move) == movesOnly && perChange.TryGetValue(ch.Id, out List<Iv>? ivs) && ivs.Count > 0)
+                if ((ch.Kind == SKind.Move) == movesOnly && perChange.TryGetValue(ch.Id, out List<Iv>? ivs) && ivs.Count > 0)
                 {
                     indexOfChange[ch.Id] = extents.Count;
                     extents.Add(ivs);
@@ -261,9 +270,9 @@ internal static class PairScorer
             }
 
             var groups = new List<int[]>();
-            foreach (ChangeGroup g in cmp.Groups)
+            foreach (int[] g in input.Groups)
             {
-                int[] members = [.. g.ChangeIds.Where(indexOfChange.ContainsKey).Select(id => indexOfChange[id])];
+                int[] members = [.. g.Where(indexOfChange.ContainsKey).Select(id => indexOfChange[id])];
                 if (members.Length > 0)
                 {
                     groups.Add(members);
@@ -331,31 +340,6 @@ internal static class PairScorer
         if (end > start)
         {
             into.Add(new Iv(isNew, node, start, end));
-        }
-    }
-
-    /// <summary>Maps a change side (a range of the nodes' joined text) back to intervals of single nodes.</summary>
-    private static void Sides(ChangeSide side, bool isNew, CompareDocument doc, List<Iv> into)
-    {
-        if (!side.IsPresent)
-        {
-            return;
-        }
-
-        int offset = 0;
-        int from = side.Start;
-        int to = side.Start + side.Length;
-        foreach (int id in side.Nodes)
-        {
-            string text = doc[id].Text;
-            int lo = Math.Max(from, offset);
-            int hi = Math.Min(to, offset + text.Length);
-            if (hi > lo)
-            {
-                AddTrimmed(into, isNew, id, lo - offset, hi - offset, text);
-            }
-
-            offset += text.Length + 1;
         }
     }
 }
