@@ -34,10 +34,10 @@ internal static class RuleGrouper
 
     public static ChangeSet Group(PairDiffs diffs, CancellationToken ct)
     {
-        // The edits that rename a defined term stand alone, so a rename can be shown as one group of its occurrences without
-        // swallowing the other edits of the sentence (docs/semantics.md).
-        HashSet<(string, string)>? renames = diffs.Alignment.Settings.CollapseCascades ? Semantics.SemanticGrouping.RenamedEdits(diffs, ct) : null;
-        return ReferenceGrouper.Group(diffs, ct, (link, og, ng, diff, al) => Units(link, og, ng, diff, al, renames), groupMoves: true);
+        // The edits that rename a defined term, and those that rewrite a clause number a renumbering moved, stand alone, so each can be
+        // shown in a group of its occurrences without swallowing the other edits of the sentence (docs/semantics.md).
+        Semantics.SemanticPins? pins = diffs.Alignment.Settings.CollapseCascades ? Semantics.SemanticGrouping.Pins(diffs, ct) : null;
+        return ReferenceGrouper.Group(diffs, ct, (link, og, ng, diff, al) => Units(link, og, ng, diff, al, pins), groupMoves: true);
     }
 
     private sealed class Unit
@@ -82,7 +82,7 @@ internal static class RuleGrouper
     private static void SortEdits(List<RegionEdit> edits) =>
         edits.Sort(static (x, y) => x.OldStart != y.OldStart ? x.OldStart.CompareTo(y.OldStart) : x.NewStart.CompareTo(y.NewStart));
 
-    private static List<(int Position, Change Change)> Units(AlignmentLink link, ProjectedGroup og, ProjectedGroup ng, LinkDiff diff, Alignment al, HashSet<(string, string)>? renames)
+    private static List<(int Position, Change Change)> Units(AlignmentLink link, ProjectedGroup og, ProjectedGroup ng, LinkDiff diff, Alignment al, Semantics.SemanticPins? pins)
     {
         var result = new List<(int, Change)>();
         if (diff.Edits.IsDefaultOrEmpty)
@@ -91,33 +91,66 @@ internal static class RuleGrouper
         }
 
         string a = og.Text, b = ng.Text;
-        var pinned = new List<RegionEdit>();
-        if (renames is { Count: > 0 })
+
+        // Pinned edits, by what they pin: one key per renamed term, one per clause number that is a reference (all edits inside one
+        // number belong together).
+        var pinned = new Dictionary<long, List<RegionEdit>>();
+        if (pins is not null)
         {
+            long next = 0;
             foreach (RegionEdit e in diff.Edits)
             {
-                if (!e.IsFormatOnly && renames.Contains((e.OldText.Trim(), e.NewText.Trim())))
+                if (e.IsFormatOnly)
                 {
-                    pinned.Add(e);
+                    continue;
+                }
+
+                long key = pins.Renames.Contains((e.OldText.Trim(), e.NewText.Trim())) ? --next : pins.ReferenceNumber(a, b, e);
+                if (key != long.MinValue)
+                {
+                    if (!pinned.TryGetValue(key, out List<RegionEdit>? list))
+                    {
+                        list = [];
+                        pinned[key] = list;
+                    }
+
+                    list.Add(e);
                 }
             }
         }
 
-        // A pinned edit stays alone unless the units built without it reach it; then it goes back among the others.
+        // A pin stays alone unless the units built without it reach it; then its edits go back among the others.
         List<Unit> units;
+        var pinUnits = new Dictionary<long, Unit>();
         while (true)
         {
-            units = BuildUnits(diff.Edits.Where(e => !pinned.Contains(e)), a, b);
-            List<RegionEdit> clash = [.. pinned.Where(p => units.Exists(u => u.OldFrom <= p.OldEnd && p.OldStart <= u.OldTo || u.NewFrom <= p.NewEnd && p.NewStart <= u.NewTo))];
+            var kept = new HashSet<RegionEdit>(pinned.Values.SelectMany(static v => v));
+            units = BuildUnits(diff.Edits.Where(e => !kept.Contains(e)), a, b);
+            pinUnits.Clear();
+            foreach (KeyValuePair<long, List<RegionEdit>> kv in pinned)
+            {
+                Unit u = Unit.Of(kv.Value[0]);
+                for (int i = 1; i < kv.Value.Count; i++)
+                {
+                    u.Absorb(kv.Value[i]);
+                }
+
+                pinUnits[kv.Key] = u;
+            }
+
+            List<long> clash = [.. pinUnits.Where(p => units.Exists(u => u.OldFrom <= p.Value.OldTo && p.Value.OldFrom <= u.OldTo || u.NewFrom <= p.Value.NewTo && p.Value.NewFrom <= u.NewTo)).Select(static p => p.Key)];
             if (clash.Count == 0)
             {
                 break;
             }
 
-            pinned.RemoveAll(clash.Contains);
+            foreach (long k in clash)
+            {
+                pinned.Remove(k);
+            }
         }
 
-        units.AddRange(pinned.Select(Unit.Of));
+        units.AddRange(pinUnits.Values);
         units.Sort(static (x, y) => x.NewFrom != y.NewFrom ? x.NewFrom.CompareTo(y.NewFrom) : x.OldFrom.CompareTo(y.OldFrom));
 
         foreach (Unit u in units)

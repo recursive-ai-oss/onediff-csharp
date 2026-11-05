@@ -28,6 +28,66 @@ internal sealed class SideTexts(Alignment alignment)
 }
 
 /// <summary>
+/// The edits the rule grouping keeps out of its joining (docs/semantics.md): renamed-term edits and clause numbers that follow a
+/// renumbering.
+/// </summary>
+/// <param name="Renames">The (old, new) texts of renamed terms.</param>
+/// <param name="LabelPairs">The (old, new) list labels a renumbering moved, normalized.</param>
+internal sealed record SemanticPins(HashSet<(string, string)> Renames, HashSet<(string, string)> LabelPairs)
+{
+    /// <summary>
+    /// A key naming the clause number an edit sits in when that number is a reference that a renumbering rewrote (<c>Section 3.2</c>
+    /// becoming <c>Section 3.3</c> where the label 3.2 became 3.3), the same key for every edit in one number; <see cref="long.MinValue"/> otherwise.
+    /// </summary>
+    private const bool PinReferences = false;
+
+    public long ReferenceNumber(string oldText, string newText, RegionEdit e)
+    {
+        // Switched off until a pinned reference unit is widened to its whole number (the unit must read 8.2 to 8.3, not 2 to 3).
+        if (LabelPairs.Count == 0 || !PinReferences)
+        {
+            return long.MinValue;
+        }
+
+        (int os, int oe) = Token(oldText, e.OldStart, e.OldEnd);
+        (int ns, int ne) = Token(newText, e.NewStart, e.NewEnd);
+        if (oe <= os || ne <= ns || e.OldStart < os || e.OldEnd > oe || e.NewStart < ns || e.NewEnd > ne)
+        {
+            return long.MinValue;
+        }
+
+        string o = oldText.Substring(os, oe - os), n = newText.Substring(ns, ne - ns);
+        if (!LabelPairs.Contains((TextRules.NormalizeLabel(o), TextRules.NormalizeLabel(n)))
+            || !TextRules.TryReference(oldText, os, oe - os, out _) || !TextRules.TryReference(newText, ns, ne - ns, out _))
+        {
+            return long.MinValue;
+        }
+
+        return ((long)os << 32) | (uint)ns;
+    }
+
+    /// <summary>The run of digits and inner full stops (<c>3.2</c>) that holds or touches [start, end).</summary>
+    private static (int Start, int End) Token(string text, int start, int end)
+    {
+        int s = Math.Min(start, text.Length), e = Math.Min(end, text.Length);
+        while (s > 0 && IsNumberChar(text, s - 1))
+        {
+            s--;
+        }
+
+        while (e < text.Length && IsNumberChar(text, e))
+        {
+            e++;
+        }
+
+        return (s, e);
+    }
+
+    private static bool IsNumberChar(string t, int i) =>
+        char.IsAsciiDigit(t[i]) || (t[i] == '.' && i > 0 && i + 1 < t.Length && char.IsAsciiDigit(t[i - 1]) && char.IsAsciiDigit(t[i + 1]));
+}
+
+/// <summary>
 /// Cascades and defined-term renames as display groups. Both are found from the changes alone and arranged as
 /// <see cref="ChangeGroup"/>s; no change is altered, merged or dropped, so every edit stays in the change list and
 /// <see cref="Stages.Verify"/> sees all of them.
@@ -191,15 +251,25 @@ internal static class SemanticGrouping
     }
 
     /// <summary>
-    /// The pairs of texts (<c>Software</c>, <c>Platform</c>) that edits replace in at least two places and that are a defined-term rename
-    /// (see <see cref="TextRules.TermPair"/>). The grouping keeps such an edit apart from its neighbours.
+    /// What the grouping keeps apart from its neighbours: the pairs of texts that edits replace in at least two places and that are a
+    /// defined-term rename (see <see cref="TextRules.TermPair"/>), and the pairs of list labels a renumbering moved (to recognize the
+    /// clause numbers that follow). Null when there is neither.
     /// </summary>
-    public static HashSet<(string, string)>? RenamedEdits(PairDiffs diffs, CancellationToken ct)
+    public static SemanticPins? Pins(PairDiffs diffs, CancellationToken ct)
     {
+        var labelPairs = new HashSet<(string, string)>();
         var counts = new Dictionary<(string, string), int>();
         foreach (LinkDiff d in diffs.Links)
         {
             ct.ThrowIfCancellationRequested();
+            foreach (AttributeEdit e in d.AttributeEdits)
+            {
+                if (e.Key == FormatKeys.ListLabel && e.OldValue is not null && e.NewValue is not null)
+                {
+                    labelPairs.Add((TextRules.NormalizeLabel(e.OldValue), TextRules.NormalizeLabel(e.NewValue)));
+                }
+            }
+
             foreach (RegionEdit e in d.Edits)
             {
                 if (e.OldLength is > 0 and <= MaxSide && e.NewLength is > 0 and <= MaxSide && !e.IsFormatOnly)
@@ -210,27 +280,23 @@ internal static class SemanticGrouping
             }
         }
 
-        if (!counts.Any(static kv => kv.Value >= 2))
+        var renames = new HashSet<(string, string)>();
+        if (counts.Any(static kv => kv.Value >= 2))
         {
-            return null;
-        }
-
-        (HashSet<string> oldTerms, HashSet<string> newTerms) = DefinedIn(diffs.Alignment);
-        if (oldTerms.Count == 0 || newTerms.Count == 0)
-        {
-            return null;
-        }
-
-        var result = new HashSet<(string, string)>();
-        foreach (KeyValuePair<(string, string), int> kv in counts.OrderBy(static kv => kv.Key.Item1, StringComparer.Ordinal).ThenBy(static kv => kv.Key.Item2, StringComparer.Ordinal))
-        {
-            if (kv.Value >= 2 && kv.Key.Item1.Length > 0 && kv.Key.Item2.Length > 0 && TextRules.TermPair(kv.Key.Item1, kv.Key.Item2, oldTerms, newTerms, out _, out _))
+            (HashSet<string> oldTerms, HashSet<string> newTerms) = DefinedIn(diffs.Alignment);
+            if (oldTerms.Count > 0 && newTerms.Count > 0)
             {
-                result.Add(kv.Key);
+                foreach (KeyValuePair<(string, string), int> kv in counts.OrderBy(static kv => kv.Key.Item1, StringComparer.Ordinal).ThenBy(static kv => kv.Key.Item2, StringComparer.Ordinal))
+                {
+                    if (kv.Value >= 2 && kv.Key.Item1.Length > 0 && kv.Key.Item2.Length > 0 && TextRules.TermPair(kv.Key.Item1, kv.Key.Item2, oldTerms, newTerms, out _, out _))
+                    {
+                        renames.Add(kv.Key);
+                    }
+                }
             }
         }
 
-        return result.Count == 0 ? null : result;
+        return renames.Count == 0 && labelPairs.Count == 0 ? null : new SemanticPins(renames, labelPairs);
     }
 
     /// <summary>Whether every attribute edit of the change is a list label that went from one value to another.</summary>
