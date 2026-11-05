@@ -111,3 +111,7 @@ The existing `onediff.comparison` document is unchanged. There is no per-change 
 ## 5. Limits and cost
 
 Claims are grouped by old node and by insertion place; pairs are compared only inside a group, so cost is quadratic only in the edits to one node. The combination's own work is a small fraction of the N comparisons it is built on (see `measurement.md`). Memory is linear in the changes. Cancellation is observed between comparisons.
+
+## 6. Samples
+
+`docs/samples/inputs/` holds the plain-text contract used below: an original, three reviewers' copies (`alice`, `bob`, `carol`) and four versions (`v1` to `v4`). `docs/samples/combine-report.html` is `onediff combine original.txt alice.txt bob.txt carol.txt -o combine-report.html` (two shared changes, one conflict over a payment period that two reviewers set to 60 and one to 30 days), and `docs/samples/chain-report.html` is `onediff chain v1.txt v2.txt v3.txt v4.txt -o chain-report.html`.
