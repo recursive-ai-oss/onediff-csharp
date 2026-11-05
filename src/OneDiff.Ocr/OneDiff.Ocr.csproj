@@ -16,6 +16,9 @@
     <PackageReference Include="RecursiveAI.OneOcr.Pdf" />
     <!-- Pins the fonts package of the PDF renderer to the same OnePDF build as the rest (a transitive dependency of the OCR package's PDF reader). -->
     <PackageReference Include="RecursiveAI.OnePdf.Fonts" />
+    <!-- Same for the OneImage packages the OCR package draws on: OneRender (through the PDF package) needs the newer OneImage build. -->
+    <PackageReference Include="RecursiveAI.OneImage.Svg" />
+    <PackageReference Include="RecursiveAI.OneImage.Text" />
   </ItemGroup>
 
 </Project>
