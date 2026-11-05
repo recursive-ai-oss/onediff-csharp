@@ -6,7 +6,7 @@ using RecursiveAI.OneOffice.Markup;
 namespace OneDiff.GoldSets.Docx;
 
 /// <summary>What a revision does to a stretch of text.</summary>
-internal enum SegKind { Equal, Delete, Insert, MoveFrom, MoveTo }
+internal enum SegKind { Equal, Delete, Insert, MoveFrom, MoveTo, Gone }
 
 internal sealed record Seg(SegKind Kind, string Text, string? Move, bool Fmt = false);
 
@@ -203,11 +203,14 @@ internal static class TrackedReader
             }
             else if (Is(c, "ins"))
             {
-                ReadInline(c, rec, moves, ctx == SegKind.Delete ? SegKind.Delete : SegKind.Insert, move);
+                // Accepting or rejecting everything resolves the outer revision first: an insertion inside moved-away text is
+                // removed with it (accept) and restored text never contains it (reject), so it is in neither view.
+                ReadInline(c, rec, moves, ctx == SegKind.Delete ? SegKind.Delete : ctx is SegKind.MoveFrom or SegKind.Gone ? SegKind.Gone : SegKind.Insert, move);
             }
             else if (Is(c, "del"))
             {
-                ReadInline(c, rec, moves, SegKind.Delete, move);
+                // A deletion inside inserted or moved-here text goes with it on reject-all and on accept-all.
+                ReadInline(c, rec, moves, ctx is SegKind.Insert or SegKind.MoveTo or SegKind.Gone ? SegKind.Gone : SegKind.Delete, move);
             }
             else if (Is(c, "moveFrom"))
             {
@@ -367,6 +370,8 @@ internal static class TrackedReader
             {
                 switch (s.Kind)
                 {
+                    case SegKind.Gone:
+                        break;
                     case SegKind.Equal when s.Fmt:
                         // A formatting revision: the same text in both views, changed.
                         if (oldLine >= 0)

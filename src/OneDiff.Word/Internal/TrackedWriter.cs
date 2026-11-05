@@ -197,6 +197,11 @@ internal sealed partial class TrackedWriter : IDisposable
         ct.ThrowIfCancellationRequested();
         Node n = bm[id];
         AlignmentLink? l = LinkOfBase(id);
+        if (l is { Kind: LinkKind.Split or LinkKind.Merge } && IsParagraph(n.Kind) && SplitMerge(l))
+        {
+            return;
+        }
+
         if (!IsPair(l))
         {
             BaseOnly(id);
@@ -662,7 +667,7 @@ internal sealed partial class TrackedWriter : IDisposable
         return Wx.NextElement(donorParagraph);
     }
 
-    private void TextRegion(Node bn, Node dn, MarkupNode bp, MarkupNode scratch, RegionEdit r)
+    private void TextRegion(Node bn, Node dn, MarkupNode bp, MarkupNode scratch, RegionEdit r, int shift = 0)
     {
         int bs = baseIsNew ? r.NewStart : r.OldStart, bl = baseIsNew ? r.NewLength : r.OldLength;
         int ds = baseIsNew ? r.OldStart : r.NewStart, dl = baseIsNew ? r.OldLength : r.NewLength;
@@ -671,6 +676,9 @@ internal sealed partial class TrackedWriter : IDisposable
         {
             throw new ReplaceNeeded("a position of the edit could not be placed");
         }
+
+        // A paragraph that was cut in pieces is addressed from the start of the piece.
+        bh -= shift;
 
         if (r.IsFormatOnly)
         {

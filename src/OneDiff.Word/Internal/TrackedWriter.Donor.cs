@@ -16,6 +16,11 @@ internal sealed partial class TrackedWriter
         ct.ThrowIfCancellationRequested();
         Node n = dm[id];
         AlignmentLink? l = LinkOfDonor(id);
+        if (handledDonor.Contains(id))
+        {
+            return;
+        }
+
         if (donorCopy.TryGetValue(id, out DonorMode mode))
         {
             Transplant(id, mode, l);
