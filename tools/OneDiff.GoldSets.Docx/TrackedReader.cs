@@ -333,36 +333,35 @@ internal static class TrackedReader
             int oldPos = oldAt[i].Start, newPos = newAt[i].Start;
             int oldLine = oldMap[i], newLine = newMap[i];
             List<LineSpan>? oldSpans = null, newSpans = null;
-            bool isMove = false;
+            List<LineSpan>? moveOld = null, moveNew = null;
             string? moveName = null;
 
+            // A move is the moved text; insertions, deletions and formatting beside it or inside it are changes of their own.
             void Close()
             {
-                if (oldSpans is null && newSpans is null)
+                if (moveName is not null || moveOld is not null || moveNew is not null)
                 {
-                    return;
-                }
-
-                if (isMove && moveName is not null)
-                {
-                    if (oldSpans is not null)
+                    string name = moveName ?? string.Empty;
+                    if (moveOld is not null)
                     {
-                        AddTo(moveFrom, moveName, oldSpans);
+                        AddTo(moveFrom, name, moveOld);
                     }
 
-                    if (newSpans is not null)
+                    if (moveNew is not null)
                     {
-                        AddTo(moveTo, moveName, newSpans);
+                        AddTo(moveTo, name, moveNew);
                     }
                 }
-                else
+
+                if (oldSpans is not null || newSpans is not null)
                 {
-                    changes.Add(new ToolChange(nextId++, isMove ? "move" : "text", oldSpans ?? [], newSpans ?? []));
+                    changes.Add(new ToolChange(nextId++, "text", oldSpans ?? [], newSpans ?? []));
                 }
 
                 oldSpans = null;
                 newSpans = null;
-                isMove = false;
+                moveOld = null;
+                moveNew = null;
                 moveName = null;
             }
 
@@ -396,16 +395,28 @@ internal static class TrackedReader
                         oldPos += s.Text.Length;
                         newPos += s.Text.Length;
                         break;
-                    case SegKind.Delete or SegKind.MoveFrom:
+                    case SegKind.MoveFrom:
+                        if (oldLine >= 0)
+                        {
+                            (moveOld ??= []).Add(new LineSpan(oldLine, oldPos, s.Text.Length));
+                        }
+
+                        moveName ??= s.Move;
+                        oldPos += s.Text.Length;
+                        break;
+                    case SegKind.MoveTo:
+                        if (newLine >= 0)
+                        {
+                            (moveNew ??= []).Add(new LineSpan(newLine, newPos, s.Text.Length));
+                        }
+
+                        moveName ??= s.Move;
+                        newPos += s.Text.Length;
+                        break;
+                    case SegKind.Delete:
                         if (oldLine >= 0)
                         {
                             (oldSpans ??= []).Add(new LineSpan(oldLine, oldPos, s.Text.Length));
-                        }
-
-                        if (s.Kind == SegKind.MoveFrom)
-                        {
-                            isMove = true;
-                            moveName ??= s.Move;
                         }
 
                         oldPos += s.Text.Length;
@@ -414,12 +425,6 @@ internal static class TrackedReader
                         if (newLine >= 0)
                         {
                             (newSpans ??= []).Add(new LineSpan(newLine, newPos, s.Text.Length));
-                        }
-
-                        if (s.Kind == SegKind.MoveTo)
-                        {
-                            isMove = true;
-                            moveName ??= s.Move;
                         }
 
                         newPos += s.Text.Length;

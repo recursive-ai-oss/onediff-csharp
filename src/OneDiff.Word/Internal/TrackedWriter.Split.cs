@@ -335,6 +335,7 @@ internal sealed partial class TrackedWriter
             // The last paragraph holds the properties of the joined paragraph in the other version.
             MarkupNode lastBase = pieces[^1], lastDonor = delements[^1];
             PropertyChange(lastBase, lastDonor, "pPr", "pPrChange", ["rPr", "sectPr", "pPrChange"], insertAtStart: true);
+            splitTail[link.Id] = pieces[^1];
         }
         catch (Exception ex) when (ex is ReplaceNeeded or ArgumentException or InvalidOperationException)
         {
@@ -382,6 +383,7 @@ internal sealed partial class TrackedWriter
     private int[] pieceStarts = [];
 
     private readonly HashSet<int> handledDonor = [];
+    private readonly Dictionary<int, MarkupNode> splitTail = [];
 
     /// <summary>
     /// Cuts a paragraph in two at a paragraph offset: what follows the offset moves to a new paragraph after it, with the same

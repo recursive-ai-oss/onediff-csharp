@@ -43,6 +43,7 @@ internal sealed partial class TrackedWriter : IDisposable
 
     private readonly Dictionary<int, List<RegionEdit>> regionEdits = [];
     private readonly HashSet<int> changedLinks = [];
+    private readonly HashSet<int> attributeLinks = [];
     private readonly Dictionary<int, DonorMode> donorCopy = [];
     private readonly Dictionary<int, MarkupNode> placed = [];
     private readonly Dictionary<int, string> moveNames = [];
@@ -100,6 +101,11 @@ internal sealed partial class TrackedWriter : IDisposable
             }
 
             changedLinks.Add(c.LinkId);
+            if (c.Kind is ChangeKind.Attribute or ChangeKind.Move or ChangeKind.Split or ChangeKind.Merge)
+            {
+                attributeLinks.Add(c.LinkId);
+            }
+
             if (!c.Edits.IsDefaultOrEmpty)
             {
                 if (!regionEdits.TryGetValue(c.LinkId, out List<RegionEdit>? list))
@@ -597,7 +603,13 @@ internal sealed partial class TrackedWriter : IDisposable
         for (int i = 0; i < bo.Count; i++)
         {
             AlignmentLink? l = LinkOfBase(bo[i]);
-            if (l is not { Kind: LinkKind.Match } || DonorOf(l) != dobj[i] || BaseOf(l) != bo[i] || changedLinks.Contains(l.Id))
+            if (l is not { Kind: LinkKind.Match } || DonorOf(l) != dobj[i] || BaseOf(l) != bo[i])
+            {
+                return false;
+            }
+
+            // A field whose result changed is written as an edit of the result; anything else that changed about an object is not.
+            if (changedLinks.Contains(l.Id) && !(bm[bo[i]].Kind == NodeKind.Field && !attributeLinks.Contains(l.Id)))
             {
                 return false;
             }
@@ -624,21 +636,49 @@ internal sealed partial class TrackedWriter : IDisposable
 
     private void FineEdits(int bid, int did, MarkupNode bp, MarkupNode dp, AlignmentLink link)
     {
-        if (!regionEdits.TryGetValue(link.Id, out List<RegionEdit>? list) || list.Count == 0)
+        // The paragraph's own text edits, and the edits of the results of fields in it (a field's text lives in its own node, but its
+        // segments name stretches of the paragraph).
+        var work = new List<(Node Base, Node Donor, RegionEdit Region, int Hub)>();
+        void Collect(int baseId, int donorId, AlignmentLink l)
+        {
+            if (!regionEdits.TryGetValue(l.Id, out List<RegionEdit>? list))
+            {
+                return;
+            }
+
+            Node bn = bm[baseId], dn = dm[donorId];
+            foreach (RegionEdit r in list)
+            {
+                int bs = baseIsNew ? r.NewStart : r.OldStart, bl = baseIsNew ? r.NewLength : r.OldLength;
+                int hub = TextPositions.TryHubRange(bn, settings, bs, bs + bl, out int h, out _) ? h : int.MaxValue;
+                work.Add((bn, dn, r, hub));
+            }
+        }
+
+        Collect(bid, did, link);
+        List<int> bo = ObjectChildren(bm, bid);
+        List<int> dobj = ObjectChildren(dm, did);
+        for (int i = 0; i < bo.Count && i < dobj.Count; i++)
+        {
+            AlignmentLink? ol = LinkOfBase(bo[i]);
+            if (ol is not null && bm[bo[i]].Kind == NodeKind.Field && changedLinks.Contains(ol.Id))
+            {
+                Collect(bo[i], dobj[i], ol);
+            }
+        }
+
+        if (work.Count == 0)
         {
             return;
         }
 
-        Node bn = bm[bid], dn = dm[did];
-        var regions = new List<RegionEdit>(list);
-        regions.Sort((x, y) => baseIsNew ? x.NewStart.CompareTo(y.NewStart) : x.OldStart.CompareTo(y.OldStart));
+        // Work from the end of the paragraph so earlier positions stay valid.
+        work.Sort((x, y) => y.Hub.CompareTo(x.Hub));
         MarkupNode scratch = default;
         try
         {
-            // Work from the end of the paragraph so earlier positions stay valid.
-            for (int i = regions.Count - 1; i >= 0; i--)
+            foreach ((Node bn, Node dn, RegionEdit r, _) in work)
             {
-                RegionEdit r = regions[i];
                 if (r.OldText.Contains('\uFFFC', StringComparison.Ordinal) || r.NewText.Contains('\uFFFC', StringComparison.Ordinal))
                 {
                     throw new ReplaceNeeded("an edit reaches an object");

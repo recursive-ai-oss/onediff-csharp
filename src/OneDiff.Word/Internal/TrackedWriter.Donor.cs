@@ -211,6 +211,15 @@ internal sealed partial class TrackedWriter
                     {
                         anchor = b.Element(BaseOf(pl));
                     }
+                    else if (pl is { Kind: LinkKind.Split or LinkKind.Merge } && splitTail.TryGetValue(pl.Id, out MarkupNode tail))
+                    {
+                        // The last of the paragraphs a split or merge was written as, when the previous donor paragraph went into one.
+                        int last = baseIsNew ? pl.OldNodes[^1] : pl.NewNodes[^1];
+                        if (last == pid)
+                        {
+                            anchor = tail;
+                        }
+                    }
                 }
 
                 if (!anchor.IsNull && (container.IsNull || anchor.Parent == container))
