@@ -5,7 +5,8 @@ using OneDiff.Pdf;
 
 namespace OneDiff.Ocr.Tests;
 
-// Reads scans, which rasterizes through OneImage.Pdf (not available under the browser runtime).
+// Rasterizes scanned PDFs through OneImage.Pdf, which fails to load an internal OneImage type under the browser runtime
+// (TypeLoadException for OneImage.DeterministicMath, still with OneImage 1.10.5); the browser run skips these until that is fixed upstream.
 [Trait("Host", "Native")]
 public class RegistrationOrderTests
 {

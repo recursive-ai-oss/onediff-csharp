@@ -69,6 +69,13 @@ public sealed class CliTests : IDisposable
 
     // ---- diff
 
+    // The ---/+++ lines as the library writes them: names with backslashes (Windows paths) are quoted, as GNU diff does.
+    private static string Header(string oldName, string newName)
+    {
+        string[] lines = Diff.Unified("a\n", "b\n", oldName, newName).Split('\n');
+        return lines[0] + "\n" + lines[1] + "\n";
+    }
+
     [Fact]
     public void DiffExitCodesFollowGnuDiff()
     {
@@ -76,7 +83,7 @@ public sealed class CliTests : IDisposable
         Assert.Equal(0, Run("", "diff", a, same).Code);
         (int code, string output, _) = Run("", "diff", a, b);
         Assert.Equal(1, code);
-        Assert.Equal($"--- {a}\n+++ {b}\n@@ -1,2 +1,2 @@\n one\n-two\n+2\n", output);
+        Assert.Equal(Header(a, b) + "@@ -1,2 +1,2 @@\n one\n-two\n+2\n", output);
         Assert.Equal(2, Run("", "diff", a).Code);
         Assert.Equal(2, Run("", "diff", a, Path.Combine(dir, "missing")).Code);
         Assert.Equal(2, Run("", "diff", "-", "-").Code);
@@ -106,7 +113,7 @@ public sealed class CliTests : IDisposable
         string b = File_("b", "x\ny\n");
         (int code, string output, _) = Run("x\nz\n", "diff", "-", b);
         Assert.Equal(1, code);
-        Assert.StartsWith("--- -\n+++ " + b + "\n", output, StringComparison.Ordinal);
+        Assert.StartsWith(Header("-", b), output, StringComparison.Ordinal);
         Assert.Equal(2, Run("", "diff", "-g", "word", b, b).Code);
         Assert.Equal(2, Run("", "diff", "--dmp", "-A", "myers", b, b).Code);
         Assert.Equal(2, Run("", "diff", "-A", "fastest", b, b).Code);

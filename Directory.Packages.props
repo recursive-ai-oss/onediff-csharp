@@ -3,10 +3,9 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <PropertyGroup Label="Sister-library pins">
-    <!-- The two lines to change when OnePDF and OneFont are on nuget.org: 1.18.0 and 1.4.0. Until then they are previews from the
-         restore source described in docs/building.md. -->
-    <OnePdfVersion>1.18.0-preview.3</OnePdfVersion>
-    <OneFontVersion>1.4.0-preview.1</OneFontVersion>
+    <!-- OnePDF and OneFont, as published on nuget.org. -->
+    <OnePdfVersion>1.18.0</OnePdfVersion>
+    <OneFontVersion>1.4.0</OneFontVersion>
   </PropertyGroup>
   <ItemGroup>
     <!-- Used by the test, bench and fuzz projects only. The libraries depend on nothing outside the shared framework. -->
@@ -33,9 +32,11 @@
     <PackageVersion Include="RecursiveAI.OneFont" Version="$(OneFontVersion)" />
     <!-- OneNLP preview (same extra restore source): the recognizers behind the .Nlp value recognizer. -->
     <PackageVersion Include="RecursiveAI.OneNlp" Version="0.1.0-preview.1" />
-    <!-- The recognizer and its page reader draw on OneImage 1.10.2 packages; OneRender needs OneImage 1.10.4, and the whole family moves together. -->
-    <PackageVersion Include="RecursiveAI.OneImage.Svg" Version="1.10.4" />
-    <PackageVersion Include="RecursiveAI.OneImage.Text" Version="1.10.4" />
+    <!-- The recognizer and its page reader draw on OneImage 1.10.2 packages; OneRender needs OneImage 1.10.4 or later, and 1.10.5 decodes large PNGs without blocking on a task (browser runtime), and the whole family moves together. -->
+    <PackageVersion Include="RecursiveAI.OneImage" Version="1.10.5" />
+    <PackageVersion Include="RecursiveAI.OneImage.Pdf" Version="1.10.5" />
+    <PackageVersion Include="RecursiveAI.OneImage.Svg" Version="1.10.5" />
+    <PackageVersion Include="RecursiveAI.OneImage.Text" Version="1.10.5" />
     <PackageVersion Include="RecursiveAI.OneOcr" Version="1.0.0" />
     <PackageVersion Include="RecursiveAI.OneOcr.Pdf" Version="1.0.0" />
     <!-- OneDocument preview (same extra restore source as the other previews): writes and reads the DOCX files of the document gold sets. -->

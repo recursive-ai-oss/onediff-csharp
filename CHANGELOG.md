@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-05
+
+The first stable release of `RecursiveAI.OneDiff`, `RecursiveAI.OneDiff.Documents`, `RecursiveAI.OneDiff.Pdf`, `RecursiveAI.OneDiff.Ocr` and the `onediff` tool (`RecursiveAI.OneDiff.Tool`). Results: [docs/results.md](docs/results.md).
+
 ### Added
 
 - `RecursiveAI.OneDiff`: `TextDiff.Pieces` and `TextDiff.Lines` read a diff as typed runs and lines with line numbers; `Diff.SideBySide` lays a line diff out in aligned rows with the changed words marked; `DiffSettings` (algorithm and work cap) is taken by the `Diff` one-liners and `TextDiff.Diagnostic` reports the cap; `Diff.ApplyUnified`, `ApplyPatchText` and `PatchText` take the apply options, patcher and cancellation token; `TextMerge.Conflicts` and `ItemMerge<T>.Items` expose a merge's conflicts and merged items.
