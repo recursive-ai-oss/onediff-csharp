@@ -39,6 +39,34 @@ public sealed class CliTests : IDisposable
         Assert.Equal(string.Empty, err);
     }
 
+    [Fact]
+    public void VersionExitCodeFormsAndTheScanSourceAreThere()
+    {
+        (int code, string output, _) = Run("", "--version");
+        Assert.Equal(0, code);
+        Assert.StartsWith("onediff " + OneDiff.Documents.Comparison.LibraryVersion, output, StringComparison.Ordinal);
+
+        // The scan source is registered, ahead of the PDF source, so scanned PDFs and images are read by OCR.
+        Assert.Contains(OneDiff.Documents.Model.DocumentSources.Registered, static s => s.Name == "ocr");
+        Assert.Equal("ocr", OneDiff.Documents.Model.DocumentSources.Registered[0].Name);
+
+        string a = File_("a.txt", "The term is 30 days."), b = File_("b.txt", "The term is 60 days."), same = File_("same.txt", "The term is 30 days.");
+        string outPath = Path.Combine(dir, "o.html");
+        Assert.Equal(0, Run("", "compare", a, b, outPath).Code);
+        Assert.Equal(1, Run("", "compare", "--exit-code", a, b, outPath).Code);
+        Assert.Equal(0, Run("", "compare", "--exit-code", a, same, outPath).Code);
+        Assert.Equal(2, Run("", "compare", "--form", "nope", a, b, outPath).Code);
+
+        // --whole-words marks the changed number whole.
+        Assert.Equal(0, Run("", "compare", "--whole-words", a, b, outPath).Code);
+        Assert.Contains("30<span class=\"sr\"> end deleted", File.ReadAllText(outPath), StringComparison.Ordinal);
+
+        // A rendered PDF can be asked for from the shell.
+        string pdf = Path.Combine(dir, "r.pdf");
+        Assert.Equal(0, Run("", "compare", "--form", "pdf-rendered", a, b, pdf).Code);
+        Assert.StartsWith("%PDF-", Encoding.Latin1.GetString(File.ReadAllBytes(pdf), 0, 5), StringComparison.Ordinal);
+    }
+
     // ---- diff
 
     [Fact]

@@ -78,13 +78,13 @@ byte[] bytes = cmp.ToBytes(RedlineForm.Html);                         // or cmp.
 
 `RedlineForm` is a small abstract class (name, extensions, preferred style, `Write`). A form passed explicitly needs no registration. `DocumentSources` and `Redline` hold two process-wide lists, filled by explicit calls and never by discovery:
 
-- `DocumentSources.Register(IDocumentSource)` (or `Redline.Register(source)`): sources consulted before the built-in plain-text one, newest first; same `Name` replaces.
+- `DocumentSources.Register(IDocumentSource, priority = 0)` (or `Redline.Register(source, priority)`): sources consulted before the built-in plain-text one, highest priority first and the newest first among equals; same `Name` replaces. A specialist source (the scan source) registers above the source that would also accept its input, so the order of `Register` calls does not matter.
 - `Redline.Register(RedlineForm)`: forms selected by extension; the latest registration of an extension wins; same `Name` replaces.
 
 Both are thread-safe and idempotent. An adapter package exposes one `Register()` that makes those calls. What a user writes:
 
 ```csharp
-PdfRedline.Register();                               // once at startup; the .All package offers one for everything
+PdfRedline.Register();                               // once at startup; each adapter package has one
 Redline.Create("a.pdf", "b.pdf", "out.pdf");
 ```
 

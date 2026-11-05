@@ -104,11 +104,11 @@ public sealed class RenderedPdfRedline : RedlineForm
         {
             // The renderer's hard limit on the glyphs of one page list (a redline of several million characters): say so, and name the
             // forms that have no such limit.
-            throw new InvalidOperationException("the redline is larger than the renderer can lay out (" + e.Message + "); save it as HTML, JSON or markup on the original pages instead", e);
+            throw new InvalidOperationException("The redline is larger than the renderer can lay out (" + e.Message + "); save it as HTML, JSON or markup on the original pages instead.", e);
         }
         catch (PdfRenderException e)
         {
-            throw new InvalidOperationException("the redline could not be rendered: " + e.Message, e);
+            throw new InvalidOperationException("The redline could not be rendered: " + e.Message, e);
         }
     }
 }
@@ -119,15 +119,15 @@ public sealed class RenderedPdfRedline : RedlineForm
 public sealed record RenderedPdfResult(int PageCount, ImmutableArray<string> Notes);
 
 /// <summary>
-/// The form registered for <c>.pdf</c> output: original-page markup when the comparison's new document was read from a PDF, a rendered
-/// redline otherwise. Name a form explicitly to override the choice.
+/// The form registered for <c>.pdf</c> output: original-page markup when the comparison's new document is paged input (PDF or scan),
+/// a rendered redline otherwise; see <see cref="PdfRedline.Auto"/>. Name a form explicitly to override the choice.
 /// </summary>
 internal sealed class AutoPdfRedline() : RedlineForm("pdf-auto", [".pdf"])
 {
     public override void Write(Comparison comparison, Stream output, RedlineStyle style, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(comparison);
-        if (PdfRedline.CanMark(comparison))
+        if (PdfRedline.IsPaged(comparison))
         {
             // Marks on the original pages default to the colour-blind-safe highlights, like the markup preset.
             PdfRedline.OnPages.Write(comparison, output, style == RedlineStyle.Blackline ? PdfRedline.OnPages.PreferredStyle! : style, cancellationToken);

@@ -3,6 +3,7 @@ using System.Text.Json;
 using OneDiff.Documents.Ledger;
 using OneDiff.Documents.Model;
 using OneDiff.Documents.Pipeline;
+using OneDiff.Documents.Verification;
 
 namespace OneDiff.Documents.Serialization;
 
@@ -15,11 +16,26 @@ public sealed class ComparisonFormatException : FormatException
     {
     }
 
-    /// <summary>Creates the exception with the underlying problem.</summary>
+    /// <summary>Creates the exception with the underlying problem. When <paramref name="inner"/> is a <see cref="JsonException"/> its position is copied to the properties.</summary>
     public ComparisonFormatException(string message, Exception inner)
         : base(message, inner)
     {
+        if (inner is JsonException j)
+        {
+            LineNumber = j.LineNumber;
+            BytePositionInLine = j.BytePositionInLine;
+            Path = j.Path;
+        }
     }
+
+    /// <summary>The zero-based line of the JSON syntax error, or null when the problem is not a syntax error or has no position.</summary>
+    public long? LineNumber { get; }
+
+    /// <summary>The zero-based byte offset within <see cref="LineNumber"/>, or null.</summary>
+    public long? BytePositionInLine { get; }
+
+    /// <summary>The JSON path of the problem, or null when it is not known.</summary>
+    public string? Path { get; }
 }
 
 /// <summary>Bounds the reader enforces so hostile input cannot exhaust memory or time.</summary>
@@ -36,60 +52,64 @@ public static partial class ComparisonJson
 {
     /// <summary>
     /// Reads a comparison written by <see cref="Write(Comparison)"/>. The structure is validated (known names, ids in range, no node
-    /// in two links, text and run bounds) but the completeness of the changes is not re-proved; call
-    /// <see cref="Comparison.Check"/> for that.
+    /// in two links, text and run bounds). With <paramref name="verify"/> (the default) the completeness checks of
+    /// <see cref="Comparison.Check"/> run on the value read, and <see cref="Comparison.Verification"/> reports their outcome, so
+    /// <see cref="VerificationResult.Passed"/> is never a claim copied from the file. Without it the read is cheaper, and the result
+    /// says <see cref="VerificationResult.VerifiedHere"/> = false and <see cref="VerificationResult.Passed"/> = false until you call
+    /// <see cref="Comparison.Check"/> yourself; writing such a value back records that it was not verified.
     /// </summary>
     /// <param name="utf8">The JSON text, UTF-8, without a byte order mark.</param>
     /// <param name="limits">Bounds on size, array length and depth; <see cref="ComparisonJsonLimits.Default"/> when null.</param>
+    /// <param name="verify">Whether to re-run the completeness checks on what was read. Default true.</param>
     /// <exception cref="ComparisonFormatException">The input is not a readable comparison or exceeds a limit.</exception>
-    public static Comparison Read(ReadOnlySpan<byte> utf8, ComparisonJsonLimits? limits = null)
+    public static Comparison Read(ReadOnlySpan<byte> utf8, ComparisonJsonLimits? limits = null, bool verify = true)
     {
         limits ??= ComparisonJsonLimits.Default;
         if (limits.MaxInputBytes <= 0 || limits.MaxItems <= 0 || limits.MaxDepth <= 0)
         {
-            throw new ArgumentException("limits must be positive", nameof(limits));
+            throw new ArgumentException("Limits must be positive.", nameof(limits));
         }
 
         if (utf8.Length > limits.MaxInputBytes)
         {
-            throw new ComparisonFormatException($"the input is {utf8.Length} bytes, over the limit of {limits.MaxInputBytes}");
+            throw new ComparisonFormatException($"The input is {utf8.Length} bytes, over the limit of {limits.MaxInputBytes}");
         }
 
         try
         {
             using JsonDocument doc = JsonDocument.Parse(utf8.ToArray(), new JsonDocumentOptions { MaxDepth = limits.MaxDepth });
-            return new Reader(limits).ReadComparison(doc.RootElement);
+            return new Reader(limits, verify).ReadComparison(doc.RootElement);
         }
         catch (JsonException ex)
         {
-            throw new ComparisonFormatException("the input is not valid JSON: " + ex.Message, ex);
+            throw new ComparisonFormatException("The input is not valid JSON: " + ex.Message, ex);
         }
         catch (ArgumentException ex)
         {
-            throw new ComparisonFormatException("the input holds an invalid value: " + ex.Message, ex);
+            throw new ComparisonFormatException("The input holds an invalid value: " + ex.Message, ex);
         }
         catch (InvalidOperationException ex)
         {
-            throw new ComparisonFormatException("the input has a member of the wrong type: " + ex.Message, ex);
+            throw new ComparisonFormatException("The input has a member of the wrong type: " + ex.Message, ex);
         }
         catch (FormatException ex) when (ex is not ComparisonFormatException)
         {
-            throw new ComparisonFormatException("the input has a malformed value: " + ex.Message, ex);
+            throw new ComparisonFormatException("The input has a malformed value: " + ex.Message, ex);
         }
         catch (OverflowException ex)
         {
-            throw new ComparisonFormatException("the input has a number out of range: " + ex.Message, ex);
+            throw new ComparisonFormatException("The input has a number out of range: " + ex.Message, ex);
         }
     }
 
-    private sealed class Reader(ComparisonJsonLimits limits)
+    private sealed class Reader(ComparisonJsonLimits limits, bool verify)
     {
         public Comparison ReadComparison(JsonElement root)
         {
             RequireObject(root, "the document");
             if (Str(root, "schema") != SchemaName || Int(root, "version") != SchemaVersion)
             {
-                throw new ComparisonFormatException("this is not a version 1 onediff comparison");
+                throw new ComparisonFormatException("This is not a version 1 onediff comparison.");
             }
 
             JsonElement prov = Member(root, "provenance");
@@ -144,7 +164,7 @@ public static partial class ComparisonJson
 
                 if (!LedgerCategoryNames.TryParse(Str(e, "category"), out LedgerCategory cat))
                 {
-                    throw new ComparisonFormatException("unknown ledger category");
+                    throw new ComparisonFormatException("Unknown ledger category.");
                 }
 
                 entries.Add(new LedgerEntry(cat, Int(e, "count"), locs.ToImmutable()));
@@ -157,8 +177,16 @@ public static partial class ComparisonJson
             }
 
             JsonElement v = Member(root, "verification");
-            var verification = new VerificationResult(Bool(v, "passed"), Int(v, "fallbackLevel"), Int(v, "failureCount"));
-            return new Comparison(alignment, changes.ToImmutable(), groups.ToImmutable(), ChangeLedger.Create(entries), diags.ToImmutable(), provenance, verification);
+            bool recorded = Bool(v, "passed");
+            int level = Int(v, "fallbackLevel"), failureCount = Int(v, "failureCount");
+            ImmutableArray<Change> changeList = changes.ToImmutable();
+            ImmutableArray<ChangeGroup> groupList = groups.ToImmutable();
+            ChangeLedger ledger = ChangeLedger.Create(entries);
+            // The file's own claim is never trusted: it is either re-proved here or reported as not verified.
+            VerificationResult verification = verify
+                ? new VerificationResult(recorded && Verifier.Check(alignment, changeList, groupList, ledger, CancellationToken.None).Count == 0, level, failureCount, true)
+                : new VerificationResult(false, level, failureCount, false);
+            return new Comparison(alignment, changeList, groupList, ledger, diags.ToImmutable(), provenance, verification);
         }
 
         private CompareSettings ReadSettings(JsonElement s)
@@ -168,7 +196,7 @@ public static partial class ComparisonJson
             {
                 if (h.ValueKind != JsonValueKind.String || !LedgerCategoryNames.TryParse(h.GetString() ?? "", out LedgerCategory c))
                 {
-                    throw new ComparisonFormatException("unknown hidden category");
+                    throw new ComparisonFormatException("Unknown hidden category.");
                 }
 
                 hidden = hidden.With(c);
@@ -239,7 +267,7 @@ public static partial class ComparisonJson
                     {
                         if (!LedgerCategoryNames.TryParse(Str(f, "category"), out LedgerCategory cat))
                         {
-                            throw new ComparisonFormatException("unknown fold category");
+                            throw new ComparisonFormatException("Unknown fold category.");
                         }
 
                         folds.Add(new NormalizationFold(cat, Int(f, "start"), Int(f, "length"), Str(f, "original")));
@@ -249,7 +277,7 @@ public static partial class ComparisonJson
                 int parent = Int(n, "parent");
                 if (parent < -1 || parent >= count)
                 {
-                    throw new ComparisonFormatException($"node {count} names parent {parent}");
+                    throw new ComparisonFormatException($"Node {count} names parent {parent}");
                 }
 
                 b.Append(
@@ -362,12 +390,12 @@ public static partial class ComparisonJson
             {
                 if (p.Value.ValueKind != JsonValueKind.String || !seen.Add(p.Name))
                 {
-                    throw new ComparisonFormatException("a format object holds a non-string value or a repeated key");
+                    throw new ComparisonFormatException("A format object holds a non-string value or a repeated key.");
                 }
 
                 if (items.Count >= limits.MaxItems)
                 {
-                    throw new ComparisonFormatException("a format object is over the item limit");
+                    throw new ComparisonFormatException("A format object is over the item limit.");
                 }
 
                 items.Add(new KeyValuePair<string, string>(p.Name, p.Value.GetString()!));
@@ -395,7 +423,7 @@ public static partial class ComparisonJson
                     {
                         if (q.ValueKind != JsonValueKind.Array || q.GetArrayLength() != 9)
                         {
-                            throw new ComparisonFormatException("a quad is an array of nine numbers");
+                            throw new ComparisonFormatException("A quad is an array of nine numbers.");
                         }
 
                         double[] v = new double[9];
@@ -416,7 +444,7 @@ public static partial class ComparisonJson
         {
             if (e.ValueKind != JsonValueKind.String)
             {
-                throw new ComparisonFormatException("expected a string");
+                throw new ComparisonFormatException("Expected a string.");
             }
 
             return e.GetString()!;
@@ -437,12 +465,12 @@ public static partial class ComparisonJson
         {
             if (e.ValueKind != JsonValueKind.Array)
             {
-                throw new ComparisonFormatException("expected an array");
+                throw new ComparisonFormatException("Expected an array.");
             }
 
             if (e.GetArrayLength() > limits.MaxItems)
             {
-                throw new ComparisonFormatException($"an array has {e.GetArrayLength()} items, over the limit of {limits.MaxItems}");
+                throw new ComparisonFormatException($"An array has {e.GetArrayLength()} items, over the limit of {limits.MaxItems}");
             }
 
             return e.EnumerateArray();
@@ -459,7 +487,7 @@ public static partial class ComparisonJson
         private static JsonElement Member(JsonElement e, string name)
         {
             RequireObject(e, "a value holding \"" + name + "\"");
-            return e.TryGetProperty(name, out JsonElement v) ? v : throw new ComparisonFormatException($"missing member \"{name}\"");
+            return e.TryGetProperty(name, out JsonElement v) ? v : throw new ComparisonFormatException($"Missing member \"{name}\".");
         }
 
         private static JsonElement? Opt(JsonElement e, string name)
@@ -475,7 +503,7 @@ public static partial class ComparisonJson
         private static double Num(JsonElement e, string name)
         {
             double d = Member(e, name).GetDouble();
-            return double.IsFinite(d) ? d : throw new ComparisonFormatException("numbers must be finite");
+            return double.IsFinite(d) ? d : throw new ComparisonFormatException("Numbers must be finite.");
         }
 
         private static bool Bool(JsonElement e, string name)
@@ -486,6 +514,6 @@ public static partial class ComparisonJson
 
         private static T Enum<T>(EnumNames<T> names, string name)
             where T : struct =>
-            names.TryParse(name, out T v) ? v : throw new ComparisonFormatException($"unknown name \"{name}\"");
+            names.TryParse(name, out T v) ? v : throw new ComparisonFormatException($"Unknown name \"{name}\".");
     }
 }

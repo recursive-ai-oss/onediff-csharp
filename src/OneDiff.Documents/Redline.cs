@@ -10,7 +10,7 @@ namespace OneDiff.Documents;
 /// own: the look and the rules come from <see cref="CompareSettings"/> and <see cref="RedlineStyle"/>.
 /// <para>
 /// This package reads plain text and writes JSON and HTML. Adapter packages add inputs and output forms by registering them
-/// once at startup (each exposes one <c>Register</c> call, and the <c>.All</c> package one for all of them); an input or
+/// once at startup (each exposes one <c>Register</c> call); an input or
 /// extension nobody registered fails with a message naming the package to add. Registration is process-wide, idempotent and
 /// thread-safe. Code that wants no global state skips the statics and uses
 /// <see cref="CompareDocument.From(DocumentInput, IDocumentSource?, CancellationToken)"/>, <see cref="Comparison.Of(CompareDocument, CompareDocument, CompareSettings?, Scoring.IPairScorer?, CancellationToken)"/>
@@ -26,7 +26,9 @@ public static class Redline
     public static IReadOnlyList<RedlineForm> Forms => forms;
 
     /// <summary>Adds an input source to the process-wide list used when reading inputs by content. Same as <see cref="DocumentSources.Register"/>.</summary>
-    public static void Register(IDocumentSource source) => DocumentSources.Register(source);
+    /// <param name="source">The source.</param>
+    /// <param name="priority">Higher is asked first, whatever the order of registration; see <see cref="DocumentSources.Register"/>.</param>
+    public static void Register(IDocumentSource source, int priority = 0) => DocumentSources.Register(source, priority);
 
     /// <summary>
     /// Adds an output form so that its extensions select it. A later registration of the same extension wins; registering a
@@ -66,10 +68,6 @@ public static class Redline
                 : $"no output form is registered for '{ext}'. " + (advice ?? "Name the form explicitly, or register one with Redline.Register."));
     }
 
-    /// <summary>Compares two files, read by content. Same as <see cref="Comparison.Of(string, string, CompareSettings?, Scoring.IPairScorer?, CancellationToken)"/>.</summary>
-    public static Comparison Compare(string oldPath, string newPath, CompareSettings? settings = null, CancellationToken cancellationToken = default) =>
-        Comparison.Of(oldPath, newPath, settings, null, cancellationToken);
-
     /// <summary>Compares two files and writes the redline to <paramref name="outputPath"/> in the form its extension selects.</summary>
     /// <param name="oldPath">The original file.</param>
     /// <param name="newPath">The revised file.</param>
@@ -101,6 +99,42 @@ public static class Redline
         ArgumentNullException.ThrowIfNull(form);
         Comparison c = Comparison.Of(DocumentInput.FromStream(oldStream, "old"), DocumentInput.FromStream(newStream, "new"), settings, null, cancellationToken);
         c.Save(output, form, null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Compares two files and writes the redline asynchronously: the files are read and the output written without blocking, and the
+    /// comparison itself runs synchronously on the calling thread. The form follows the extension of <paramref name="outputPath"/>.
+    /// </summary>
+    /// <exception cref="NotSupportedException">An input is not recognized, or no form is registered for the extension.</exception>
+    /// <exception cref="IOException">A file cannot be read or written.</exception>
+    /// <exception cref="OperationCanceledException">The token was cancelled.</exception>
+    public static Task CreateAsync(string oldPath, string newPath, string outputPath, CompareSettings? settings = null, CancellationToken cancellationToken = default) =>
+        CreateAsync(oldPath, newPath, outputPath, FormFor(outputPath), settings, cancellationToken);
+
+    /// <summary>Compares two files and writes the redline asynchronously in an explicit form; the extension is not consulted.</summary>
+    /// <exception cref="NotSupportedException">An input is not recognized.</exception>
+    /// <exception cref="IOException">A file cannot be read or written.</exception>
+    public static async Task CreateAsync(string oldPath, string newPath, string outputPath, RedlineForm form, CompareSettings? settings = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(outputPath);
+        ArgumentNullException.ThrowIfNull(form);
+        Comparison c = await Comparison.OfAsync(oldPath, newPath, settings, null, cancellationToken).ConfigureAwait(false);
+        await c.SaveAsync(outputPath, form, null, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Compares two streams (each read asynchronously to its end) and writes the redline to <paramref name="output"/> asynchronously.
+    /// This is the form to use with an ASP.NET Core request and response body, which refuse synchronous I/O by default. The comparison
+    /// itself runs synchronously on the calling thread. No stream is closed.
+    /// </summary>
+    /// <exception cref="NotSupportedException">An input is not recognized.</exception>
+    /// <exception cref="OperationCanceledException">The token was cancelled.</exception>
+    public static async Task CreateAsync(Stream oldStream, Stream newStream, Stream output, RedlineForm form, CompareSettings? settings = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(output);
+        ArgumentNullException.ThrowIfNull(form);
+        Comparison c = await Comparison.OfAsync(oldStream, newStream, settings, null, cancellationToken).ConfigureAwait(false);
+        await c.SaveAsync(output, form, null, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>Compares two byte arrays and returns the redline's bytes.</summary>

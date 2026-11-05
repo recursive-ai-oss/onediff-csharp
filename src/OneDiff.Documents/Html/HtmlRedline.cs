@@ -83,7 +83,7 @@ public static class HtmlRedline
         ArgumentNullException.ThrowIfNull(comparison);
         RedlineStyle s = style ?? RedlineStyle.Blackline;
         var o = new HtmlOut(writer);
-        RedlineView view = RedlineView.Build(comparison, ct);
+        RedlineView view = RedlineView.Build(comparison, s.MarkWholeWords, ct);
         HtmlPage.Begin(o, comparison, s, sideBySide, print, paper);
         if (sideBySide)
         {

@@ -69,6 +69,14 @@ public sealed record RedlineStyle
     /// <summary>Whether each change carries a tag naming its type. Off by default.</summary>
     public bool TypeTags { get; init; }
 
+    /// <summary>
+    /// Whether a mark that falls inside a word is widened to the whole word: <c>30</c> to <c>60</c> shows as the word <c>30</c> deleted and
+    /// <c>60</c> inserted, not as <c>3</c> and <c>6</c> with the unchanged <c>0</c> between them. Off by default, which marks exactly the
+    /// characters that differ. Applies to the HTML pages and the rendered PDF. The changes themselves, their text and their anchors are
+    /// unaffected. Scripts written without spaces (Han, kana) are never widened.
+    /// </summary>
+    public bool MarkWholeWords { get; init; }
+
     /// <summary>The page heading and title of a written redline; empty for "Comparison of <i>old</i> and <i>new</i>" from the input names.</summary>
     public string Title { get; init; } = "";
 
@@ -223,22 +231,22 @@ public sealed record CompareSettings
     {
         if (!(MatchThreshold > 0 && MatchThreshold <= 1) || !(SplitMergeThreshold > 0 && SplitMergeThreshold <= 1) || !(MoveThreshold > 0 && MoveThreshold <= 1))
         {
-            throw new ArgumentException("similarity thresholds must lie in (0, 1]");
+            throw new ArgumentException("Similarity thresholds must lie in (0, 1].");
         }
 
         if (CostCap <= 0)
         {
-            throw new ArgumentException("the cost cap must be positive");
+            throw new ArgumentException("The cost cap must be positive.");
         }
 
         if (!(OcrConfidenceThreshold > 0 && OcrConfidenceThreshold <= 1))
         {
-            throw new ArgumentException("the OCR confidence threshold must lie in (0, 1]");
+            throw new ArgumentException("The OCR confidence threshold must lie in (0, 1].");
         }
 
         if (!Enum.IsDefined(Algorithm) || Style is null || Name is null)
         {
-            throw new ArgumentException("the algorithm, style or name is invalid");
+            throw new ArgumentException("The algorithm, style or name is invalid.");
         }
     }
 }

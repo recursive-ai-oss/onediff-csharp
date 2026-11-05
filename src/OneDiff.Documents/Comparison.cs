@@ -17,10 +17,11 @@ namespace OneDiff.Documents;
 public sealed record Provenance(string LibraryVersion, int SchemaVersion, string OldName, string NewName, string OldHash, string NewHash);
 
 /// <summary>How verification went.</summary>
-/// <param name="Passed">True when the comparison passed every check (possibly after falling back).</param>
+/// <param name="Passed">True when the comparison passed every check (possibly after falling back) <b>in this process</b>: it is false for a comparison read from JSON with verification off, because the stored claim was not checked here.</param>
 /// <param name="FallbackLevel">0: the stages' own result was complete. 1: regrouped with the reference stages on the same alignment. 2: each changed block replaced as a whole. 3: nothing aligned; every block deleted and inserted.</param>
 /// <param name="FailureCount">How many checks failed before the result that was kept (0 when no fallback ran).</param>
-public sealed record VerificationResult(bool Passed, int FallbackLevel, int FailureCount);
+/// <param name="VerifiedHere">True when the checks ran in this process on this value: always for a comparison the stages made; for one read from JSON, only when the reader was asked to verify (the default). False means <see cref="Passed"/> says nothing about the content: call <see cref="Comparison.Check"/>.</param>
+public sealed record VerificationResult(bool Passed, int FallbackLevel, int FailureCount, bool VerifiedHere = true);
 
 /// <summary>
 /// The result of comparing two documents: both compare models, the alignment between them, the atomic changes, the display groups

@@ -90,7 +90,7 @@ public sealed class ComparisonChain
         ArgumentNullException.ThrowIfNull(versions);
         if (versions.Count < 2)
         {
-            throw new ArgumentException("a chain needs at least two versions", nameof(versions));
+            throw new ArgumentException("A chain needs at least two versions.", nameof(versions));
         }
 
         var steps = ImmutableArray.CreateBuilder<ChainStep>();
@@ -155,7 +155,7 @@ public sealed class ComparisonChain
     /// <exception cref="ArgumentException">No such change.</exception>
     public ImmutableArray<int> StepsOf(int netChangeId)
     {
-        Change? net = Net.Changes.FirstOrDefault(c => c.Id == netChangeId) ?? throw new ArgumentException("no such net change", nameof(netChangeId));
+        Change? net = Net.Changes.FirstOrDefault(c => c.Id == netChangeId) ?? throw new ArgumentException("No such net change.", nameof(netChangeId));
         var touched = new SortedSet<int>();
         if (net.Old.IsPresent)
         {
@@ -260,7 +260,7 @@ public sealed class ComparisonChain
         }
         else
         {
-            throw new NotSupportedException($"no chain output form for '{ext}'; .html and .json are built in");
+            throw new NotSupportedException($"No chain output form for '{ext}'; .html and .json are built in.");
         }
     }
 }

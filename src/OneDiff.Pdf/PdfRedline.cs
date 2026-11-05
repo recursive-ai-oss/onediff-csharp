@@ -94,13 +94,19 @@ public sealed class PdfRedline : RedlineForm
     public static RenderedPdfRedline RenderedSideBySide => RenderedPdfRedline.SideBySideLayout;
 
     /// <summary>
-    /// The form <see cref="Register"/> selects for <c>.pdf</c>: markup on the original pages when the comparison's new document was read
-    /// from a PDF (<see cref="OnPages"/>), a <see cref="Rendered"/> redline otherwise (plain text, or any other kind of input).
+    /// The form <see cref="Register"/> selects for <c>.pdf</c>. The choice is made from the comparison alone: when the new document's
+    /// <see cref="CompareDocument.SourceFormat"/> is a PDF or a scanned image, the pages are marked (<see cref="OnPages"/>), and the
+    /// file those pages come from must be on the document (<see cref="CompareDocument.Origin"/>, kept by the PDF and scan sources),
+    /// otherwise writing throws <see cref="InvalidOperationException"/> and says to name a form; for every other kind of input
+    /// (plain text, Word) it is a <see cref="Rendered"/> redline. Nothing else is consulted: no registration order, no process
+    /// state, so a comparison read back from JSON never silently writes a different kind of file. Name <see cref="OnPages"/>,
+    /// <see cref="MarkNewDocument"/> or <see cref="Rendered"/> to choose yourself.
     /// </summary>
     public static RedlineForm Auto { get; } = new AutoPdfRedline();
 
-    /// <summary>True when the comparison's new document was read from a PDF by <see cref="PdfDocumentSource"/> in this process, so that <see cref="OnPages"/> can mark it.</summary>
-    internal static bool CanMark(Comparison comparison) => PdfOrigins.TryGet(comparison.New, out _);
+    /// <summary>True when the new document is paged input (a PDF, or an image read as a scan): <see cref="Auto"/> marks its pages.</summary>
+    internal static bool IsPaged(Comparison comparison) =>
+        comparison.New.SourceFormat is PdfDocumentSource.MediaType or "image/png" or "image/jpeg" or "image/tiff";
 
     /// <summary>
     /// Registers the PDF source and the <see cref="Auto"/> form as the output form of <c>.pdf</c> files, process-wide, so that
@@ -118,19 +124,19 @@ public sealed class PdfRedline : RedlineForm
     /// form. The PDF's bytes are those the comparison's new document was read from by <see cref="PdfDocumentSource"/>; a style
     /// passed by the caller or chosen from the settings replaces <see cref="Style"/>.
     /// </summary>
-    /// <exception cref="InvalidOperationException">The comparison's new document was not read from a PDF by <see cref="PdfDocumentSource"/> in this process (for example it was read back from JSON); use <see cref="MarkNewDocument"/> with the bytes.</exception>
+    /// <exception cref="InvalidOperationException">The comparison's new document has no <see cref="CompareDocument.Origin"/> (for example it was read back from JSON, or built by hand); use <see cref="MarkNewDocument"/> with the PDF's bytes, or <see cref="Rendered"/>.</exception>
     public override void Write(Comparison comparison, Stream output, RedlineStyle style, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(comparison);
         ArgumentNullException.ThrowIfNull(output);
         ArgumentNullException.ThrowIfNull(style);
-        if (!PdfOrigins.TryGet(comparison.New, out PdfOrigin origin))
+        if (comparison.New.Origin is not { } origin)
         {
-            throw new InvalidOperationException("the new document was not read from a PDF by PdfDocumentSource, so its bytes are not known; call MarkNewDocument with the PDF's bytes");
+            throw new InvalidOperationException("The new document carries no PDF to mark (it was read back from JSON, or built by hand). Call MarkNewDocument with the PDF's bytes, or use PdfRedline.Rendered for a rendered redline.");
         }
 
         var use = new PdfRedline { Style = style, Author = Author, ModifiedDate = ModifiedDate, Incremental = Incremental, Password = Password ?? origin.Password };
-        use.MarkNewDocument(comparison, origin.Bytes, output, cancellationToken);
+        use.MarkNewDocument(comparison, origin.Content, output, cancellationToken);
     }
 
     /// <summary>Splits an annotation's <c>/Contents</c> written by this type into its first line and the old (or, on the old document, new) text after it.</summary>
@@ -178,10 +184,10 @@ public sealed class PdfRedline : RedlineForm
         ArgumentNullException.ThrowIfNull(Author);
         CompareDocument doc = markNew ? comparison.New : comparison.Old;
         string hash = Convert.ToHexStringLower(SHA256.HashData(pdfBytes.Span));
-        string expected = PdfOrigins.TryGet(doc, out PdfOrigin known) && known.Sha256 is not null ? known.Sha256 : doc.SourceHash;
+        string expected = doc.Origin?.Sha256 ?? doc.SourceHash;
         if (!string.Equals(hash, expected, StringComparison.OrdinalIgnoreCase))
         {
-            throw new ArgumentException($"the PDF is not the {(markNew ? "new" : "old")} input of the comparison (the hashes differ)", nameof(pdfBytes));
+            throw new ArgumentException($"The PDF is not the {(markNew ? "new" : "old")} input of the comparison (the hashes differ)", nameof(pdfBytes));
         }
 
         PdfDocument pdf;

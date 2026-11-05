@@ -7,7 +7,7 @@ namespace OneDiff.Documents;
 /// <summary>
 /// An output form of a <see cref="Comparison"/>: what it is called, which file extensions select it, and how it writes itself.
 /// A form is self-contained, so passing one explicitly (<c>cmp.SaveAs(path, form)</c>) needs no registration; registering it
-/// with <see cref="Redline.Register(RedlineForm)"/> lets <c>Redline.Create</c> and <see cref="Comparison.SaveAs(string)"/>
+/// with <see cref="Redline.Register(RedlineForm)"/> lets <c>Redline.Create</c> and <see cref="Comparison.SaveAs(string, CancellationToken)"/>
 /// choose it from the output file's extension. Adapter packages derive their own forms (a PDF with markup on the original
 /// pages, a tracked-changes DOCX, ...). Implementations are stateless and thread-safe.
 /// </summary>

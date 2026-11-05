@@ -159,6 +159,9 @@ internal sealed class RedlineView
 
     public Comparison Comparison { get; }
 
+    /// <summary>Whether marks inside a word are widened to the whole word (<see cref="RedlineStyle.MarkWholeWords"/>).</summary>
+    public bool WholeWords { get; private init; }
+
     public Alignment Alignment { get; }
 
     public CompareDocument Old { get; }
@@ -193,9 +196,9 @@ internal sealed class RedlineView
 
     public List<MNode> Roots { get; private set; } = [];
 
-    public static RedlineView Build(Comparison comparison, CancellationToken cancellationToken)
+    public static RedlineView Build(Comparison comparison, bool wholeWords, CancellationToken cancellationToken)
     {
-        var v = new RedlineView(comparison);
+        var v = new RedlineView(comparison) { WholeWords = wholeWords };
         v.IndexChanges();
         v.BuildLinks(cancellationToken);
         v.BuildTree(cancellationToken);
@@ -273,21 +276,97 @@ internal sealed class RedlineView
             List<(RegionEdit Edit, int ChangeId)> edits = editsOfLink.TryGetValue(link.Id, out List<(RegionEdit, int)>? l) ? l : [];
             edits = [.. edits.OrderBy(x => x.Edit.NewStart).ThenBy(x => x.Edit.OldStart)];
             int move = MoveOfLink.TryGetValue(link.Id, out Change? mc) ? mc.Id : -1;
-            Links[link.Id] = new LinkView(link, Timeline(newText, edits), move);
+            Links[link.Id] = new LinkView(link, Timeline(newText, edits, WholeWords), move);
         }
     }
 
-    /// <summary>Lays a link's edits over its new text: unchanged text from the new side, and at each edit its deleted then inserted text.</summary>
-    private static List<Piece> Timeline(string newText, List<(RegionEdit Edit, int ChangeId)> edits)
+    // A character of a word written with spaces. Han, kana and Hangul are left out: a run of them is a sentence, not a word.
+    private static bool IsWordChar(char c) =>
+        char.IsLetterOrDigit(c) && !(c is (>= '\u3040' and <= '\u30FF') or (>= '\u3400' and <= '\u9FFF') or (>= '\uAC00' and <= '\uD7AF') or (>= '\uF900' and <= '\uFAFF'));
+
+    private static bool StartsWithWordChar(string s) => s.Length > 0 && IsWordChar(s[0]);
+
+    private static bool EndsWithWordChar(string s) => s.Length > 0 && IsWordChar(s[^1]);
+
+    /// <summary>
+    /// Lays a link's edits over its new text: unchanged text from the new side, and at each edit its deleted then inserted text. With
+    /// <paramref name="wholeWords"/> an edit that begins or ends inside a word takes the rest of the word on both sides (the rest is
+    /// the same text in old and new), and edits of one change that touch the same word become one.
+    /// </summary>
+    private static List<Piece> Timeline(string newText, List<(RegionEdit Edit, int ChangeId)> edits, bool wholeWords)
     {
         var pieces = new List<Piece>();
         int pos = 0;
-        foreach ((RegionEdit e, int id) in edits)
+        for (int i = 0; i < edits.Count; i++)
         {
+            (RegionEdit e, int id) = edits[i];
             int start = Math.Clamp(e.NewStart, pos, newText.Length);
-            if (start > pos)
+            string del = e.OldText, ins = e.NewText;
+            int end = Math.Clamp(start + e.NewLength, start, newText.Length);
+            int from = start;
+            RegionEdit shown = e;
+            if (wholeWords && !e.IsFormatOnly)
             {
-                pieces.Add(new Piece(PieceKind.Equal, newText[pos..start], -1, null));
+                int left = start;
+                if (start > pos && IsWordChar(newText[start - 1]) && (StartsWithWordChar(del) || StartsWithWordChar(ins)))
+                {
+                    while (left > pos && IsWordChar(newText[left - 1]))
+                    {
+                        left--;
+                    }
+                }
+
+                string head = newText[left..start];
+                string body = del, bodyNew = ins;
+                int right = end;
+                while (true)
+                {
+                    int wordEnd = right;
+                    if (right < newText.Length && IsWordChar(newText[right]) && (EndsWithWordChar(body) || EndsWithWordChar(bodyNew) || right > end))
+                    {
+                        while (wordEnd < newText.Length && IsWordChar(newText[wordEnd]))
+                        {
+                            wordEnd++;
+                        }
+                    }
+
+                    // Another edit of the same change that starts inside the word joins this one.
+                    if (i + 1 < edits.Count && edits[i + 1].ChangeId == id && !edits[i + 1].Edit.IsFormatOnly && edits[i + 1].Edit.NewStart >= right && edits[i + 1].Edit.NewStart <= wordEnd && wordEnd > right)
+                    {
+                        RegionEdit next = edits[++i].Edit;
+                        string gap = newText[right..next.NewStart];
+                        body += gap + next.OldText;
+                        bodyNew += gap + next.NewText;
+                        right = Math.Min(next.NewStart + next.NewLength, newText.Length);
+                        continue;
+                    }
+
+                    // Do not run into an edit of another change: keep this one as it is.
+                    bool blocked = i + 1 < edits.Count && edits[i + 1].Edit.NewStart < wordEnd;
+                    if (wordEnd > right && !blocked)
+                    {
+                        string rest = newText[right..wordEnd];
+                        body += rest;
+                        bodyNew += rest;
+                        right = wordEnd;
+                    }
+
+                    break;
+                }
+
+                if (right - left <= 64 && (left < start || right > end || !ReferenceEquals(body, del) || !ReferenceEquals(bodyNew, ins)))
+                {
+                    from = left;
+                    del = head + body;
+                    ins = head + bodyNew;
+                    end = right;
+                    shown = e with { OldText = del, NewText = ins, OldLength = del.Length, NewLength = ins.Length };
+                }
+            }
+
+            if (from > pos)
+            {
+                pieces.Add(new Piece(PieceKind.Equal, newText[pos..from], -1, null));
             }
 
             if (e.IsFormatOnly)
@@ -296,18 +375,18 @@ internal sealed class RedlineView
             }
             else
             {
-                if (e.OldLength > 0)
+                if (del.Length > 0)
                 {
-                    pieces.Add(new Piece(PieceKind.Delete, e.OldText, id, e));
+                    pieces.Add(new Piece(PieceKind.Delete, del, id, shown));
                 }
 
-                if (e.NewLength > 0)
+                if (ins.Length > 0)
                 {
-                    pieces.Add(new Piece(PieceKind.Insert, e.NewText, id, e));
+                    pieces.Add(new Piece(PieceKind.Insert, ins, id, shown));
                 }
             }
 
-            pos = Math.Clamp(start + e.NewLength, start, newText.Length);
+            pos = Math.Clamp(end, from, newText.Length);
         }
 
         if (pos < newText.Length)

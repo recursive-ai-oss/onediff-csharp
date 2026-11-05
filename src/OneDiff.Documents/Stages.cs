@@ -48,10 +48,37 @@ public static class Stages
         ArgumentNullException.ThrowIfNull(newDocument);
         if (oldDocument.Kind != newDocument.Kind)
         {
-            throw new ArgumentException("documents of different kinds cannot be compared");
+            throw new ArgumentException("Documents of different kinds cannot be compared.");
         }
 
-        return BlockAligner.Run(oldDocument, newDocument, scorer, settings ?? CompareSettings.Default, seed, cancellationToken);
+        CompareSettings use = settings ?? CompareSettings.Default;
+        Alignment aligned = BlockAligner.Run(oldDocument, newDocument, scorer, use, seed, cancellationToken);
+
+        // A source that read a damaged input says so: it becomes a diagnostic here (an exception in strict mode), never silence.
+        List<Diagnostic> fromSources = [];
+        foreach ((CompareDocument doc, string side) in new[] { (oldDocument, "old"), (newDocument, "new") })
+        {
+            foreach (SourceWarning w in doc.Warnings)
+            {
+                var d = new Diagnostic(w.Severity, $"source.{side}.{w.Code}", $"The {side} document ({doc.Name}): {w.Message}");
+                if (!aligned.Diagnostics.Contains(d))
+                {
+                    fromSources.Add(d);
+                }
+            }
+        }
+
+        if (fromSources.Count == 0)
+        {
+            return aligned;
+        }
+
+        if (use.ThrowOnFailure && fromSources.Any(d => d.Severity >= DiagnosticSeverity.Warning))
+        {
+            throw new ComparisonVerificationException(fromSources.Where(d => d.Severity >= DiagnosticSeverity.Warning).Select(d => new VerificationFailure(d.Code, d.Message)));
+        }
+
+        return aligned.WithDiagnostics(fromSources);
     }
 
     /// <summary>

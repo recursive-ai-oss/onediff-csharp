@@ -21,6 +21,7 @@ internal static class MergeCommand
               --marker-size N      length of the conflict markers (7)
           -A, --algorithm NAME     myers | patience | histogram (myers)
           -o, --output FILE        write the result to FILE (standard output by default)
+        The argument order is that of git merge-file (OURS BASE THEIRS); the library's Diff.Merge takes base first.
         exit status: the number of conflicts (at most 127); 255 on error
         """;
 

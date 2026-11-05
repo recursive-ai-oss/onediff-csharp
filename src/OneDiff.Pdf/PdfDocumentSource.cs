@@ -76,7 +76,7 @@ public sealed class PdfDocumentSource : IDocumentSource
         ArgumentNullException.ThrowIfNull(input);
         if (!CanRead(input))
         {
-            throw PdfSourceErrors.Make(PdfSourceFailure.Malformed, "the input has no PDF header");
+            throw PdfSourceErrors.Make(PdfSourceFailure.Malformed, "The input has no PDF header.");
         }
 
         try
@@ -84,13 +84,27 @@ public sealed class PdfDocumentSource : IDocumentSource
             using PdfDocument pdf = PdfDocument.Open(input.Content, new PdfOpenOptions { Password = options.Password });
             if (pdf.PageCount > options.MaxPages)
             {
-                throw PdfSourceErrors.Make(PdfSourceFailure.TooLarge, $"the document has {pdf.PageCount} pages; the limit is {options.MaxPages}");
+                throw PdfSourceErrors.Make(PdfSourceFailure.TooLarge, $"The document has {pdf.PageCount} pages; the limit is {options.MaxPages}");
             }
 
             cancellationToken.ThrowIfCancellationRequested();
             IReadOnlyList<PdfPageText> pages = pdf.ExtractText(
                 new PdfTextOptions { RetainGlyphs = true, DetectHeadersAndFooters = true },
                 cancellationToken);
+            if (pages.Count == 0)
+            {
+                throw PdfSourceErrors.Make(PdfSourceFailure.Malformed, "No pages could be read from this PDF; the file is damaged or empty.");
+            }
+
+            // Pages without any text are a scan, not an empty document: refuse instead of comparing nothing (ISO 32000-2 puts a scan's
+            // page content in an image, which text extraction never sees).
+            if (pages.All(static p => string.IsNullOrWhiteSpace(p.Text)))
+            {
+                throw PdfSourceErrors.Make(
+                    PdfSourceFailure.NoTextLayer,
+                    "This PDF has no text layer, so it is probably a scan. Reference RecursiveAI.OneDiff.Ocr and call OcrRedline.Register() to read it by OCR.");
+            }
+
             var labels = new string?[pages.Count];
             for (int i = 0; i < labels.Length; i++)
             {
@@ -98,19 +112,48 @@ public sealed class PdfDocumentSource : IDocumentSource
             }
 
             var builder = new CompareDocumentBuilder(DocumentKind.Flowing).WithMetadata(input.Name, input.Sha256Hex(), MediaType);
+            AddReaderDiagnostics(builder, pdf);
             new PdfModelBuilder(options, builder, cancellationToken).Build(pages, labels);
-            CompareDocument result = builder.Build();
-            PdfOrigins.Remember(result, input.Content, options.Password);
+            CompareDocument result = builder.WithOrigin(new DocumentOrigin(input.Content, options.Password, input.Sha256Hex())).Build();
             return result;
         }
         catch (Exception ex) when (ex is not (OperationCanceledException or InvalidDataException or OutOfMemoryException))
         {
             throw ex switch
             {
-                PdfPasswordException or PdfEncryptionException => PdfSourceErrors.Make(PdfSourceFailure.Encrypted, "the PDF is encrypted and the password is missing or wrong", ex),
-                PdfLimitException => PdfSourceErrors.Make(PdfSourceFailure.TooLarge, "the PDF exceeds a reader limit", ex),
-                _ => PdfSourceErrors.Make(PdfSourceFailure.Malformed, "the input is not a readable PDF", ex),
+                PdfPasswordException or PdfEncryptionException => PdfSourceErrors.Make(PdfSourceFailure.Encrypted, "The PDF is encrypted and the password is missing or wrong.", ex),
+                PdfLimitException => PdfSourceErrors.Make(PdfSourceFailure.TooLarge, "The PDF exceeds a reader limit.", ex),
+                _ => PdfSourceErrors.Make(PdfSourceFailure.Malformed, "The input is not a readable PDF.", ex),
             };
+        }
+    }
+
+    // What OnePDF repaired or could not recover while reading becomes a warning on the document, so a damaged file is reported on
+    // the comparison instead of being compared as if it were whole. Repairs alone are informational; dropped content is a warning.
+    internal static void AddReaderDiagnostics(CompareDocumentBuilder builder, PdfDocument pdf)
+    {
+        int repaired = 0, lost = 0;
+        string? firstLost = null;
+        foreach (PdfDiagnostic d in pdf.Diagnostics)
+        {
+            if (d.Severity == PdfSeverity.Error)
+            {
+                lost++;
+                firstLost ??= d.Message;
+            }
+            else if (d.Severity == PdfSeverity.Warning)
+            {
+                repaired++;
+            }
+        }
+
+        if (lost > 0)
+        {
+            builder.AddWarning(DiagnosticSeverity.Warning, "pdf.unrecovered", $"Content of this PDF could not be recovered ({lost} problem{(lost == 1 ? "" : "s")}; first: {firstLost}). The comparison covers only what was read.");
+        }
+        else if (repaired > 0)
+        {
+            builder.AddWarning(DiagnosticSeverity.Info, "pdf.repaired", $"This PDF deviates from the specification and was repaired while reading ({repaired} repair{(repaired == 1 ? "" : "s")}).");
         }
     }
 }
