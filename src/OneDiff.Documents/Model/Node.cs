@@ -307,6 +307,13 @@ public sealed class CompareDocumentBuilder
     private readonly List<int> path = [];
     private readonly Stack<int> open = new();
     private readonly DocumentKind kind;
+
+    /// <summary>
+    /// The most containers that may be open at once (256). Real documents nest a few levels; the limit keeps the writers that walk
+    /// the tree recursively within the call stack of a small host such as a browser.
+    /// </summary>
+    public const int MaxDepth = 256;
+
     private string name = "";
     private string sourceHash = "";
     private string sourceFormat = "";
@@ -337,8 +344,14 @@ public sealed class CompareDocumentBuilder
     /// <summary>Adds a node that has children; close it with <see cref="End"/>.</summary>
     /// <returns>The node's id.</returns>
     /// <exception cref="ArgumentException">The content is invalid (see <see cref="NodeContent"/>).</exception>
+    /// <exception cref="InvalidOperationException"><see cref="MaxDepth"/> containers are already open.</exception>
     public int Begin(NodeKind kind, NodeContent? content = null)
     {
+        if (open.Count >= MaxDepth)
+        {
+            throw new InvalidOperationException("documents nest at most " + MaxDepth.ToString(System.Globalization.CultureInfo.InvariantCulture) + " containers deep");
+        }
+
         int id = Append(open.Count > 0 ? open.Peek() : -1, kind, content ?? NodeContent.Empty);
         open.Push(id);
         return id;

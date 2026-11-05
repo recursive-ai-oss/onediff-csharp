@@ -193,6 +193,7 @@ public class JsonTests
     }
 
     [Fact]
+    [Trait("Host", "Native")] // reads the schema file from the repository
     public void SchemaFileNamesTheSameVersion()
     {
         string root = Path.GetFullPath(Path.Combine(SourceDir(), "..", ".."));

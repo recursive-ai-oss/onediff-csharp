@@ -11,6 +11,7 @@
     <ToolCommandName>onediff</ToolCommandName>
     <Description>Text diff and document comparison for .NET: the onediff command-line tool, which compares text and PDF files.</Description>
     <IsPackable>true</IsPackable>
+    <EnablePackageValidation>true</EnablePackageValidation>
     <PackageTags>$(PackageTags);cli;dotnet-tool</PackageTags>
   </PropertyGroup>
 

@@ -9,7 +9,7 @@ that is not on nuget.org yet. A hosted runner can restore those only from a prev
     directly or through project references, on a prerelease package. The filter is written to
     OneDiff.Hosted.slnf and the run says which projects were left out and why.
 
-Prints key=value lines for $GITHUB_OUTPUT on stdout (solution, filtered, smoke, filter = the .slnf text on one line) and notices on stderr.
+Prints key=value lines for $GITHUB_OUTPUT on stdout (solution, filtered, smoke, wasm = the browser test suites that can be built, filter = the .slnf text on one line) and notices on stderr.
 Usage: select-solution.py [repository-root]
 """
 import json
@@ -50,6 +50,7 @@ def main():
         print(f"solution={solution}")
         print("filtered=false")
         print("smoke=true")
+        print("wasm=Core Documents Pdf Ocr")
         print("filter=")
         if pins:
             print(f"::notice::Restoring {', '.join(sorted(pins))} from the preview feed.", file=sys.stderr)
@@ -80,6 +81,9 @@ def main():
     print("filter=" + filter_json)
     print("solution=OneDiff.Hosted.slnf")
     print("filtered=true")
+    # Each browser suite is named like its test project; a suite runs when its project is in the filter.
+    suites = [n for n, t in (("Core", "tests/OneDiff.Tests/OneDiff.Tests.csproj"), ("Documents", "tests/OneDiff.Documents.Tests/OneDiff.Documents.Tests.csproj"), ("Pdf", "tests/OneDiff.Pdf.Tests/OneDiff.Pdf.Tests.csproj"), ("Ocr", "tests/OneDiff.Ocr.Tests/OneDiff.Ocr.Tests.csproj")) if t in kept]
+    print("wasm=" + " ".join(suites))
     print("smoke=" + ("true" if "samples/OneDiff.AotSmoke/OneDiff.AotSmoke.csproj" in kept else "false"))
     print(
         "::notice::No preview feed is configured (repository variable ONEDIFF_PREVIEW_FEED), so the projects that need "

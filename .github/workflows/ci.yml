@@ -20,6 +20,7 @@ jobs:
       solution: ${{ steps.select.outputs.solution }}
       filter: ${{ steps.select.outputs.filter }}
       smoke: ${{ steps.select.outputs.smoke }}
+      wasm: ${{ steps.select.outputs.wasm }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -75,6 +76,17 @@ jobs:
         if: needs.plan.outputs.smoke == 'true'
         shell: bash
         run: '"$RUNNER_TEMP/smoke/OneDiff.AotSmoke"'
+      - name: Publish the onediff tool with NativeAOT (warnings are errors)
+        if: needs.plan.outputs.smoke == 'true'
+        run: dotnet publish src/OneDiff.Cli -c Release -r ${{ matrix.rid }} -p:PublishAot=true -o ${{ runner.temp }}/tool -warnaserror
+      - name: Run the AOT tool
+        if: needs.plan.outputs.smoke == 'true'
+        shell: bash
+        run: |
+          printf 'a\nb\n' > "$RUNNER_TEMP/a.txt"; printf 'a\nc\n' > "$RUNNER_TEMP/b.txt"
+          status=0; "$RUNNER_TEMP"/tool/OneDiff.Cli diff "$RUNNER_TEMP/a.txt" "$RUNNER_TEMP/b.txt" > "$RUNNER_TEMP/diff.out" || status=$?
+          # GNU diff's convention: 1 means the files differ.
+          [ "$status" = 1 ] && grep -q '^+c$' "$RUNNER_TEMP/diff.out"
 
   pack:
     needs: plan
@@ -107,8 +119,11 @@ jobs:
           path: ${{ runner.temp }}/packages/*
 
   wasm:
-    # The core's tests, compiled into a browser WebAssembly app and run in headless Chrome (xunit.v3 has no browser runner, so
-    # tests/OneDiff.Tests.Wasm compiles the same test sources and runs them with a small runner). Fails on any test failure.
+    # The test sources of the core, .Documents, .Pdf and .Ocr, each compiled into a browser WebAssembly app and run in headless
+    # Chrome (xunit.v3 has no browser runner, so tests/OneDiff.Tests.Wasm compiles the same test sources and runs them with a small
+    # runner; tests that need files, threads or processes carry [Trait("Host", "Native")] and are counted as skipped).
+    # Fails on any test failure. Without a preview feed only the suites that restore from nuget.org run.
+    needs: plan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -125,4 +140,9 @@ jobs:
       - name: Install the browser driver (the runner's Google Chrome is used as the browser)
         run: python3 -m pip install playwright==1.57.0
       - name: Publish and run the browser tests
-        run: tests/OneDiff.Tests.Wasm/run.sh "$RUNNER_TEMP/wasm"
+        env:
+          ONEDIFF_PREVIEW_FEED: ${{ vars.ONEDIFF_PREVIEW_FEED }}
+          SUITES: ${{ needs.plan.outputs.wasm }}
+        run: |
+          read -ra suites <<< "$SUITES"
+          tests/OneDiff.Tests.Wasm/run.sh "$RUNNER_TEMP/wasm" "${suites[@]}"

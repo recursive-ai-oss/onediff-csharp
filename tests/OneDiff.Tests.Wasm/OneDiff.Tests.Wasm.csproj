@@ -1,17 +1,22 @@
 <Project Sdk="Microsoft.NET.Sdk.WebAssembly">
 
   <!--
-    Runs the core's test sources inside a browser. xunit.v3 has no browser runner, so the same test files are compiled into this
+    Runs a package's test sources inside a browser. WasmSuite picks which: Core (default), Documents, Pdf or Ocr; run.sh builds each. xunit.v3 has no browser runner, so the same test files are compiled into this
     host (against the real xunit attributes and Assert) and run by the small runner in Program.cs. The assembly is named like the
     test project so the tests see the library's internals the same way. Build output is the AppBundle folder that run.py serves.
   -->
   <PropertyGroup>
-    <AssemblyName>$(LibName).Tests</AssemblyName>
-    <RootNamespace>$(LibName).Tests</RootNamespace>
+    <WasmSuite Condition="'$(WasmSuite)' == ''">Core</WasmSuite>
+    <!-- The assembly is named like the suite's test project so the tests see the library's internals the same way. -->
+    <SuiteProject Condition="'$(WasmSuite)' == 'Core'">OneDiff.Tests</SuiteProject>
+    <SuiteProject Condition="'$(WasmSuite)' != 'Core'">OneDiff.$(WasmSuite).Tests</SuiteProject>
+    <AssemblyName>$(SuiteProject)</AssemblyName>
+    <RootNamespace>$(SuiteProject)</RootNamespace>
     <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
     <IsTestProject>false</IsTestProject>
-    <NoWarn>$(NoWarn);xUnit1051</NoWarn>
+    <!-- CA1416: the scale and measurement tests read the process working set; they carry the Host=Native trait and are skipped here. -->
+    <NoWarn>$(NoWarn);xUnit1051;CA1416</NoWarn>
     <!-- The runner finds tests by reflection, so nothing may be trimmed away. -->
     <PublishTrimmed>false</PublishTrimmed>
     <InvariantGlobalization>true</InvariantGlobalization>
@@ -22,7 +27,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="../OneDiff.Tests/**/*.cs" Exclude="../OneDiff.Tests/obj/**;../OneDiff.Tests/bin/**" />
+    <Compile Include="../$(SuiteProject)/**/*.cs" Exclude="../$(SuiteProject)/obj/**;../$(SuiteProject)/bin/**" />
+    <Compile Include="../Shared/SamplePair.cs" Link="Shared/SamplePair.cs" Condition="'$(WasmSuite)' != 'Core'" />
   </ItemGroup>
 
   <ItemGroup>
@@ -31,7 +37,24 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../src/OneDiff/OneDiff.csproj" />
+    <ProjectReference Include="../../src/OneDiff/OneDiff.csproj" Condition="'$(WasmSuite)' == 'Core'" />
+    <ProjectReference Include="../../src/OneDiff.Documents/OneDiff.Documents.csproj" Condition="'$(WasmSuite)' == 'Documents'" />
+    <ProjectReference Include="../../src/OneDiff.Pdf/OneDiff.Pdf.csproj" Condition="'$(WasmSuite)' == 'Pdf'" />
+    <ProjectReference Include="../../src/OneDiff.Ocr/OneDiff.Ocr.csproj" Condition="'$(WasmSuite)' == 'Ocr'" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(WasmSuite)' == 'Pdf'">
+    <PackageReference Include="RecursiveAI.OnePdf.Layout" />
+    <PackageReference Include="RecursiveAI.OnePdf.Fonts" />
+    <PackageReference Include="RecursiveAI.OnePdf.Hyphenation" />
+    <PackageReference Include="RecursiveAI.OneRender.Fonts.Cjk" />
+    <PackageReference Include="RecursiveAI.OneRender.Fonts.Noto.Arabic" />
+    <PackageReference Include="RecursiveAI.OneRender.Fonts.Noto.Devanagari" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(WasmSuite)' == 'Ocr'">
+    <PackageReference Include="RecursiveAI.OnePdf.Layout" />
+    <PackageReference Include="RecursiveAI.OnePdf.Hyphenation" />
   </ItemGroup>
 
 </Project>

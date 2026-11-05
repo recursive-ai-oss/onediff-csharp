@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <PublishToNuGet>true</PublishToNuGet>
     <AssemblyName>OneDiff.Ocr</AssemblyName>
     <Description>Text diff and document comparison for .NET. Scan comparison: a document source that reads scanned PDFs and images through a local OCR engine into the compare model, with every word anchored by its page quadrilateral and recognition confidence, so differences that may be recognition errors are flagged and the changes are marked on the original pages.</Description>
     <EnablePackageValidation>true</EnablePackageValidation>

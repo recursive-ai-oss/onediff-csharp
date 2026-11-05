@@ -54,8 +54,8 @@ internal static class Program
                 "diff" => DiffCommand.Run(rest, io),
                 "patch" => PatchCommand.Run(rest, io),
                 "merge" => MergeCommand.Run(rest, io),
-                "compare" => CompareCommand.Run(rest),
-                "combine" or "chain" => CombineCommand.Run(command, rest),
+                "compare" => CompareCommand.Run(rest, io),
+                "combine" or "chain" => CombineCommand.Run(command, rest, io),
                 _ => throw new CliException($"unknown command '{command}'"),
             };
         }
