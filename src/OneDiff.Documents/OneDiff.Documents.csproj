@@ -18,4 +18,17 @@
     <PackageReference Include="RecursiveAI.OneFont" />
   </ItemGroup>
 
+  <!-- The library version is written into the assembly as a constant from the one Version property, so the provenance of a comparison
+       cannot drift from the package version and nothing reads it at run time. -->
+  <Target Name="WriteBuildVersion" BeforeTargets="CoreCompile" Inputs="$(MSBuildProjectFullPath)" Outputs="$(IntermediateOutputPath)BuildVersion.g.cs">
+    <PropertyGroup>
+      <BuildVersionFile>$(IntermediateOutputPath)BuildVersion.g.cs</BuildVersionFile>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(BuildVersionFile)" Lines="namespace OneDiff.Documents%3B;internal static class BuildVersion { internal const string Value = &quot;$(Version)&quot;%3B }" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <ItemGroup>
+      <Compile Include="$(BuildVersionFile)" />
+      <FileWrites Include="$(BuildVersionFile)" />
+    </ItemGroup>
+  </Target>
+
 </Project>
