@@ -18,10 +18,12 @@ import os
 import re
 import sys
 import threading
+import time
 
 from playwright.sync_api import sync_playwright
 
-TIMEOUT_MS = 20 * 60 * 1000
+TIMEOUT_MS = int(os.environ.get("ONEDIFF_WASM_TIMEOUT_S", "1200")) * 1000
+FILTER = os.environ.get("ONEDIFF_WASM_FILTER", "")  # optional test-name filter, passed to Main as its first argument
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -47,7 +49,7 @@ def main() -> int:
 
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(Handler, directory=root))
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    url = f"http://127.0.0.1:{server.server_address[1]}/index.html"
+    url = f"http://127.0.0.1:{server.server_address[1]}/index.html" + (f"?arg={FILTER}" if FILTER else "")
 
     lines: list[str] = []
     with sync_playwright() as p:
@@ -63,12 +65,23 @@ def main() -> int:
         page.on("console", lambda m: (lines.append(m.text), print(m.text, flush=True)))
         page.on("pageerror", lambda e: (lines.append(f"PAGE ERROR: {e}"), print(f"PAGE ERROR: {e}", flush=True)))
         page.goto(url)
-        try:
-            page.wait_for_function("window.__oneDiffExitCode !== undefined", timeout=TIMEOUT_MS)
-            exit_code = page.evaluate("window.__oneDiffExitCode")
-        except Exception as e:  # timeout or crashed page
-            print(f"no exit code from the page: {e}")
-            exit_code = -1
+        # Polls with evaluate rather than wait_for_function: after a scan has been recognized, the page publishes its exit code
+        # but wait_for_function never notices (evaluate still sees it), so the wait would run to its timeout.
+        exit_code = -1
+        deadline = time.monotonic() + TIMEOUT_MS / 1000
+        while True:
+            try:
+                value = page.evaluate("window.__oneDiffExitCode")
+            except Exception as e:  # crashed or closed page
+                print(f"no exit code from the page: {e}")
+                break
+            if value is not None:
+                exit_code = value
+                break
+            if time.monotonic() > deadline:
+                print(f"no exit code from the page after {TIMEOUT_MS // 1000} s")
+                break
+            time.sleep(0.2)
         browser.close()
     server.shutdown()
 

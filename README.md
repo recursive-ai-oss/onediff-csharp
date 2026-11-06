@@ -94,10 +94,6 @@ Start at [docs/index.md](docs/index.md). The pages that matter first:
 - What a comparison is and how it is proved complete: [docs/compare-model.md](docs/compare-model.md)
 - Measured results, including the rows that are pending or lose: [docs/results.md](docs/results.md). Nothing beyond that page is claimed. In short: Myers' edit length equals GNU diff's minimum on 9,483 corpus pairs, three-way merge equals `git merge-file` byte for byte on 2,599 real triples in all three conflict styles, and in the speed rows against DiffPlex and diff-match-patch every area's geometric-mean time ratio is below 1.0 (the worst single row is 1.13×, patch make against diff-match-patch on x64).
 
-## Known issues
-
-- In browser WebAssembly, reading scans with `RecursiveAI.OneDiff.Ocr` fails with a `TypeLoadException` from the image library it uses (OneImage). Scans compare normally on every native platform; text, document and digital-PDF comparison work in the browser.
-
 ## Building
 
 ```

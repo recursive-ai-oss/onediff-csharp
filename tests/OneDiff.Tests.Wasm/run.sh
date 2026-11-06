@@ -13,7 +13,9 @@ suites=("$@")
 status=0
 for suite in "${suites[@]}"; do
   echo "=== suite $suite"
-  dotnet publish "$here" -c Release -p:WasmSuite="$suite" -o "$out/$suite" -v quiet -clp:NoSummary
+  # Each suite gets its own build folder: suites resolve different package versions, and a shared intermediate folder would let
+  # one suite's converted assemblies (webcil) be reused by the next when their timestamps are newer.
+  ONEDIFF_ARTIFACTS="$out/art-$suite" dotnet publish "$here" -c Release -p:WasmSuite="$suite" -o "$out/$suite" -v quiet -clp:NoSummary
   if command -v uv >/dev/null 2>&1; then
     uv run "$here/run.py" "$out/$suite/wwwroot" || status=1
   else

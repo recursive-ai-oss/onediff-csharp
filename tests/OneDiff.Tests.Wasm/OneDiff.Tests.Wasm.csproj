@@ -20,6 +20,8 @@
     <!-- The runner finds tests by reflection, so nothing may be trimmed away. -->
     <PublishTrimmed>false</PublishTrimmed>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- The central pins also cover transitive packages here, so every suite ships the same OneImage build (OneRender alone would bring an older one). -->
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
 
   <ItemGroup>
