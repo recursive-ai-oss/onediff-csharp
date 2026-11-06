@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Fixed
+
+- Documentation: the 1.0.1 known issue "scans cannot be read in browser WebAssembly" was a bug in this repository's browser test harness, not in the packages. Scans work in the browser with the published packages, and the browser test suite now runs the scan tests.
+
 ## [1.0.1] - 2026-11-05
 
 ### Fixed
